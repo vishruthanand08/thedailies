@@ -8,12 +8,26 @@ import Friends from './Friends.jsx'
 export default function App() {
   const [me, setMe] = useState(undefined) // undefined = loading, null = signed out
   const [tab, setTab] = useState('today')
+  // ?add=username from an invite link — kept through login/signup, consumed in Friends
+  const [pendingAdd, setPendingAdd] = useState(() => {
+    const p = new URLSearchParams(window.location.search).get('add')
+    return p ? p.toLowerCase() : null
+  })
 
   useEffect(() => {
     api.get('/auth/me')
       .then((d) => setMe(d.user))
       .catch(() => setMe(null))
   }, [])
+
+  useEffect(() => {
+    if (me && pendingAdd) setTab('friends')
+  }, [me, pendingAdd])
+
+  const consumePendingAdd = () => {
+    setPendingAdd(null)
+    window.history.replaceState(null, '', window.location.pathname)
+  }
 
   if (me === undefined) return <div className="spin">loading…</div>
   if (me === null) return <Auth onAuth={setMe} />
@@ -51,7 +65,7 @@ export default function App() {
 
       {tab === 'today' && <Today me={me} />}
       {tab === 'feed' && <Feed me={me} />}
-      {tab === 'friends' && <Friends />}
+      {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
     </div>
   )
 }

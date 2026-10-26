@@ -1,13 +1,50 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
 
-export default function Friends() {
+// survives StrictMode's double-mount so an invite only fires one request
+let inviteHandledFor = null
+
+export default function Friends({ me, pendingAdd, onPendingDone }) {
   const [data, setData] = useState(null)
   const [name, setName] = useState('')
   const [flash, setFlash] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   const load = () => api.get('/friends').then(setData)
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    // arrived via an invite link (/?add=username) — send the request automatically
+    if (pendingAdd && me && inviteHandledFor !== `${me.username}>${pendingAdd}`) {
+      inviteHandledFor = `${me.username}>${pendingAdd}`
+      if (pendingAdd === me.username) {
+        onPendingDone?.()
+        return
+      }
+      api.post('/friends/request', { username: pendingAdd })
+        .then((d) =>
+          setFlash({
+            kind: 'ok',
+            msg: d.accepted ? `You and ${d.user.username} are now friends 🤝` : `Friend request sent to ${d.user.username} ✓`,
+          })
+        )
+        .catch((err) => setFlash({ kind: 'err', msg: err.message }))
+        .finally(() => {
+          load()
+          onPendingDone?.()
+        })
+    }
+  }, [])
+
+  const inviteLink = `${window.location.origin}/?add=${me.username}`
+  const copyInvite = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setFlash({ kind: 'ok', msg: `Copy it manually: ${inviteLink}` })
+    }
+  }
 
   const add = async (e) => {
     e.preventDefault()
@@ -53,6 +90,25 @@ export default function Friends() {
           Your leaderboard is you + your friends. Everyone sees their own circle.
         </p>
       </form>
+
+      <div className="card">
+        <h3 className="sectiontitle">Your invite link</h3>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            className="input"
+            readOnly
+            value={inviteLink}
+            aria-label="Your invite link"
+            onFocus={(e) => e.target.select()}
+          />
+          <button className="btn" type="button" onClick={copyInvite}>
+            {copied ? 'Copied ✓' : 'Copy'}
+          </button>
+        </div>
+        <p className="hint" style={{ marginBottom: 0 }}>
+          Send it to a friend — when they open it and sign in, it friend-requests you automatically.
+        </p>
+      </div>
 
       {data.incoming.length > 0 && (
         <div className="card">
