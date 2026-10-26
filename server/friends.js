@@ -1,0 +1,98 @@
+import { Router } from 'express'
+import { q } from './db.js'
+import { requireAuth } from './auth.js'
+
+export const friendsRouter = Router()
+friendsRouter.use(requireAuth)
+
+const pair = (a, b) => (a < b ? [a, b] : [b, a])
+
+// Everyone in my circle: accepted friends + pending in both directions.
+friendsRouter.get('/', async (req, res) => {
+  const me = req.user.id
+  const { rows } = await q(
+    `SELECT f.user_a, f.user_b, f.status, f.requested_by,
+            ua.username AS username_a, ub.username AS username_b
+       FROM friendships f
+       JOIN users ua ON ua.id = f.user_a
+       JOIN users ub ON ub.id = f.user_b
+      WHERE f.user_a = $1 OR f.user_b = $1`,
+    [me]
+  )
+  const friends = []
+  const incoming = []
+  const outgoing = []
+  for (const r of rows) {
+    const other =
+      r.user_a === me
+        ? { id: r.user_b, username: r.username_b }
+        : { id: r.user_a, username: r.username_a }
+    if (r.status === 'accepted') friends.push(other)
+    else if (r.requested_by === me) outgoing.push(other)
+    else incoming.push(other)
+  }
+  res.json({ friends, incoming, outgoing })
+})
+
+friendsRouter.post('/request', async (req, res) => {
+  const me = req.user.id
+  const username = String(req.body.username || '').trim().toLowerCase()
+  const { rows } = await q('SELECT id, username FROM users WHERE username = $1', [username])
+  if (!rows.length) return res.status(404).json({ error: `No user named "${username}"` })
+  const target = rows[0]
+  if (target.id === me) return res.status(400).json({ error: "That's you" })
+
+  const [a, b] = pair(me, target.id)
+  const existing = await q('SELECT * FROM friendships WHERE user_a = $1 AND user_b = $2', [a, b])
+  if (existing.rows.length) {
+    const f = existing.rows[0]
+    if (f.status === 'accepted') return res.status(409).json({ error: 'Already friends' })
+    if (f.requested_by === me) return res.status(409).json({ error: 'Request already sent' })
+    // They asked me first — mutual intent, auto-accept.
+    await q('UPDATE friendships SET status = $3 WHERE user_a = $1 AND user_b = $2', [a, b, 'accepted'])
+    return res.json({ ok: true, accepted: true, user: target })
+  }
+  await q(
+    'INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES ($1, $2, $3, $4)',
+    [a, b, 'pending', me]
+  )
+  res.json({ ok: true, accepted: false, user: target })
+})
+
+friendsRouter.post('/respond', async (req, res) => {
+  const me = req.user.id
+  const otherId = Number(req.body.userId)
+  const accept = Boolean(req.body.accept)
+  const [a, b] = pair(me, otherId)
+  const { rows } = await q(
+    'SELECT * FROM friendships WHERE user_a = $1 AND user_b = $2 AND status = $3',
+    [a, b, 'pending']
+  )
+  if (!rows.length || rows[0].requested_by === me) {
+    return res.status(404).json({ error: 'No pending request from them' })
+  }
+  if (accept) {
+    await q('UPDATE friendships SET status = $3 WHERE user_a = $1 AND user_b = $2', [a, b, 'accepted'])
+  } else {
+    await q('DELETE FROM friendships WHERE user_a = $1 AND user_b = $2', [a, b])
+  }
+  res.json({ ok: true })
+})
+
+friendsRouter.delete('/:userId', async (req, res) => {
+  const [a, b] = pair(req.user.id, Number(req.params.userId))
+  await q('DELETE FROM friendships WHERE user_a = $1 AND user_b = $2', [a, b])
+  res.json({ ok: true })
+})
+
+// Helper other routes use: ids of me + accepted friends.
+export async function circleIds(userId) {
+  const { rows } = await q(
+    `SELECT user_a, user_b FROM friendships
+      WHERE (user_a = $1 OR user_b = $1) AND status = 'accepted'`,
+    [userId]
+  )
+  const ids = new Set([userId])
+  for (const r of rows) ids.add(r.user_a === userId ? r.user_b : r.user_a)
+  return [...ids]
+}
