@@ -91,6 +91,7 @@ export default function Today({ me }) {
             <textarea
               className="input"
               placeholder="Paste your result here — straight from the game's share button 📋"
+              aria-label="Paste your game result"
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
@@ -166,6 +167,7 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual }) {
             className="input"
             type="number"
             placeholder={game.metricLabel}
+            aria-label={`${game.name} ${game.metricLabel}`}
             value={manualVal}
             onChange={(e) => setManualVal(e.target.value)}
           />
@@ -183,6 +185,7 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual }) {
         </div>
       )}
 
+      {game.note && entries.length === 0 && <div className="hint">{game.note}</div>}
       {entries.length === 0 ? (
         <div className="noscores">No scores yet{isToday ? ' — be first' : ''}</div>
       ) : (
@@ -195,7 +198,12 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual }) {
             </span>
             <span className="score">{e.display}</span>
             {e.userId === me.id && isToday && (
-              <button className="del" title="Delete my score" onClick={() => onRemove(e.submissionId)}>
+              <button
+                className="del"
+                title="Delete my score"
+                aria-label={`Delete my ${game.name} score`}
+                onClick={() => onRemove(e.submissionId)}
+              >
                 ✕
               </button>
             )}

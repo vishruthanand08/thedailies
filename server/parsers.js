@@ -110,7 +110,9 @@ export const GAMES = [
       const m = text.match(/Mini Crossword in (\d+:\d{2})/i)
       if (!m) return null
       const d = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
-      const date = d ? `${d[3]}-${String(d[1]).padStart(2, '0')}-${String(d[2]).padStart(2, '0')}` : null
+      const date = d
+        ? `${d[3]}-${String(d[1]).padStart(2, '0')}-${String(d[2]).padStart(2, '0')}`
+        : parseLongDate(text)
       const secs = clockToSeconds(m[1])
       return { date, metric: secs, display: secondsToClock(secs) }
     },
@@ -144,6 +146,7 @@ export const GAMES = [
   {
     id: 'geoguessr', name: 'GeoGuessr Daily', emoji: '🌍', color: '#B8E0C8',
     url: 'https://www.geoguessr.com/daily-challenges', metricLabel: 'points', better: 'higher',
+    note: 'GeoGuessr has no official share text — tap “+ score”, or paste GGShare extension text.',
     epoch: null, dateTolerance: null, manual: true,
     parse(text) {
       if (!/geoguessr/i.test(text)) return null
@@ -159,7 +162,12 @@ export const GAMES = [
     epoch: null, dateTolerance: 1, manual: false,
     parse(text) {
       if (!/#globle/i.test(text) && !/globle-game\.com/i.test(text)) return null
-      const m = text.match(/guesses:?\s*=?\s*(\d+)/i) || text.match(/=\s*(\d+)/)
+      // "Today's guesses: 7" (new) or the "🟧🟥🟩 = 6" line (old);
+      // never "Avg. Guesses: 9.1" — the (?!\.) guard rejects decimals
+      const m =
+        text.match(/today'?s guesses:?\s*(\d+)/i) ||
+        text.match(/=\s*(\d+)\s*$/m) ||
+        text.match(/(?<!avg\W{0,3})guesses:?\s*=?\s*(\d+)(?!\.)/i)
       if (!m) return null
       const guesses = num(m[1])
       return { date: parseLongDate(text), metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
@@ -170,7 +178,8 @@ export const GAMES = [
     url: 'https://travle.earth', metricLabel: 'extra guesses', better: 'lower',
     epoch: null, dateTolerance: null, manual: false,
     parse(text) {
-      const m = text.match(/#travle\s+#([\d,]+)(?:\s+\+(\d+))?/i)
+      // covers regional variants too: #travle_usa, #travle_gb, ...
+      const m = text.match(/#travle(?:_[a-z]+)?\s+#([\d,]+)(?:\s+\+(\d+))?/i)
       if (!m) return null
       if (m[2] != null) {
         const extra = num(m[2])

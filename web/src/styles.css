@@ -88,7 +88,16 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 .hero p { color: var(--muted); font-weight: 500; margin-top: 14px; }
 .authcard { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
 .authtoggle { text-align: center; font-size: 14px; color: var(--muted); }
-.authtoggle a { color: var(--coral); font-weight: 700; cursor: pointer; }
+.linklike {
+  background: none; border: none; padding: 0; font: inherit;
+  color: var(--coral); font-weight: 700; cursor: pointer; text-decoration: underline;
+}
+
+.btn:focus-visible, .tab:focus-visible, .navbtn:focus-visible, .linklike:focus-visible,
+.del:focus-visible, .playlink:focus-visible {
+  outline: 3px solid var(--coral);
+  outline-offset: 2px;
+}
 
 /* ---------- today ---------- */
 .daterow { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }

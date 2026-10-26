@@ -38,7 +38,12 @@ export default function App() {
 
       <nav className="tabs">
         {[['today', 'Today'], ['feed', 'Feed'], ['friends', 'Friends']].map(([id, label]) => (
-          <button key={id} className={`tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id)}>
+          <button
+            key={id}
+            className={`tab${tab === id ? ' active' : ''}`}
+            aria-current={tab === id ? 'page' : undefined}
+            onClick={() => setTab(id)}
+          >
             {label}
           </button>
         ))}

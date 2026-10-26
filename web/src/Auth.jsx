@@ -44,6 +44,7 @@ export default function Auth({ onAuth }) {
         <input
           className="input"
           placeholder="username"
+          aria-label="Username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoComplete="username"
@@ -53,6 +54,7 @@ export default function Auth({ onAuth }) {
           className="input"
           type="password"
           placeholder="password"
+          aria-label="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
@@ -63,9 +65,9 @@ export default function Auth({ onAuth }) {
         </button>
         <div className="authtoggle">
           {mode === 'login' ? (
-            <>New here? <a onClick={() => setMode('register')}>Make an account</a></>
+            <>New here? <button type="button" className="linklike" onClick={() => setMode('register')}>Make an account</button></>
           ) : (
-            <>Already in? <a onClick={() => setMode('login')}>Sign in</a></>
+            <>Already in? <button type="button" className="linklike" onClick={() => setMode('login')}>Sign in</button></>
           )}
         </div>
       </form>
