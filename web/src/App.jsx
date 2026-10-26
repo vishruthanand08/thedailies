@@ -27,8 +27,8 @@ export default function App() {
     <div className="container">
       <header className="header">
         <div className="logo">
-          <span className="pill">Daily</span>
-          <span className="rest">board</span>
+          <span className="pill">The</span>
+          <span className="rest">Dailies</span>
         </div>
         <div className="userchip">
           <span>@{me.username}</span>

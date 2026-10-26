@@ -26,8 +26,8 @@ export default function Auth({ onAuth }) {
     <div className="container">
       <header className="header">
         <div className="logo">
-          <span className="pill">Daily</span>
-          <span className="rest">board</span>
+          <span className="pill">The</span>
+          <span className="rest">Dailies</span>
         </div>
       </header>
 

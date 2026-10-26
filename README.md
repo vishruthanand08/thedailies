@@ -1,4 +1,4 @@
-# Dailyboard
+# The Dailies
 
 One leaderboard for every daily game your group plays — Wordle, NYT Mini, Connections,
 LinkedIn games (Queens, Tango, Zip, Pinpoint, Crossclimb), GeoGuessr daily, Worldle, Globle,

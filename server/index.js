@@ -36,4 +36,4 @@ if (fs.existsSync(dist)) {
 }
 
 const port = process.env.PORT || 3001
-app.listen(port, () => console.log(`dailyboard api on :${port}`))
+app.listen(port, () => console.log(`thedailies api on :${port}`))
