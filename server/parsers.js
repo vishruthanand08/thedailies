@@ -257,25 +257,19 @@ export const GAMES = [
     },
   },
   {
-    id: 'noillirk', name: 'Noillirk', emoji: '🪸', color: '#F4C7D8',
-    url: 'https://noillirk.com', metricLabel: 'points', better: 'higher',
-    // noillirk.com was on daily #12 on 2026-10-26 → #1 = 2026-10-15 (share text unverified)
-    epoch: { date: '2026-10-15', first: 1 }, dateTolerance: 1, manual: true,
-    parse(text) {
-      if (!/noillirk/i.test(text)) return null
-      const n = text.match(/#(\d+)/)
-      const m = text.match(/([\d,]+)\s*(?:pts|points)/i) || text.match(/^\s*([\d,]+)\s*$/m)
-      if (!m) return null
-      const v = num(m[1])
-      return { puzzleNumber: n ? num(n[1]) : undefined, metric: v, display: `${v.toLocaleString()}` }
-    },
-  },
-  {
     id: 'ethnoguessr', name: 'EthnoGuessr', emoji: '🧬', color: '#D8D3F2',
-    url: 'https://ethnoguessr.com', metricLabel: 'points', better: 'higher',
+    url: 'https://hbd.gg/play/', metricLabel: 'avg points', better: 'higher',
+    // Verified from a real share 2026-10-26: "I scored an average of 1133 over 10 rounds
+    // in today's EthnoGuessr! Can you beat my score of 3002 points on round 4? ..."
+    // The score is the 10-round AVERAGE, not the bragged best round.
     epoch: null, dateTolerance: null, manual: true,
     parse(text) {
       if (!/ethnoguessr/i.test(text)) return null
+      const avg = text.match(/average of ([\d,]+)/i)
+      if (avg) {
+        const pts = num(avg[1])
+        return { metric: pts, display: `${pts.toLocaleString()} avg` }
+      }
       const nums = [...text.matchAll(/([\d,]{3,7})/g)].map((m) => num(m[1])).filter((v) => v > 0)
       if (!nums.length) return null
       const pts = Math.max(...nums)
