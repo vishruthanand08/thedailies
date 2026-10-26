@@ -1,8 +1,8 @@
 # The Dailies
 
 One leaderboard for every daily game your group plays — Wordle, NYT Mini, Connections,
-LinkedIn games (Queens, Tango, Zip, Pinpoint, Crossclimb), GeoGuessr daily, Worldle, Globle,
-Travle, Costcodle, Fermi, MapTap, Krillion, Noillirk, EthnoGuessr.
+LinkedIn games (Queens, Tango, Zip, Pinpoint, Crossclimb, Wend, Mini Sudoku, Patches), Minute
+Cryptic, GeoGuessr daily, Worldle, Globle, Travle, Costcodle, Fermi, MapTap, Krillion, EthnoGuessr.
 
 Paste the share text from any game's share button → a hardcoded parser verifies the format
 **and that it's today's puzzle** → it lands on your friends leaderboard. No AI, no cost.
@@ -17,7 +17,7 @@ Paste the share text from any game's share button → a hardcoded parser verifie
 - **Verification** — parsers check the share-string format and derive the puzzle's date from
   its number (Wordle #, Connections #, LinkedIn #s) or embedded date (Mini, Worldle, Globle).
   Stale pastes are rejected. Fermi, MapTap, and Krillion share formats were captured live
-  on 2026-10-26. Games with no reliable share text (GeoGuessr without GGShare, Noillirk,
+  on 2026-10-26. Games with no reliable share text (GeoGuessr without GGShare,
   EthnoGuessr) also allow manual entry, shown with a `~manual` badge.
 - Day rolls over on US Eastern time (matches NYT).
 

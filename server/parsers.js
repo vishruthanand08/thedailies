@@ -122,6 +122,11 @@ export const GAMES = [
   linkedinGame('tango', 'Tango', '🌗', '#F7E8B0', 'https://www.linkedin.com/games/tango', '2024-10-08', 'time'),
   linkedinGame('zip', 'Zip', '🏁', '#F4C2C2', 'https://www.linkedin.com/games/zip', '2025-03-18', 'time'),
   linkedinGame('crossclimb', 'Crossclimb', '🪜', '#C9E8E5', 'https://www.linkedin.com/games/crossclimb', '2024-05-01', 'time'),
+  // Epochs below derived from real shares on 2026-10-26 (Wend #140, Mini Sudoku #441,
+  // Patches #223), so they're exact — no need for the factory's loose tolerance.
+  { ...linkedinGame('wend', 'Wend', '🌀', '#CFE0F5', 'https://www.linkedin.com/games/wend', '2026-06-09', 'time'), dateTolerance: 1 },
+  { ...linkedinGame('minisudoku', 'Mini Sudoku', '🧮', '#E6DCF5', 'https://www.linkedin.com/games/mini-sudoku', '2025-08-12', 'time'), dateTolerance: 1 },
+  { ...linkedinGame('patches', 'Patches', '🧶', '#F5D0DC', 'https://www.linkedin.com/games/patches', '2026-03-18', 'time'), dateTolerance: 1 },
   {
     ...linkedinGame('pinpoint', 'Pinpoint', '📌', '#D4E6F7', 'https://www.linkedin.com/games/pinpoint', '2024-05-01', 'guesses'),
     parse(text) {
@@ -140,6 +145,31 @@ export const GAMES = [
         if (idx !== -1) return { puzzleNumber: num(m[1]), metric: idx + 1, display: `${idx + 1} guess${idx === 0 ? '' : 'es'}` }
       }
       return { puzzleNumber: num(m[1]), metric: 6, display: 'Missed' }
+    },
+  },
+
+  {
+    id: 'minutecryptic', name: 'Minute Cryptic', emoji: '🔍', color: '#DCCCF0',
+    url: 'https://www.minutecryptic.com', metricLabel: 'hints', better: 'lower',
+    // Verified from a real share 2026-10-26: "Minute Cryptic - 26 October, 2026\n"<clue>" (4)\n
+    // 🟣🟣🟣🟣🟣🟣🟣\n🏆 0 hints – 1 under the community par (...)". Par is the same for
+    // everyone on a given day, so ranking by hints is equivalent to ranking vs par.
+    epoch: null, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/Minute Cryptic\s*[-–—]\s*(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})/i)
+      if (!m) return null
+      const mi = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase())
+      if (mi === -1) return null
+      const h = text.match(/(\d+)\s*hints?\b/i)
+      if (!h) return null
+      const hints = num(h[1])
+      const par = text.match(/(\d+)\s+(under|over)\s+(?:the\s+)?(?:community\s+)?par/i) || text.match(/\b(at|on)\s+(?:the\s+)?(?:community\s+)?par/i)
+      const vsPar = !par ? '' : par[1] === 'at' || par[1] === 'on' ? ' · par' : ` · ${par[2].toLowerCase() === 'under' ? '−' : '+'}${par[1]} par`
+      return {
+        date: `${m[3]}-${String(mi + 1).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`,
+        metric: hints,
+        display: `${hints} hint${hints === 1 ? '' : 's'}${vsPar}`,
+      }
     },
   },
 
