@@ -110,6 +110,7 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 
 .pastebox { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
 .pastebox .row { display: flex; gap: 10px; align-items: flex-start; }
+.pastebox .btn { white-space: nowrap; }
 .flash {
   border: var(--border); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 14px;
   box-shadow: var(--shadow-sm);
@@ -194,4 +195,18 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 @media (max-width: 560px) {
   .tilegrid { grid-template-columns: 1fr; }
   .hero { margin-top: 28px; }
+
+  /* paste bar pinned to the bottom, in thumb reach; --kb lifts it above the iOS keyboard */
+  .pastebox {
+    position: fixed; left: 0; right: 0; bottom: var(--kb, 0); z-index: 10; margin: 0;
+    background: var(--bg); border-top: var(--border);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .pastebox .row { align-items: stretch; }
+  .pastebox .flash { order: -1; }
+  /* 16px keeps iOS from zooming in on focus */
+  .pastebox textarea.input { min-height: 46px; max-height: 30vh; height: 46px; resize: none; font-size: 16px; padding: 11px 12px; }
+  .pastebox textarea.input:focus { height: 96px; }
+  .pastebox .btn { min-height: 46px; padding: 0 16px; }
+  .container:has(.pastebox) { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
 }

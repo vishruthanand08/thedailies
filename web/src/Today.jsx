@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 
 function shiftDate(iso, days) {
@@ -22,6 +22,8 @@ export default function Today({ me }) {
   const [text, setText] = useState('')
   const [flash, setFlash] = useState(null) // {kind, msg}
   const [busy, setBusy] = useState(false)
+  const textRef = useRef(null)
+  const canReadClipboard = Boolean(navigator.clipboard?.readText)
 
   useEffect(() => {
     api.get('/submissions/games').then((d) => setGames(d.games))
@@ -35,18 +37,38 @@ export default function Today({ me }) {
   }
   useEffect(() => load(null), [])
 
+  // On mobile the paste bar is fixed to the bottom; lift it above the iOS
+  // keyboard, which covers the layout viewport instead of resizing it.
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const root = document.documentElement
+    const update = () => {
+      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      root.style.setProperty('--kb', `${covered}px`)
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+      root.style.removeProperty('--kb')
+    }
+  }, [])
+
   const boardsByGame = useMemo(() => {
     const m = {}
     for (const b of board?.boards ?? []) m[b.gameId] = b.entries
     return m
   }, [board])
 
-  const submit = async () => {
-    if (!text.trim()) return
+  const submit = async (value = text) => {
+    if (!value.trim()) return
     setBusy(true)
     setFlash(null)
     try {
-      const d = await api.post('/submissions', { text })
+      const d = await api.post('/submissions', { text: value })
       setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added ✓` })
       setText('')
       load(date)
@@ -55,6 +77,24 @@ export default function Today({ me }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  // One tap: read the share text the game just copied and submit it.
+  const pasteFromClipboard = async () => {
+    setFlash(null)
+    let clip
+    try {
+      clip = await navigator.clipboard.readText()
+    } catch {
+      textRef.current?.focus()
+      setFlash({ kind: 'err', msg: "Couldn't read your clipboard — paste it into the box instead." })
+      return
+    }
+    if (!clip.trim()) {
+      setFlash({ kind: 'err', msg: 'Clipboard is empty — tap Share in the game first.' })
+      return
+    }
+    submit(clip)
   }
 
   const submitManual = async (gameId, value) => {
@@ -89,17 +129,24 @@ export default function Today({ me }) {
         <div className="pastebox">
           <div className="row">
             <textarea
+              ref={textRef}
               className="input"
-              placeholder="Paste your result here — straight from the game's share button 📋"
+              placeholder="Paste a result, or tap 📋"
               aria-label="Paste your game result"
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
-            <button className="btn coral" onClick={submit} disabled={busy || !text.trim()}>
-              Add ↑
-            </button>
+            {canReadClipboard && !text.trim() ? (
+              <button className="btn coral" onClick={pasteFromClipboard} disabled={busy}>
+                📋 Paste
+              </button>
+            ) : (
+              <button className="btn coral" onClick={() => submit()} disabled={busy || !text.trim()}>
+                Add ↑
+              </button>
+            )}
           </div>
-          {flash && <div className={`flash ${flash.kind}`}>{flash.msg}</div>}
+          {flash && <div className={`flash ${flash.kind}`} role="status">{flash.msg}</div>}
         </div>
       )}
 
