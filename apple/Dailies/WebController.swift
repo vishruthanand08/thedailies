@@ -112,7 +112,7 @@ final class WebController {
                     Keychain.clear()
                     issueToken()
                 } catch {
-                    log.error("token check failed: \(String(describing: error))")
+                    log.error("token check failed: \(String(describing: error), privacy: .public)")
                 }
             }
             return
@@ -133,7 +133,7 @@ final class WebController {
             arguments: ["name": Self.deviceName], in: nil, in: .page
         ) { [weak self] result in
             if case .failure(let error) = result {
-                log.error("issueToken call failed: \(error.localizedDescription)")
+                log.error("issueToken call failed: \(error.localizedDescription, privacy: .public)")
                 self?.issuingToken = false
             }
         }
@@ -142,12 +142,12 @@ final class WebController {
     private func handleToken(_ msg: [String: Any]) {
         issuingToken = false
         guard let token = msg["token"] as? String, let username else {
-            log.error("token handshake failed: \(msg["error"] as? String ?? "no token")")
+            log.error("token handshake failed: \(msg["error"] as? String ?? "no token", privacy: .public)")
             return
         }
         let stored = StoredToken(token: token, tokenId: msg["id"] as? Int, username: username, server: Server.current.rawValue)
         if Keychain.save(stored) {
-            log.info("device token saved to keychain for \(username)")
+            log.info("device token saved to keychain for \(username, privacy: .public)")
             Task { await SubmissionQueue.shared.flush() }
         }
     }

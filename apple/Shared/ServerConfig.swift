@@ -4,7 +4,15 @@ import os
 enum AppGroup {
     static let id = "group.lol.thedailies"
     /// Shared between the app and the share extension (pending shares, server choice, flags).
-    static let defaults = UserDefaults(suiteName: id) ?? .standard
+    /// macOS has no extension, and a free (Personal Team) Mac profile doesn't grant the group,
+    /// so the Mac app keeps these in its own defaults.
+    static let defaults: UserDefaults = {
+        #if os(macOS)
+        .standard
+        #else
+        UserDefaults(suiteName: id) ?? .standard
+        #endif
+    }()
 }
 
 let log = Logger(subsystem: "lol.thedailies", category: "dailies")
