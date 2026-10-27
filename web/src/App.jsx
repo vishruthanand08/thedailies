@@ -6,6 +6,7 @@ import Today from './Today.jsx'
 import Feed from './Feed.jsx'
 import Friends from './Friends.jsx'
 import Profile from './Profile.jsx'
+import Admin from './Admin.jsx'
 
 export default function App() {
   const [me, setMe] = useState(undefined) // undefined = loading, null = signed out
@@ -58,7 +59,7 @@ export default function App() {
       </header>
 
       <nav className="tabs">
-        {[['today', 'Today'], ['feed', 'Feed'], ['friends', 'Friends'], ['you', 'You']].map(([id, label]) => (
+        {[['today', 'Today'], ['feed', 'Feed'], ['friends', 'Friends'], ['you', 'You'], ...(me.admin ? [['admin', 'Admin']] : [])].map(([id, label]) => (
           <button
             key={id}
             className={`tab${tab === id ? ' active' : ''}`}
@@ -74,6 +75,7 @@ export default function App() {
       {tab === 'feed' && <Feed me={me} />}
       {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
       {tab === 'you' && <Profile me={me} onLogout={logout} />}
+      {tab === 'admin' && me.admin && <Admin />}
     </div>
   )
 }

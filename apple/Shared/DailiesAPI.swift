@@ -51,6 +51,21 @@ struct GameCategory: Decodable, Identifiable, Hashable {
     let symbol: String
 }
 
+/// How points are worked out: each game's results worth 100, 50 and 0 points, in words.
+struct ScoringTable: Decodable {
+    struct Row: Decodable, Identifiable {
+        let id: String
+        let name: String
+        let emoji: String
+        let category: String
+        let perfect: String
+        let par: String
+        let zero: String
+    }
+    let games: [Row]
+    let categories: [GameCategory]
+}
+
 struct BoardEntry: Decodable, Identifiable, Hashable {
     let userId: Int
     let username: String
@@ -72,6 +87,8 @@ struct Board: Decodable {
         let username: String
         let points: Int
         let games: Int
+        /// Shared when points and games are both tied (older servers don't send it).
+        let rank: Int?
         var id: Int { userId }
     }
     let date: String
@@ -147,6 +164,10 @@ actor DailiesAPI {
     func games() async throws -> (games: [Game], categories: [GameCategory]) {
         let body = try decode(GamesBody.self, try await send("/api/submissions/games"))
         return (body.games, body.categories ?? [])
+    }
+
+    func scoring() async throws -> ScoringTable {
+        try decode(ScoringTable.self, try await send("/api/submissions/scoring"))
     }
 
     func board(date: String?) async throws -> Board {

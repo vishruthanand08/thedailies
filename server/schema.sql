@@ -71,3 +71,20 @@ CREATE TABLE IF NOT EXISTS game_suggestion_votes (
   user_id INTEGER NOT NULL REFERENCES users(id),
   PRIMARY KEY (suggestion_id, user_id)
 );
+
+-- Points: every score is worth 0-100 (perfect 100, par 50, zero 0), saved when it's posted so
+-- later changes to a game's values only affect new scores.
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS points DOUBLE PRECISION;
+
+-- Admin overrides of a game's perfect/par/zero (the defaults live in parsers.js).
+CREATE TABLE IF NOT EXISTS game_scoring (
+  game_id TEXT PRIMARY KEY,
+  perfect DOUBLE PRECISION NOT NULL,
+  par DOUBLE PRECISION NOT NULL,
+  zero DOUBLE PRECISION NOT NULL,
+  updated_by TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 'open', or 'added' once the game is on the board
+ALTER TABLE game_suggestions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';

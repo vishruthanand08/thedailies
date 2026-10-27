@@ -357,6 +357,7 @@ private struct CrownCard: View {
     let onDrag: (CGFloat) -> Void
     let onDragEnd: (_ dx: CGFloat, _ predicted: CGFloat) -> Void
     let onPage: (Int) -> Void
+    @State private var showScoring = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -364,6 +365,17 @@ private struct CrownCard: View {
                 Label("Daily crown", systemImage: "crown.fill")
                     .font(.brand(.title3, .heavy))
                     .oneLine()
+                Button { showScoring = true } label: {
+                    Image(systemName: "info.circle")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressIn)
+                .accessibilityLabel("How scoring works")
+                #if os(macOS)
+                .help("How scoring works")
+                #endif
                 if !model.isToday {
                     Image(systemName: "clock.arrow.circlepath").font(.subheadline.weight(.bold)).accessibilityHidden(true)
                 }
@@ -402,7 +414,7 @@ private struct CrownCard: View {
                     .oneLine()
             } else {
                 ForEach(Array(model.crown.enumerated()), id: \.element.id) { i, c in
-                    crownRow(rank: i + 1, entry: c)
+                    crownRow(rank: c.rank ?? i + 1, entry: c)
                 }
             }
 
@@ -445,6 +457,7 @@ private struct CrownCard: View {
                     onDragEnd(v.translation.width, v.predictedEndTranslation.width)
                 }
         )
+        .sheet(isPresented: $showScoring) { ScoringInfoView() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crownCard")
         // swipe-only isn't accessible: VoiceOver gets the same moves as actions

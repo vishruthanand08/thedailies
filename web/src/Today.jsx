@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { inApp, nativeCapture, tellNative } from './native.js'
 import GamePanel from './GamePanel.jsx'
+import ScoringInfo from './ScoringInfo.jsx'
 import Suggestions from './Suggestions.jsx'
 
 function shiftDate(iso, days) {
@@ -447,7 +448,7 @@ export default function Today({ me }) {
       {board.crown.length > 0 && (
         <div className="card crowncard">
           <div className="crownhead">
-            <h3>👑 Daily crown</h3>
+            <h3>👑 Daily crown <ScoringInfo /></h3>
             <div className="scopechips" role="group" aria-label="Standings for">
               {[{ id: 'all', name: 'Overall' }, ...orderedCategories].map((c) => (
                 <button
@@ -466,7 +467,7 @@ export default function Today({ me }) {
           )}
           {(crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).map((c, i) => (
             <div key={c.userId} className={`crownrow${c.userId === me.id ? ' me' : ''}`}>
-              <span>{['🥇', '🥈', '🥉'][i] ?? `${i + 1}.`}</span>
+              <span>{['🥇', '🥈', '🥉'][(c.rank ?? i + 1) - 1] ?? `${c.rank ?? i + 1}.`}</span>
               <span>
                 {c.username}{' '}
                 <span className="sub">· {c.games} game{c.games === 1 ? '' : 's'}</span>

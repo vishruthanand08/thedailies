@@ -18,6 +18,7 @@ export const api = {
   get: (p) => call(p),
   post: (p, body) => call(p, { method: 'POST', body }),
   put: (p, body) => call(p, { method: 'PUT', body }),
+  patch: (p, body) => call(p, { method: 'PATCH', body }),
   del: (p, body) => call(p, { method: 'DELETE', body }),
 }
 

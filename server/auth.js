@@ -62,6 +62,8 @@ authRouter.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Username: 2-20 letters, numbers, or _' })
   }
   if (password.length < 6) return res.status(400).json({ error: 'Password needs 6+ characters' })
+  // admin names can't be signed up by anyone else, even if an admin deletes their account
+  if (ADMINS.has(username)) return res.status(409).json({ error: 'That username is taken' })
 
   const hash = await bcrypt.hash(password, 10)
   try {
@@ -95,8 +97,20 @@ authRouter.post('/logout', (req, res) => {
   res.json({ ok: true })
 })
 
+// Admins see the website's Admin tab (scoring values, game suggestions). ADMIN_USERNAMES
+// (comma separated) overrides the default list, e.g. to try it with a local test account.
+const ADMINS = new Set(
+  (process.env.ADMIN_USERNAMES || 'nickpianfetti,vishruthanand').split(',').map((u) => u.trim().toLowerCase()).filter(Boolean)
+)
+export const isAdmin = (user) => Boolean(user && ADMINS.has(user.username.toLowerCase()))
+
+export function requireAdmin(req, res, next) {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Admins only' })
+  next()
+}
+
 authRouter.get('/me', requireAuth, (req, res) => {
-  res.json({ user: { id: req.user.id, username: req.user.username } })
+  res.json({ user: { id: req.user.id, username: req.user.username, admin: isAdmin(req.user) } })
 })
 
 authRouter.get('/profile', requireAuth, async (req, res) => {

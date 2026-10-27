@@ -113,15 +113,19 @@ export default function Suggestions() {
       {list?.length > 0 && (
         <ul className="suggestlist">
           {list.map((s) => (
-            <li key={s.id}>
-              <button
-                className={`votebtn${s.voted ? ' on' : ''}`}
-                aria-pressed={s.voted}
-                aria-label={`${s.voted ? 'Remove your vote for' : 'Vote for'} ${s.name}`}
-                onClick={() => vote(s)}
-              >
-                ▲ {s.votes}
-              </button>
+            <li key={s.id} className={s.added ? 'added' : undefined}>
+              {s.added ? (
+                <span className="addedtag" title="This game is on the board now">Added ✓</span>
+              ) : (
+                <button
+                  className={`votebtn${s.voted ? ' on' : ''}`}
+                  aria-pressed={s.voted}
+                  aria-label={`${s.voted ? 'Remove your vote for' : 'Vote for'} ${s.name}`}
+                  onClick={() => vote(s)}
+                >
+                  ▲ {s.votes}
+                </button>
+              )}
               <div className="what">
                 <div>
                   {s.url ? (

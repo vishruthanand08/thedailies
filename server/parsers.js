@@ -393,6 +393,39 @@ export const GAMES = [
   },
 ]
 
+// Points (server/points.js): each result is worth 0-100. `perfect` scores 100, `par` (a typical
+// result for the game itself, not for any group) 50 and `zero` or worse 0, on a curve that costs
+// little near perfect and more further away. Values are in the game's metric (times in seconds).
+// `failAt`: the metric from which a result is a fail, so the scoring table can say "Failed".
+// Admins can override perfect/par/zero (game_scoring table); new values only affect new scores.
+const SCORING = {
+  wordle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
+  worldle: { perfect: 1, par: 3, zero: 7, failAt: 7 },
+  costcodle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
+  pinpoint: { perfect: 1, par: 3, zero: 6, failAt: 6 },
+  connections: { perfect: 0, par: 1.5, zero: 4, failAt: 4 },
+  strands: { perfect: 0, par: 1, zero: 6 },
+  minutecryptic: { perfect: 0, par: 1, zero: 5 },
+  travle: { perfect: 0, par: 2, zero: 8, failAt: 21 },
+  globle: { perfect: 1, par: 8, zero: 25 },
+  fermi: { perfect: 1, par: 1.6, zero: 4 },
+  mini: { perfect: 20, par: 45, zero: 180 },
+  queens: { perfect: 5, par: 30, zero: 180 },
+  tango: { perfect: 13, par: 30, zero: 180 },
+  zip: { perfect: 3, par: 10, zero: 120 },
+  crossclimb: { perfect: 15, par: 45, zero: 180 },
+  minisudoku: { perfect: 20, par: 90, zero: 360 },
+  patches: { perfect: 6, par: 30, zero: 120 },
+  wend: { perfect: 10, par: 45, zero: 180 },
+  maptap: { perfect: 1000, par: 600, zero: 0 },
+  geoguessr: { perfect: 25000, par: 12500, zero: 0 },
+  timeguessr: { perfect: 50000, par: 25000, zero: 0 },
+  worldguessr: { perfect: 15000, par: 6500, zero: 0 },
+  ethnoguessr: { perfect: 5000, par: 1500, zero: 0 },
+  krillion: { perfect: 1000, par: 300, zero: 0 },
+}
+for (const game of GAMES) game.scoring = SCORING[game.id]
+
 export const gameById = Object.fromEntries(GAMES.map((g) => [g.id, g]))
 
 export function detect(text) {

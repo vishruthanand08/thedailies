@@ -4,6 +4,7 @@ import { requireAuth } from './auth.js'
 import { circleIds } from './friends.js'
 import { GAMES, CATEGORIES, gameById, detect, expectedDate } from './parsers.js'
 import { buildBoards } from './scoring.js'
+import { allRules, pointsFor } from './points.js'
 import { todayISO, daysApart, isValidISODate, secondsToClock } from './util.js'
 
 export const submissionsRouter = Router()
@@ -13,6 +14,30 @@ submissionsRouter.get('/games', (req, res) => {
   res.json({
     games: GAMES.map(({ id, category, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
       id, category, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed, paid: paid ?? null,
+    })),
+    categories: CATEGORIES,
+  })
+})
+
+// A scoring value in words: "4 guesses", "1:30", "Failed", "12,500 pts".
+function describe(game, v) {
+  const fail = game.scoring.failAt
+  if (fail != null && (game.better === 'lower' ? v >= fail : v <= fail)) return 'Failed'
+  if (game.metricLabel === 'time') return secondsToClock(Math.round(v))
+  if (game.id === 'fermi') return `${+v.toFixed(2)}× off`
+  const n = Number.isInteger(v) ? v : +v.toFixed(1)
+  if (/points|score/.test(game.metricLabel)) return `${n.toLocaleString('en-US')} pts`
+  const unit = n === 1 ? game.metricLabel.replace(/(ss)es$/, '$1').replace(/([^s])s$/, '$1') : game.metricLabel
+  return `${n.toLocaleString('en-US')} ${unit}`
+}
+
+// How points are worked out, for the ⓘ on the boards: every game's perfect, par and zero.
+submissionsRouter.get('/scoring', (req, res) => {
+  const rules = allRules()
+  res.json({
+    games: GAMES.map((g) => ({
+      id: g.id, name: g.name, emoji: g.emoji, category: g.category,
+      perfect: describe(g, rules[g.id].perfect), par: describe(g, rules[g.id].par), zero: describe(g, rules[g.id].zero),
     })),
     categories: CATEGORIES,
   })
@@ -75,9 +100,9 @@ submissionsRouter.post('/', async (req, res) => {
   }
 
   const { rows } = await q(
-    `INSERT INTO submissions (user_id, game_id, puzzle_date, puzzle_number, metric, display, raw_text, verified)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [req.user.id, gameId, puzzleDate, puzzleNumber, metric, display, rawText, verified]
+    `INSERT INTO submissions (user_id, game_id, puzzle_date, puzzle_number, metric, display, raw_text, verified, points)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [req.user.id, gameId, puzzleDate, puzzleNumber, metric, display, rawText, verified, pointsFor(gameId, metric)]
   )
   const game = gameById[gameId]
   res.json({
@@ -154,7 +179,7 @@ submissionsRouter.get('/stats', async (req, res) => {
   const since = days ? new Date(Date.parse(today + 'T12:00:00Z') - (days - 1) * 86400000).toISOString().slice(0, 10) : null
   const ids = await circleIds(req.user.id)
   const { rows } = await q(
-    `SELECT s.id, s.user_id, s.game_id, s.puzzle_date, s.metric, s.display, s.verified, u.username
+    `SELECT s.id, s.user_id, s.game_id, s.puzzle_date, s.metric, s.points, s.display, s.verified, u.username
        FROM submissions s
        JOIN users u ON u.id = s.user_id
       WHERE s.user_id = ANY($1)`,
@@ -187,7 +212,7 @@ submissionsRouter.get('/stats', async (req, res) => {
     const { boards, crown, categoryCrowns } = buildBoards(dayRows)
     for (const [scope, list] of [['all', crown], ...Object.entries(categoryCrowns)]) {
       if (list.length >= 2) {
-        for (const c of list) if (c.points === list[0].points) player(scope, c.userId, c.username).crowns += 1
+        for (const c of list) if (c.rank === 1) player(scope, c.userId, c.username).crowns += 1
       }
       for (const c of list) player(scope, c.userId, c.username).points += c.points
     }
@@ -248,7 +273,8 @@ submissionsRouter.get('/stats', async (req, res) => {
       userId: p.userId, username: p.username, points: p.points, crowns: p.crowns, wins: p.wins,
       played: p.played, daysPlayed: p.days.size, streak: streak(p.allDays), bestStreak: bestStreak(p.allDays),
     }))
-    .sort((a, b) => b.points - a.points || b.crowns - a.crowns || a.username.localeCompare(b.username))
+    // most points; a tie goes to whoever played fewer games (more per game)
+    .sort((a, b) => b.points - a.points || a.played - b.played || a.username.localeCompare(b.username))
   const overall = standings('all')
   const categories = Object.fromEntries(CATEGORIES.map((c) => [c.id, standings(c.id)]))
 
@@ -260,7 +286,8 @@ submissionsRouter.get('/stats', async (req, res) => {
         avg: s.sum / s.played, best: s.best,
         avgDisplay: formatMetric(game, s.sum / s.played), bestDisplay: formatMetric(game, s.best),
       }))
-      .sort((a, b) => b.wins - a.wins || dir * (a.avg - b.avg) || b.played - a.played)
+      // best ever result, then the better average
+      .sort((a, b) => dir * (a.best - b.best) || dir * (a.avg - b.avg) || b.played - a.played)
     return { gameId: game.id, better: game.better, entries }
   })
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api.js'
+import ScoringInfo from './ScoringInfo.jsx'
 
 const RANGES = [['all', 'All time'], ['30', '30 days'], ['7', '7 days']]
 
@@ -56,7 +57,7 @@ export function unitFor(game) {
 }
 
 const OVERALL_COLS = [
-  ['points', 'Points', 'Daily points added up: in each game, last place gets 1 and each place higher gets 1 more'],
+  ['points', 'Points', 'Daily points added up: each score is worth 0 to 100 (perfect 100, par 50, fail 0)'],
   ['crowns', '👑', 'Days won (with at least 2 players)'],
   ['wins', 'Wins', 'Games won (with at least 2 players)'],
   ['played', 'Played', 'Scores submitted'],
@@ -76,7 +77,7 @@ export default function Leaderboards({ me }) {
   const overall = useMemo(() => {
     if (!stats) return []
     const rows = [...(scope === 'all' ? stats.overall : stats.categories?.[scope] ?? [])]
-    if (sortBy !== 'points') rows.sort((a, b) => b[sortBy] - a[sortBy] || b.points - a.points)
+    if (sortBy !== 'points') rows.sort((a, b) => b[sortBy] - a[sortBy] || b.points - a.points || a.played - b.played)
     return rows
   }, [stats, sortBy, scope])
 
@@ -92,7 +93,7 @@ export default function Leaderboards({ me }) {
   return (
     <div className="card leaderboards">
       <div className="cardhead">
-        <h3 className="sectiontitle">🏆 Leaderboard</h3>
+        <h3 className="sectiontitle">🏆 Leaderboard <ScoringInfo /></h3>
         <RangeRow range={range} onChange={setRange} />
       </div>
       <div className="scopechips leaderscope" role="group" aria-label="Standings for">
@@ -155,7 +156,8 @@ export default function Leaderboards({ me }) {
             </table>
           </div>
           <p className="hint small">
-            Crowns and wins only count on days at least two of you played. Tap a column to sort.
+            Ties go to whoever played fewer games. Crowns and wins only count on days at least two of you
+            played. Tap a column to sort.
           </p>
 
           {board && game && (
@@ -183,8 +185,8 @@ export default function Leaderboards({ me }) {
                       <th>Player</th>
                       <th className="num">Wins</th>
                       <th className="num">Played</th>
-                      <th className="num">Average{unit}</th>
                       <th className="num">Best{unit}</th>
+                      <th className="num">Average{unit}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -194,15 +196,15 @@ export default function Leaderboards({ me }) {
                         <td className="who">{e.username}</td>
                         <td className="num">{e.wins}</td>
                         <td className="num">{e.played}</td>
-                        <td className="num">{e.avgDisplay}</td>
                         <td className="num">{e.bestDisplay}</td>
+                        <td className="num">{e.avgDisplay}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="hint small">
-                Ranked by wins, then average ({board.better === 'higher' ? 'higher' : 'lower'} is better).
+                Ranked by best ever, then average ({board.better === 'higher' ? 'higher' : 'lower'} is better).
               </p>
             </>
           )}

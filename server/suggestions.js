@@ -13,13 +13,13 @@ const PER_DAY = 5
 suggestionsRouter.get('/', async (req, res) => {
   const ids = await circleIds(req.user.id)
   const { rows } = await q(
-    `SELECT s.id, s.user_id, s.name, s.url, s.note, s.created_at, u.username,
+    `SELECT s.id, s.user_id, s.name, s.url, s.note, s.status, s.created_at, u.username,
             (SELECT COUNT(*) FROM game_suggestion_votes v WHERE v.suggestion_id = s.id)::int AS votes,
             EXISTS (SELECT 1 FROM game_suggestion_votes v WHERE v.suggestion_id = s.id AND v.user_id = $1) AS voted
        FROM game_suggestions s
        JOIN users u ON u.id = s.user_id
       WHERE s.user_id = ANY($2) OR s.id IN (SELECT suggestion_id FROM game_suggestion_votes WHERE user_id = $1)
-      ORDER BY votes DESC, s.created_at DESC
+      ORDER BY (s.status = 'open') DESC, votes DESC, s.created_at DESC
       LIMIT 30`,
     [req.user.id, ids]
   )
@@ -30,6 +30,7 @@ suggestionsRouter.get('/', async (req, res) => {
       url: r.url,
       note: r.note,
       votes: r.votes,
+      added: r.status === 'added',
       voted: r.voted,
       mine: r.user_id === req.user.id,
       by: ids.includes(r.user_id) ? r.username : null,
