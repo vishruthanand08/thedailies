@@ -15,17 +15,26 @@ npm run build      # installs web deps and builds the frontend into web/dist
 npm start          # production: the Express server serves web/dist and the API on one port
 ```
 
-There are no tests, linter, or TypeScript. To check a parser against a sample share string:
+There is no linter or TypeScript. `npm test` (`node --test server/parsers.test.mjs`) checks that every real share in `apple/capture/fixtures/<gameId>.txt` is detected as that game; add a fixture only from an actual share. To check a parser against a sample share string:
 
 ```bash
 node --input-type=module -e "import {detect} from './server/parsers.js'; console.log(detect(\`Wordle 1,234 3/6\`))"
 ```
 
+Native app (`apple/`, see `docs/native-app-plan.md`), XcodeGen-generated (the `.xcodeproj` is gitignored):
+
+```bash
+cd apple && xcodegen generate     # export DAILIES_TEAM=<team id> first to sign; never commit a team id
+xcodebuild -project apple/Dailies.xcodeproj -scheme Dailies -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath apple/build/DerivedData build
+```
+
+Debug builds accept launch arguments for scripted Simulator runs: `-dailiesServer local`, `-dailiesEval "<js>"` (runs once after the first page load), `-dailiesTestWordle YES`. Logs: `xcrun simctl spawn booted log show --info --predicate 'subsystem == "lol.thedailies"'`.
+
 ## Architecture
 
 **Backend (`server/`, Express, ESM, plain SQL):**
 - `db.js`: if `DATABASE_URL` is set it uses `pg` (Railway Postgres), otherwise embedded PGlite stored in `./data/pg` (gitignored, so local dev needs no setup). Both sit behind the same `q(text, params)` helper, so SQL must work on both. `schema.sql` runs on every boot with `CREATE ... IF NOT EXISTS`. There is no migration system, so changing an existing table needs a manual plan.
-- `auth.js`: bcrypt + JWT in an httpOnly cookie (`db_token`). `requireAuth` sets `req.user = { id, username }`. The `JWT_SECRET` env var is required in production.
+- `auth.js`: bcrypt + JWT in an httpOnly cookie (`db_token`). `requireAuth` (async) also accepts `Authorization: Bearer dly_...` device tokens from the `api_tokens` table (sha256-hashed, max 10 per user, managed at `/api/auth/tokens`) and checks them before the cookie. It sets `req.user = { id, username }`. The `JWT_SECRET` env var is required in production.
 - `friends.js`: `friendships` stores one row per pair, normalized so `user_a < user_b` (use the `pair()` helper). `circleIds(userId)` (self + accepted friends) defines who appears on a user's board and feed.
 - `submissions.js`: `POST /api/submissions` accepts either `{ text }` (parsed and verified) or `{ gameId, value }` (manual entry, allowed only when `game.manual`, stored with `verified=false`). Each user gets one submission per game per `puzzle_date` (enforced by a DB unique constraint and checked before insert, returning 409).
 - `scoring.js`: `buildBoards(rows)` uses competition ranking (1-2-2-4) per game. Points per game are `N - rank + 1`, where N is the number of players who submitted that game. The daily "crown" is the sum of a user's points across games.
@@ -42,7 +51,9 @@ node --input-type=module -e "import {detect} from './server/parsers.js'; console
 
 Adding a game = adding one `GAMES` entry. No frontend change is needed.
 
-**Frontend (`web/src/`, React 18 + Vite, no router or state library):** `App.jsx` switches between the tabs `today`, `feed`, and `friends` using local state. `api.js` wraps `fetch('/api' + path)` and throws `Error(data.error)` on non-2xx responses. Server error messages are written to be shown to users directly. Invite links (`/?add=username`) are held in `App` across login and consumed by `Friends.jsx`, which sends the request.
+**Frontend (`web/src/`, React 18 + Vite, no router or state library):** `App.jsx` switches between the tabs `today`, `feed`, and `friends` using local state. `api.js` wraps `fetch('/api' + path)` and throws `Error(data.error)` on non-2xx responses. Server error messages are written to be shown to users directly. Invite links (`/?add=username`) are held in `App` across login and consumed by `Friends.jsx`, which sends the request. `native.js` is the bridge to the iOS/macOS shell. It is inert in normal browsers. In the app (user agent contains `TheDailiesApp/`) it reports the session, issues a device token on request, and routes Play through native.
+
+**Native app (`apple/`):** a SwiftUI shell around the site in one long-lived `WKWebView` (`WebController`). Native submissions never go through the web view. They use `DailiesAPI` (`URLSession` + bearer token from the shared keychain) via `SubmissionQueue`. The iOS share extension (`DailiesShare/`) posts directly with the same token.
 
 ## Deploy
 
