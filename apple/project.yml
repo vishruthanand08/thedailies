@@ -25,6 +25,9 @@ targets:
     sources:
       - Dailies
       - Shared
+      - path: capture
+        includes: [capture.js, harness.html]
+        buildPhase: resources
     dependencies:
       - target: DailiesShare
         destinationFilters: [iOS]

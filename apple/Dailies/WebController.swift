@@ -14,8 +14,8 @@ final class WebController {
 
     let webView: WKWebView
     private(set) var username: String?
-    /// Stage 4 routes `open` messages here to decide between the in-app browser and Safari.
-    @ObservationIgnored var openGame: ((URL, String?) -> Void)?
+    /// Play taps from the web app: the in-app game browser when allowed, else the system browser.
+    @ObservationIgnored var presentGame: ((GameLaunch) -> Void)?
 
     @ObservationIgnored private let bridge = Bridge()
     @ObservationIgnored private var issuingToken = false
@@ -25,11 +25,8 @@ final class WebController {
         config.applicationNameForUserAgent = "TheDailiesApp/1.0" // keeps the default UA, appends this
         config.websiteDataStore = .default() // login cookie persists across launches
 
-        let controller = config.userContentController
-        controller.add(bridge, contentWorld: .page, name: "dailies")
-        controller.addUserScript(WKUserScript(
-            source: "window.__dailiesNative = { capture: \(Self.hasNativeCapture) };",
-            injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        config.userContentController.add(bridge, contentWorld: .page, name: "dailies")
+        Self.addFlagsScript(to: config.userContentController)
 
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = bridge
@@ -50,13 +47,36 @@ final class WebController {
         load()
     }
 
-    /// The share extension saves scores without pasting on iOS; the web app hides its paste bar then.
+    /// The share extension (iOS) or the in-app game browser saves scores without pasting;
+    /// the web app hides its paste bar then.
     private static var hasNativeCapture: Bool {
         #if os(iOS)
         true
         #else
-        false
+        GameHosts.inAppEnabled
         #endif
+    }
+
+    private static func addFlagsScript(to controller: WKUserContentController) {
+        controller.addUserScript(WKUserScript(
+            source: "window.__dailiesNative = { capture: \(hasNativeCapture) };",
+            injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+    }
+
+    /// Re-injects the flags (after a Debug toggle changes them) and reloads the site.
+    func refreshNativeFlags() {
+        webView.configuration.userContentController.removeAllUserScripts()
+        Self.addFlagsScript(to: webView.configuration.userContentController)
+        webView.reload()
+    }
+
+    /// Routes a Play tap: in-app when the browser is on and the host is allowlisted, else Safari.
+    func open(_ url: URL, name: String) {
+        if GameHosts.inAppEnabled, GameHosts.isAllowed(url.host), let presentGame {
+            presentGame(GameLaunch(url: url, name: name))
+        } else {
+            openExternally(url)
+        }
     }
 
     func load() {
@@ -83,7 +103,7 @@ final class WebController {
             handleToken(msg)
         case "open":
             guard let s = msg["url"] as? String, let url = URL(string: s) else { return }
-            if let openGame { openGame(url, msg["gameId"] as? String) } else { openExternally(url) }
+            open(url, name: msg["name"] as? String ?? url.host ?? "Game")
         default:
             log.debug("unknown message type \(type)")
         }

@@ -13,6 +13,14 @@ struct DailiesApp: App {
             RootView()
         }
         .defaultSize(width: 480, height: 860)
+
+        // the in-app game browser opens each game in its own window
+        WindowGroup(id: "game", for: GameLaunch.self) { $launch in
+            if let launch {
+                GameBrowserView(launch: launch)
+            }
+        }
+        .defaultSize(width: 480, height: 860)
         .commands {
             CommandGroup(after: .toolbar) {
                 Button("Reload") { WebController.shared.reload() }

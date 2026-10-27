@@ -3,6 +3,11 @@ import SwiftUI
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var queue = SubmissionQueue.shared
+    #if os(iOS)
+    @State private var game: GameLaunch?
+    #else
+    @Environment(\.openWindow) private var openWindow
+    #endif
     #if DEBUG
     @State private var showDebug = false
     #endif
@@ -21,10 +26,23 @@ struct RootView: View {
         #endif
         .onAppear {
             queue.onSaved = { WebController.shared.reloadBoard() }
+            WebController.shared.presentGame = { launch in
+                #if os(iOS)
+                game = launch
+                #else
+                openWindow(id: "game", value: launch)
+                #endif
+            }
             #if DEBUG
             DebugHooks.start()
             #endif
         }
+        #if os(iOS)
+        .sheet(item: $game) { launch in
+            GameBrowserView(launch: launch)
+                .presentationDetents([.large])
+        }
+        #endif
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task { await queue.flush() }

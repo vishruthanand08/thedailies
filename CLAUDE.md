@@ -28,7 +28,7 @@ cd apple && xcodegen generate     # export DAILIES_TEAM=<team id> first to sign;
 xcodebuild -project apple/Dailies.xcodeproj -scheme Dailies -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath apple/build/DerivedData build
 ```
 
-Debug builds accept launch arguments for scripted Simulator runs: `-dailiesServer local`, `-dailiesEval "<js>"` (runs once after the first page load), `-dailiesTestWordle YES`. Logs: `xcrun simctl spawn booted log show --info --predicate 'subsystem == "lol.thedailies"'`.
+Debug builds accept launch arguments for scripted Simulator runs: `-dailiesServer local`, `-dailiesEval "<js>"` (runs once after the first page load), `-dailiesTestWordle YES`, and for the in-app game browser `-dailiesInAppGames YES`, `-dailiesExperimentalGames YES`, `-dailiesOpenGame <url>`, `-dailiesOpenHarness YES`, `-dailiesGameEval "<js>"` (full list in `apple/Dailies/DebugMenu.swift`). On the Mac use `/usr/bin/log`, because zsh has a `log` builtin. Logs: `xcrun simctl spawn booted log show --info --predicate 'subsystem == "lol.thedailies"'`.
 
 ## Architecture
 
@@ -53,7 +53,7 @@ Adding a game = adding one `GAMES` entry. No frontend change is needed.
 
 **Frontend (`web/src/`, React 18 + Vite, no router or state library):** `App.jsx` switches between the tabs `today`, `feed`, and `friends` using local state. `api.js` wraps `fetch('/api' + path)` and throws `Error(data.error)` on non-2xx responses. Server error messages are written to be shown to users directly. Invite links (`/?add=username`) are held in `App` across login and consumed by `Friends.jsx`, which sends the request. `native.js` is the bridge to the iOS/macOS shell. It is inert in normal browsers. In the app (user agent contains `TheDailiesApp/`) it reports the session, issues a device token on request, and routes Play through native.
 
-**Native app (`apple/`):** a SwiftUI shell around the site in one long-lived `WKWebView` (`WebController`). Native submissions never go through the web view. They use `DailiesAPI` (`URLSession` + bearer token from the shared keychain) via `SubmissionQueue`. The iOS share extension (`DailiesShare/`) posts directly with the same token.
+**Native app (`apple/`):** a SwiftUI shell around the site in one long-lived `WKWebView` (`WebController`). Native submissions never go through the web view. They use `DailiesAPI` (`URLSession` + bearer token from the shared keychain) via `SubmissionQueue`. The iOS share extension (`DailiesShare/`) posts directly with the same token. The Debug-only in-app game browser (`GameBrowser.swift`) injects `apple/capture/capture.js` into allowlisted game sites (`GameHosts.swift`) to catch the game's own share/copy text and enqueue it. Create web views in `onAppear`, not in a SwiftUI view's init, because SwiftUI may build views more than once.
 
 ## Deploy
 

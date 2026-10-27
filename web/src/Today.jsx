@@ -214,7 +214,7 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual }) {
               // in the app, native decides between the in-app game browser and Safari
               if (!inApp) return
               e.preventDefault()
-              tellNative({ type: 'open', url: game.url, gameId: game.id })
+              tellNative({ type: 'open', url: game.url, gameId: game.id, name: game.name })
             }}
           >
             Play ↗
