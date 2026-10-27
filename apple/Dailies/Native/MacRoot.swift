@@ -15,6 +15,16 @@ final class MacCommands {
 
     var section: MacRootView.Section? = .today
     var addingScore = false
+
+    init() {
+        #if DEBUG
+        // -dailiesTab feed|friends|you and -dailiesAddSheet YES, as on iPhone (screenshots)
+        let args = UserDefaults.standard
+        if let tab = args.string(forKey: "dailiesTab"),
+           let s = MacRootView.Section.allCases.first(where: { $0.rawValue.lowercased() == tab }) { section = s }
+        addingScore = args.bool(forKey: "dailiesAddSheet")
+        #endif
+    }
     var pageRequest: PageRequest?
 
     func page(_ days: Int) {

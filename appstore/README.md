@@ -1,8 +1,9 @@
 # App Store submission kit
 
 Everything to paste into App Store Connect for The Dailies (iPhone + Mac, one app record, universal purchase).
-Screenshots for iPhone are in `screenshots/iphone-6.9/` (1320×2868, gitignored; regenerate with the
-`-dailiesScreenshots YES` launch flag on the iPhone Pro Max Simulator against the local demo data).
+Screenshots are in `screenshots/iphone-6.9/` (1320×2868) and `screenshots/mac/` (2880×1800), both
+gitignored. Regenerate them against the local demo data with the `-dailiesScreenshots YES` launch flag
+(iPhone Pro Max Simulator; on the Mac, capture the window and pad it onto a 2880×1800 canvas).
 
 ## App information
 
@@ -33,7 +34,8 @@ Play your daily puzzles right inside the app, tap the game's Share button, then 
 your score, checks it's today's puzzle, and puts you on a leaderboard with your friends.
 
 • One board for all your dailies: word games, logic puzzles, geography games and more
-• A daily crown for whoever does best across every game that day
+• Games grouped by kind: word games, logic puzzles, geography and more
+• A daily crown for whoever does best across every game that day, plus a winner for each kind of game
 • All-time leaderboards with your friends, by game or overall
 • Your own stats: streaks, wins, averages and personal bests
 • Pin your favorite games to the top and arrange the rest however you like
@@ -97,6 +99,22 @@ Expect a 13+ rating.
 
 - **iPhone 6.9"** (required): use the five in `screenshots/iphone-6.9/` in order. Apple scales them for
   smaller iPhones.
-- **Mac** (required, 1–10): take them from the Mac app. Run it, press Cmd+Shift+4, then Space, and click the
-  window. Accepted sizes are 1280×800, 1440×900, 2560×1600 or 2880×1800, so place the window capture on a
-  canvas of one of those sizes (Preview › Tools › Adjust Size won't pad; Claude can composite them for you).
+- **Mac** (required, 1–10): use the four in `screenshots/mac/` in order (2880×1800).
+
+## Release checklist
+
+1. Membership approved (developer.apple.com/account › Membership details); note the Team ID.
+2. A working support email (support@thedailies.lol doesn't exist yet). It is on `/support`, `/privacy`
+   and the You tab's "Report a problem" link.
+3. Demo account on the live site with two friends and scores for the day you submit.
+4. App Store Connect › Apps › + › New App: iOS + macOS, name The Dailies, bundle ID lol.thedailies.app,
+   SKU thedailies-1.
+5. `cd apple && DAILIES_TEAM=<team id> xcodegen generate`, open in Xcode, pick the team (automatic signing).
+   Any iOS Device › Product › Archive › Distribute App › App Store Connect; then the same with My Mac.
+   Bump `CURRENT_PROJECT_VERSION` in `project.yml` for every later upload.
+6. TestFlight on your own phone: sign in, Play, Paste, the share sheet.
+7. Fill in the listing from this file, attach the screenshots, then Submit for Review.
+
+Already set: no non-exempt encryption (`ITSAppUsesNonExemptEncryption = NO`, so no export question),
+Mac app category (Games), Mac sandbox with network access, iPhone-only (no iPad screenshots needed),
+privacy manifests, account deletion, and both Release builds compile.
