@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
+import { tellNative } from './native.js'
 import Auth from './Auth.jsx'
 import Today from './Today.jsx'
 import Feed from './Feed.jsx'
@@ -23,6 +24,11 @@ export default function App() {
   useEffect(() => {
     if (me && pendingAdd) setTab('friends')
   }, [me, pendingAdd])
+
+  // keep the native shell's view of who is signed in current (login, signup, logout)
+  useEffect(() => {
+    if (me !== undefined) tellNative({ type: 'session', user: me ? { id: me.id, username: me.username } : null })
+  }, [me])
 
   const consumePendingAdd = () => {
     setPendingAdd(null)

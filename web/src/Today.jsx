@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
+import { inApp, nativeCapture, tellNative } from './native.js'
 
 function shiftDate(iso, days) {
   const d = new Date(iso + 'T12:00:00Z')
@@ -36,6 +37,15 @@ export default function Today({ me }) {
     })
   }
   useEffect(() => load(null), [])
+
+  // the native shell fires this after it saves a score from the share sheet or game browser
+  const dateRef = useRef(null)
+  dateRef.current = date
+  useEffect(() => {
+    const refresh = () => load(dateRef.current)
+    window.addEventListener('dailies:refresh', refresh)
+    return () => window.removeEventListener('dailies:refresh', refresh)
+  }, [])
 
   // On mobile the paste bar is fixed to the bottom; lift it above the iOS
   // keyboard, which covers the layout viewport instead of resizing it.
@@ -125,7 +135,7 @@ export default function Today({ me }) {
         <h2>{prettyDate(date, today)}</h2>
       </div>
 
-      {isToday && (
+      {isToday && !nativeCapture && (
         <div className="pastebox">
           <div className="row">
             <textarea
@@ -195,7 +205,18 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual }) {
         <div className="gameicon" style={{ background: game.color }}>{game.emoji}</div>
         <div>
           <div className="name">{game.name}</div>
-          <a className="playlink" href={game.url} target="_blank" rel="noreferrer">
+          <a
+            className="playlink"
+            href={game.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => {
+              // in the app, native decides between the in-app game browser and Safari
+              if (!inApp) return
+              e.preventDefault()
+              tellNative({ type: 'open', url: game.url, gameId: game.id })
+            }}
+          >
             Play ↗
           </a>
         </div>

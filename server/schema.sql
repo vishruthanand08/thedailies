@@ -32,3 +32,15 @@ CREATE TABLE IF NOT EXISTS submissions (
 
 CREATE INDEX IF NOT EXISTS idx_submissions_date ON submissions (puzzle_date);
 CREATE INDEX IF NOT EXISTS idx_submissions_user ON submissions (user_id, created_at DESC);
+
+-- Per-device bearer tokens for native clients (app, share extension, Shortcut).
+-- Only sha256(token) is stored; the plaintext is returned once at creation.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens (user_id);
