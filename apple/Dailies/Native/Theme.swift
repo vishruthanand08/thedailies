@@ -113,9 +113,6 @@ struct ChunkyCard: ViewModifier {
 extension View {
     func chunkyCard(_ fill: Color) -> some View { modifier(ChunkyCard(fill: fill)) }
 
-    /// A lighter version of the crown card's look for repeated items (each game on the Mac).
-    func chunkyTile(_ fill: Color) -> some View { modifier(ChunkyCard(fill: fill, radius: 14, weight: 2, shadow: 3)) }
-
     /// Never wraps: text stays on one line and anything past the available width is hidden,
     /// fading out where it meets the next element.
     func oneLine(_ alignment: Alignment = .leading) -> some View { modifier(OneLine(alignment: alignment)) }
@@ -153,4 +150,58 @@ func ordinal(_ n: Int) -> String {
     default: suffix = "th"
     }
     return "\(n)\(suffix)"
+}
+
+/// Press-in: a pressed (or, with a pointer, hovered) control sinks into its own shadow, which
+/// disappears as it lands. Controls without a shadow just sink in a little.
+struct PressInStyle: ButtonStyle {
+    enum Kind {
+        /// The brand card look as a button: fill, ink outline, hard offset shadow.
+        case chunky(fill: Color, radius: CGFloat = 999, weight: CGFloat = 2, shadow: CGFloat = 3)
+        /// No shadow to sink into: shrink slightly.
+        case plain
+    }
+    var kind: Kind = .plain
+
+    func makeBody(configuration: Configuration) -> some View {
+        PressInBody(configuration: configuration, kind: kind)
+    }
+}
+
+private struct PressInBody: View {
+    let configuration: ButtonStyle.Configuration
+    let kind: PressInStyle.Kind
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let down = enabled && (configuration.isPressed || hovering)
+        Group {
+            switch kind {
+            case let .chunky(fill, radius, weight, shadow):
+                let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+                configuration.label
+                    .background(shape.fill(fill))
+                    .overlay(shape.strokeBorder(Color.onAccent, lineWidth: weight))
+                    .offset(x: down ? shadow : 0, y: down ? shadow : 0)
+                    // the shadow stays put underneath; the button slides onto it
+                    .background(shape.fill(Color.onAccent).offset(x: shadow, y: shadow).opacity(down ? 0 : 1))
+            case .plain:
+                configuration.label
+                    .scaleEffect(down ? 0.97 : 1)
+                    .opacity(down ? 0.8 : 1)
+            }
+        }
+        .contentShape(Rectangle())
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: down)
+        .onHover { hovering = $0 }
+    }
+}
+
+extension ButtonStyle where Self == PressInStyle {
+    static var pressIn: PressInStyle { PressInStyle() }
+    static func pressIn(_ fill: Color, radius: CGFloat = 999, weight: CGFloat = 2, shadow: CGFloat = 3) -> PressInStyle {
+        PressInStyle(kind: .chunky(fill: fill, radius: radius, weight: weight, shadow: shadow))
+    }
 }

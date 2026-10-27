@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
 import { circleIds } from './friends.js'
-import { GAMES, gameById, detect, expectedDate } from './parsers.js'
+import { GAMES, CATEGORIES, gameById, detect, expectedDate } from './parsers.js'
 import { buildBoards } from './scoring.js'
 import { todayISO, daysApart, isValidISODate, secondsToClock } from './util.js'
 
@@ -11,9 +11,10 @@ submissionsRouter.use(requireAuth)
 
 submissionsRouter.get('/games', (req, res) => {
   res.json({
-    games: GAMES.map(({ id, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
-      id, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed, paid: paid ?? null,
+    games: GAMES.map(({ id, category, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
+      id, category, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed, paid: paid ?? null,
     })),
+    categories: CATEGORIES,
   })
 })
 
@@ -99,8 +100,8 @@ submissionsRouter.get('/board', async (req, res) => {
       WHERE s.puzzle_date = $1 AND s.user_id = ANY($2)`,
     [date, ids]
   )
-  const { boards, crown } = buildBoards(rows)
-  res.json({ date, today: todayISO(), boards, crown, circleSize: ids.length })
+  const { boards, crown, categoryCrowns } = buildBoards(rows)
+  res.json({ date, today: todayISO(), boards, crown, categoryCrowns, circleSize: ids.length })
 })
 
 submissionsRouter.get('/feed', async (req, res) => {
@@ -161,39 +162,47 @@ submissionsRouter.get('/stats', async (req, res) => {
   )
   for (const r of rows) r.puzzle_date = iso(r.puzzle_date)
 
-  const players = new Map() // user_id -> overall row
-  const player = (id, username) => {
-    if (!players.has(id)) {
-      players.set(id, { userId: id, username, points: 0, crowns: 0, wins: 0, played: 0, days: new Set(), allDays: new Set() })
+  // standings per scope: 'all' plus one per category, so each category has its own winners
+  const scopes = new Map([['all', new Map()], ...CATEGORIES.map((c) => [c.id, new Map()])])
+  const player = (scope, id, username) => {
+    const m = scopes.get(scope)
+    if (!m.has(id)) {
+      m.set(id, { userId: id, username, points: 0, crowns: 0, wins: 0, played: 0, days: new Set(), allDays: new Set() })
     }
-    return players.get(id)
+    return m.get(id)
   }
   const perGame = new Map() // game_id -> user_id -> { played, wins, sum, best }
 
   const byDate = new Map()
   for (const r of rows) {
-    player(r.user_id, r.username).allDays.add(r.puzzle_date)
+    player('all', r.user_id, r.username).allDays.add(r.puzzle_date)
+    const cat = gameById[r.game_id]?.category
+    if (cat) player(cat, r.user_id, r.username).allDays.add(r.puzzle_date)
     if (since && r.puzzle_date < since) continue
     if (!byDate.has(r.puzzle_date)) byDate.set(r.puzzle_date, [])
     byDate.get(r.puzzle_date).push(r)
   }
 
   for (const dayRows of byDate.values()) {
-    const { boards, crown } = buildBoards(dayRows)
-    if (crown.length >= 2) {
-      for (const c of crown) if (c.points === crown[0].points) player(c.userId, c.username).crowns += 1
+    const { boards, crown, categoryCrowns } = buildBoards(dayRows)
+    for (const [scope, list] of [['all', crown], ...Object.entries(categoryCrowns)]) {
+      if (list.length >= 2) {
+        for (const c of list) if (c.points === list[0].points) player(scope, c.userId, c.username).crowns += 1
+      }
+      for (const c of list) player(scope, c.userId, c.username).points += c.points
     }
-    for (const c of crown) player(c.userId, c.username).points += c.points
     for (const b of boards) {
       const game = gameById[b.gameId]
       if (!perGame.has(b.gameId)) perGame.set(b.gameId, new Map())
       const g = perGame.get(b.gameId)
       for (const e of b.entries) {
-        const p = player(e.userId, e.username)
-        p.played += 1
-        p.days.add(dayRows[0].puzzle_date)
         const won = e.rank === 1 && b.entries.length >= 2
-        if (won) p.wins += 1
+        for (const scope of ['all', game.category]) {
+          const p = player(scope, e.userId, e.username)
+          p.played += 1
+          p.days.add(dayRows[0].puzzle_date)
+          if (won) p.wins += 1
+        }
         const s = g.get(e.userId) || { userId: e.userId, username: e.username, played: 0, wins: 0, sum: 0, best: null }
         s.played += 1
         if (won) s.wins += 1
@@ -233,13 +242,15 @@ submissionsRouter.get('/stats', async (req, res) => {
     return best
   }
 
-  const overall = [...players.values()]
+  const standings = (scope) => [...scopes.get(scope).values()]
     .filter((p) => p.played > 0)
     .map((p) => ({
       userId: p.userId, username: p.username, points: p.points, crowns: p.crowns, wins: p.wins,
       played: p.played, daysPlayed: p.days.size, streak: streak(p.allDays), bestStreak: bestStreak(p.allDays),
     }))
     .sort((a, b) => b.points - a.points || b.crowns - a.crowns || a.username.localeCompare(b.username))
+  const overall = standings('all')
+  const categories = Object.fromEntries(CATEGORIES.map((c) => [c.id, standings(c.id)]))
 
   const games = GAMES.filter((game) => perGame.has(game.id)).map((game) => {
     const dir = game.better === 'higher' ? -1 : 1
@@ -253,5 +264,5 @@ submissionsRouter.get('/stats', async (req, res) => {
     return { gameId: game.id, better: game.better, entries }
   })
 
-  res.json({ days, since, today, overall, games })
+  res.json({ days, since, today, overall, categories, games })
 })

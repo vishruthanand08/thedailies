@@ -104,14 +104,18 @@ export default function Today({ me }) {
   }, [backFrom])
 
   useEffect(() => {
-    api.get('/submissions/games').then((d) => setGames(d.games))
+    api.get('/submissions/games').then((d) => {
+      setGames(d.games)
+      setCategories(d.categories ?? [])
+    })
   }, [])
 
   // favorites pin games to the top; drag (or arrow keys on the handle) to rearrange
-  const [prefs, setPrefs] = useState({ order: [], favorites: [] })
+  const [categories, setCategories] = useState([])
+  const [prefs, setPrefs] = useState({ order: [], favorites: [], categoryOrder: [], collapsed: [] })
   const [prefsError, setPrefsError] = useState(null)
   useEffect(() => {
-    api.get('/prefs').then(setPrefs).catch(() => {})
+    api.get('/prefs').then((p) => setPrefs((old) => ({ ...old, ...p }))).catch(() => {})
   }, [])
   const savePrefs = (patch) => {
     setPrefsError(null)
@@ -119,13 +123,32 @@ export default function Today({ me }) {
   }
   const ordered = useMemo(() => arrange(games, prefs.order), [games, prefs.order])
   const favSet = useMemo(() => new Set(prefs.favorites), [prefs.favorites])
-  const favGames = ordered.filter((g) => favSet.has(g.id))
-  const otherGames = ordered.filter((g) => !favSet.has(g.id))
-  // the latest order, updated as soon as a game moves (a drop can land before React re-renders)
+  // favorites keep the order they were pinned in (and rearranged to); a favorite stays in its
+  // category too, so it shows up in both places
+  const favGames = useMemo(() => {
+    const byId = Object.fromEntries(games.map((g) => [g.id, g]))
+    return prefs.favorites.map((id) => byId[id]).filter(Boolean)
+  }, [games, prefs.favorites])
+  const orderedCategories = useMemo(() => arrange(categories, prefs.categoryOrder ?? []), [categories, prefs.categoryOrder])
+  const collapsed = useMemo(() => new Set(prefs.collapsed ?? []), [prefs.collapsed])
+  const groups = [
+    { id: 'favorites', title: '★ Favorites', games: favGames, movable: false },
+    ...orderedCategories.map((c) => ({
+      id: c.id, title: `${c.emoji} ${c.name}`, movable: true,
+      games: ordered.filter((g) => g.category === c.id),
+    })),
+  ].filter((group) => group.games.length > 0)
+  // games only move within their group. Favorites are ordered by the favorites list itself and
+  // categories by the game order, so rearranging one never reshuffles the other.
+  const gameCategoryRef = useRef({})
+  gameCategoryRef.current = Object.fromEntries(games.map((g) => [g.id, g.category]))
+  // the latest lists, updated as soon as a game moves (a drop can land before React re-renders)
   const orderIdsRef = useRef([])
   orderIdsRef.current = ordered.map((g) => g.id)
-  const favSetRef = useRef(favSet)
-  favSetRef.current = favSet
+  const favIdsRef = useRef([])
+  favIdsRef.current = favGames.map((g) => g.id)
+  const groupIds = (group) =>
+    group === 'favorites' ? favIdsRef.current : orderIdsRef.current.filter((id) => gameCategoryRef.current[id] === group)
 
   const toggleFavorite = (game) => {
     const favorites = favSet.has(game.id) ? prefs.favorites.filter((id) => id !== game.id) : [...prefs.favorites, game.id]
@@ -133,40 +156,44 @@ export default function Today({ me }) {
     savePrefs({ favorites })
   }
 
-  // put `id` where `targetId` is; returns the new full order
-  const moveGame = (id, targetId) => {
-    const ids = [...orderIdsRef.current]
+  // put `id` where `targetId` is within `group`; returns the prefs patch to save
+  const moveGame = (id, targetId, group) => {
+    const fav = group === 'favorites'
+    const ids = [...(fav ? favIdsRef.current : orderIdsRef.current)]
     const from = ids.indexOf(id)
     const to = ids.indexOf(targetId)
     if (from === -1 || to === -1 || from === to) return null
     ids.splice(from, 1)
     ids.splice(to, 0, id)
-    orderIdsRef.current = ids
-    setPrefs((p) => ({ ...p, order: ids }))
-    return ids
+    if (fav) favIdsRef.current = ids
+    else orderIdsRef.current = ids
+    const patch = fav ? { favorites: ids } : { order: ids }
+    setPrefs((p) => ({ ...p, ...patch }))
+    return patch
   }
 
-  const [draggingId, setDraggingId] = useState(null)
-  const startDrag = (e, game) => {
+  // `${group}:${gameId}`, since a favorite appears twice
+  const [draggingKey, setDraggingKey] = useState(null)
+  const startDrag = (e, game, group) => {
     if (e.button !== 0) return
     e.preventDefault()
-    const drag = { id: game.id, fav: favSetRef.current.has(game.id), last: null, x: e.clientX, y: e.clientY, moved: false }
-    setDraggingId(game.id)
+    const drag = { id: game.id, group, last: null, x: e.clientX, y: e.clientY, moved: false }
+    setDraggingKey(`${group}:${game.id}`)
 
     const retarget = () => {
       // look through the fixed paste bar on phones to the tile underneath
       const target = document
         .elementsFromPoint(drag.x, drag.y)
-        .map((el) => el.closest('[data-gameid]'))
+        .map((el) => el.closest(`[data-group="${drag.group}"] [data-gameid]`))
         .find(Boolean)?.dataset.gameid
       if (!target || target === drag.id) {
         drag.last = null
         return
       }
       // ignore the tile we just swapped with until the pointer leaves it, so they don't flicker back and forth
-      if (target === drag.last || favSetRef.current.has(target) !== drag.fav) return
+      if (target === drag.last) return
       drag.last = target
-      if (moveGame(drag.id, target)) drag.moved = true
+      if (moveGame(drag.id, target, drag.group)) drag.moved = true
     }
     // scroll while holding a tile near the top or bottom of the screen
     let raf
@@ -191,8 +218,10 @@ export default function Today({ me }) {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', end)
-      setDraggingId(null)
-      if (drag.moved) savePrefs({ order: orderIdsRef.current })
+      setDraggingKey(null)
+      if (drag.moved) {
+        savePrefs(drag.group === 'favorites' ? { favorites: favIdsRef.current } : { order: orderIdsRef.current })
+      }
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', end)
@@ -200,14 +229,73 @@ export default function Today({ me }) {
   }
 
   // arrow keys on the handle move a game one place within its group
-  const nudge = (game, step) => {
-    const fav = favSetRef.current
-    const group = orderIdsRef.current.filter((id) => fav.has(id) === fav.has(game.id))
-    const target = group[group.indexOf(game.id) + step]
+  const nudge = (game, step, group) => {
+    const ids = groupIds(group)
+    const target = ids[ids.indexOf(game.id) + step]
     if (!target) return
-    const ids = moveGame(game.id, target)
-    if (ids) savePrefs({ order: ids })
+    const patch = moveGame(game.id, target, group)
+    if (patch) savePrefs(patch)
   }
+
+  const toggleCollapsed = (id) => {
+    const next = collapsed.has(id) ? [...collapsed].filter((x) => x !== id) : [...collapsed, id]
+    setPrefs((p) => ({ ...p, collapsed: next }))
+    savePrefs({ collapsed: next })
+  }
+
+  const categoryIdsRef = useRef([])
+  categoryIdsRef.current = orderedCategories.map((c) => c.id)
+  const moveCategory = (id, targetId) => {
+    const ids = [...categoryIdsRef.current]
+    const from = ids.indexOf(id)
+    const to = ids.indexOf(targetId)
+    if (from === -1 || to === -1 || from === to) return null
+    ids.splice(from, 1)
+    ids.splice(to, 0, id)
+    categoryIdsRef.current = ids
+    setPrefs((p) => ({ ...p, categoryOrder: ids }))
+    return ids
+  }
+  const [draggingCategory, setDraggingCategory] = useState(null)
+  const startCategoryDrag = (e, id) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const drag = { id, last: null, moved: false }
+    setDraggingCategory(id)
+    const move = (ev) => {
+      const target = document
+        .elementsFromPoint(ev.clientX, ev.clientY)
+        .map((el) => el.closest('[data-categoryid]'))
+        .find(Boolean)?.dataset.categoryid
+      if (!target || target === id) {
+        drag.last = null
+        return
+      }
+      if (target === drag.last) return
+      drag.last = target
+      if (moveCategory(id, target)) drag.moved = true
+    }
+    const end = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      setDraggingCategory(null)
+      if (drag.moved) savePrefs({ categoryOrder: categoryIdsRef.current })
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+  const nudgeCategory = (id, step) => {
+    const ids = categoryIdsRef.current
+    const target = ids[ids.indexOf(id) + step]
+    if (!target) return
+    const next = moveCategory(id, target)
+    if (next) savePrefs({ categoryOrder: next })
+  }
+
+  // the crown card can show the overall standings or one category's
+  const [crownScope, setCrownScope] = useState('all')
 
   const load = (d) => {
     api.get(`/submissions/board${d ? `?date=${d}` : ''}`).then((resp) => {
@@ -358,8 +446,25 @@ export default function Today({ me }) {
 
       {board.crown.length > 0 && (
         <div className="card crowncard">
-          <h3>👑 Daily crown</h3>
-          {board.crown.map((c, i) => (
+          <div className="crownhead">
+            <h3>👑 Daily crown</h3>
+            <div className="scopechips" role="group" aria-label="Standings for">
+              {[{ id: 'all', name: 'Overall' }, ...orderedCategories].map((c) => (
+                <button
+                  key={c.id}
+                  className={`scopechip${crownScope === c.id ? ' active' : ''}`}
+                  aria-pressed={crownScope === c.id}
+                  onClick={() => setCrownScope(c.id)}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).length === 0 && (
+            <p className="hint crownempty">Nobody has played these games {isToday ? 'yet today' : 'this day'}.</p>
+          )}
+          {(crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).map((c, i) => (
             <div key={c.userId} className={`crownrow${c.userId === me.id ? ' me' : ''}`}>
               <span>{['🥇', '🥈', '🥉'][i] ?? `${i + 1}.`}</span>
               <span>
@@ -374,38 +479,72 @@ export default function Today({ me }) {
 
       {prefsError && <div className="flash err gridflash" role="status">{prefsError}</div>}
 
-      {[
-        ['fav', '★ Favorites', favGames],
-        ['all', favGames.length ? 'All games' : null, otherGames],
-      ].map(([key, title, list]) =>
-        list.length === 0 ? null : (
-          <section key={key} className="gamegroup" aria-label={title ?? 'Games'}>
-            {title && <h3 className="grouptitle">{title}</h3>}
-            <div className="tilegrid">
-              {list.map((g) => (
-                <GameTile
-                  key={g.id}
-                  game={g}
-                  entries={boardsByGame[g.id] ?? []}
-                  me={me}
-                  isToday={isToday}
-                  favorite={favSet.has(g.id)}
-                  dragging={draggingId === g.id}
-                  onFavorite={toggleFavorite}
-                  onDragStart={startDrag}
-                  onNudge={nudge}
-                  onRemove={remove}
-                  onManual={submitManual}
-                  onPlay={setPlaying}
-                  onLeave={leftForGame}
-                />
-              ))}
+      {groups.map((group) => {
+        const open = !collapsed.has(group.id)
+        return (
+          <section
+            key={group.id}
+            className={`gamegroup${draggingCategory === group.id ? ' dragging' : ''}`}
+            aria-label={group.title}
+            data-categoryid={group.movable ? group.id : undefined}
+            data-group={group.id}
+          >
+            <div className="grouphead">
+              <button
+                className="grouptoggle"
+                aria-expanded={open}
+                onClick={() => toggleCollapsed(group.id)}
+              >
+                <span className={`chevron${open ? ' open' : ''}`} aria-hidden="true">›</span>
+                <span className="grouptitle">{group.title}</span>
+                <span className="groupcount">{group.games.length}</span>
+              </button>
+              {group.movable && (
+                <button
+                  className="iconbtn handle"
+                  aria-label={`Move the ${group.title.replace(/^\S+ /, '')} group. Drag, or use the arrow keys`}
+                  title="Drag to move this group"
+                  onPointerDown={(e) => startCategoryDrag(e, group.id)}
+                  onKeyDown={(e) => {
+                    const step = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key]
+                    if (!step) return
+                    e.preventDefault()
+                    const el = e.currentTarget
+                    nudgeCategory(group.id, step)
+                    requestAnimationFrame(() => el.focus())
+                  }}
+                >
+                  ⠿
+                </button>
+              )}
             </div>
+            {open && (
+              <div className="tilegrid">
+                {group.games.map((g) => (
+                  <GameTile
+                    key={g.id}
+                    game={g}
+                    entries={boardsByGame[g.id] ?? []}
+                    me={me}
+                    isToday={isToday}
+                    favorite={favSet.has(g.id)}
+                    dragging={draggingKey === `${group.id}:${g.id}`}
+                    onFavorite={toggleFavorite}
+                    onDragStart={(e, game) => startDrag(e, game, group.id)}
+                    onNudge={(game, step) => nudge(game, step, group.id)}
+                    onRemove={remove}
+                    onManual={submitManual}
+                    onPlay={setPlaying}
+                    onLeave={leftForGame}
+                  />
+                ))}
+              </div>
+            )}
           </section>
         )
-      )}
+      })}
       {games.length > 0 && favGames.length === 0 && (
-        <p className="hint layouthint">Tap ☆ to pin a game to the top. Drag ⠿ to move games around.</p>
+        <p className="hint layouthint">Tap a game to play it. ☆ pins it to the top, ⠿ moves it.</p>
       )}
 
       <Suggestions />
@@ -424,8 +563,36 @@ function GameTile({
   const [paidOpen, setPaidOpen] = useState(false)
   const mine = entries.find((e) => e.userId === me.id)
 
+  // Play: in the app, native decides between the in-app game browser and Safari; on the site,
+  // games that allow framing open in a panel (cmd/ctrl-click still opens a tab), others a new tab
+  const play = (e, viaLink) => {
+    if (inApp) {
+      e.preventDefault()
+      tellNative({ type: 'open', url: game.url, gameId: game.id, name: game.name })
+      return
+    }
+    const newTab = e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0
+    if (game.embed && !newTab) {
+      e.preventDefault()
+      onPlay(game)
+      return
+    }
+    // a new tab: offer to paste the result when the player comes back
+    if (isToday) onLeave(game)
+    if (!viaLink) window.open(game.url, '_blank', 'noopener')
+  }
+
   return (
-    <div className={`card tile${dragging ? ' dragging' : ''}`} data-gameid={game.id}>
+    <div
+      className={`card tile playable${dragging ? ' dragging' : ''}`}
+      data-gameid={game.id}
+      // the whole card plays the game; its own buttons and links keep their jobs. Keyboard users
+      // get the same through the Play link.
+      onClick={(e) => {
+        if (e.target.closest('button, a, input, textarea, .manualrow, .paidinfo')) return
+        play(e, false)
+      }}
+    >
       <div className="tilehead">
         <div className="gameicon" style={{ background: game.color }}>{game.emoji}</div>
         <div className="titles">
@@ -448,22 +615,7 @@ function GameTile({
             href={game.url}
             target="_blank"
             rel="noreferrer"
-            onClick={(e) => {
-              // in the app, native decides between the in-app game browser and Safari
-              if (inApp) {
-                e.preventDefault()
-                tellNative({ type: 'open', url: game.url, gameId: game.id, name: game.name })
-                return
-              }
-              // on the site, games that allow framing open in a panel; cmd/ctrl-click still opens a tab
-              if (game.embed && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)) {
-                e.preventDefault()
-                onPlay(game)
-                return
-              }
-              // a new tab: offer to paste the result when the player comes back
-              if (isToday) onLeave(game)
-            }}
+            onClick={(e) => play(e, true)}
           >
             Play ↗
           </a>

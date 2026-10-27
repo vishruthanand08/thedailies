@@ -52,10 +52,7 @@ body {
   font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer;
   background: var(--ink); color: #fff; border: var(--border); border-radius: 999px;
   padding: 10px 22px; box-shadow: var(--shadow-sm);
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
-.btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
-.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 .btn.coral { background: var(--coral); color: var(--ink); }
 .btn.ghost { background: #fff; color: var(--ink); }
 .btn.small { padding: 5px 14px; font-size: 13px; box-shadow: 2px 2px 0 var(--ink); }
@@ -370,3 +367,61 @@ body:has(.tile.dragging) { cursor: grabbing; user-select: none; -webkit-user-sel
   .stattable .who { white-space: normal; }
   .stattable td, .stattable th { padding-left: 5px; padding-right: 5px; }
 }
+
+/* ---------- press-in ----------
+   Anything clickable sinks into its own shadow: on hover with a mouse, and while pressed
+   everywhere (touch has no hover). Shadowless controls just nudge in a little. */
+.btn, .tab, .navbtn, .userchip, .card.playable, .votebtn, .scopechip, .iconbtn, .grouptoggle,
+.playlink, .linklike, .paidbadge, .del {
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+.btn:disabled, .navbtn:disabled { transform: none !important; }
+@media (hover: hover) {
+  .btn:not(:disabled):hover, .tab:hover { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+  .btn.small:not(:disabled):hover, .navbtn:not(:disabled):hover, .userchip:hover { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+  .card.playable:hover { transform: translate(5px, 5px); box-shadow: 0 0 0 var(--ink); cursor: pointer; }
+  .votebtn:hover, .scopechip:hover, .iconbtn:hover, .paidbadge:hover, .del:hover { transform: translate(1px, 1px) scale(0.96); }
+  .playlink:hover, .linklike:hover { transform: translate(1px, 1px); }
+}
+.btn:not(:disabled):active, .tab:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+.btn.small:not(:disabled):active, .navbtn:not(:disabled):active, .userchip:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+.card.playable:active { transform: translate(5px, 5px); box-shadow: 0 0 0 var(--ink); }
+.votebtn:active, .scopechip:active, .iconbtn:active, .paidbadge:active, .del:active { transform: translate(1px, 1px) scale(0.94); }
+/* a game card stays put while one of its own buttons is being pressed */
+.card.playable:has(button:active, a:active, input:focus) { transform: none; box-shadow: var(--shadow); }
+.tile.dragging { transform: rotate(-1deg) !important; }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .tab, .navbtn, .userchip, .card.playable, .votebtn, .scopechip, .iconbtn, .grouptoggle,
+  .playlink, .linklike, .paidbadge, .del { transition: none; }
+}
+
+/* ---------- category groups ---------- */
+.grouphead { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.grouptoggle {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; text-align: left;
+  background: none; border: none; padding: 6px 4px; font: inherit; cursor: pointer; border-radius: 10px;
+}
+.grouptoggle:focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
+/* headers stay still: click opens and closes, the handle drags */
+.grouphead .handle:hover, .grouphead .handle:active { transform: none; }
+.grouptoggle .grouptitle { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chevron { display: inline-block; font-weight: 800; font-size: 20px; line-height: 1; width: 14px; transition: transform 0.15s ease; }
+.chevron.open { transform: rotate(90deg); }
+.groupcount {
+  font-size: 12px; font-weight: 700; color: var(--muted); background: #fff; border: 2px solid #d5cfeb;
+  border-radius: 999px; padding: 0 8px;
+}
+.gamegroup.dragging { opacity: 0.7; outline: 3px dashed var(--coral); outline-offset: 6px; border-radius: 12px; }
+
+/* ---------- crown card scope switcher ---------- */
+.crownhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.crownhead h3 { margin: 0; }
+.scopechips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.scopechip {
+  flex-shrink: 0; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.55); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 12px;
+}
+.scopechip.active { background: #fff; box-shadow: 2px 2px 0 var(--ink); }
+.scopechip:focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
+.crownempty { margin: 4px 2px 0; }
+.leaderscope { margin: -2px 0 14px; }

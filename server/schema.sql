@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS user_prefs (
   favorites TEXT NOT NULL DEFAULT '[]',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- added later: category groups on Today (their order, and which are collapsed)
+ALTER TABLE user_prefs ADD COLUMN IF NOT EXISTS category_order TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE user_prefs ADD COLUMN IF NOT EXISTS collapsed TEXT NOT NULL DEFAULT '[]';
 
 CREATE TABLE IF NOT EXISTS game_suggestions (
   id SERIAL PRIMARY KEY,

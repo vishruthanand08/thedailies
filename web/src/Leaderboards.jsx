@@ -25,6 +25,14 @@ export function useGames() {
   return useMemo(() => Object.fromEntries(games.map((g) => [g.id, g])), [games])
 }
 
+export function useCategories() {
+  const [categories, setCategories] = useState([])
+  useEffect(() => {
+    api.get('/submissions/games').then((d) => setCategories(d.categories ?? []))
+  }, [])
+  return categories
+}
+
 export function RangeRow({ range, onChange }) {
   return (
     <div className="rangerow" role="group" aria-label="Time range">
@@ -60,18 +68,20 @@ export default function Leaderboards({ me }) {
   const [range, setRange] = useState('all')
   const { stats, error } = useStats(range)
   const gameById = useGames()
+  const categories = useCategories()
+  const [scope, setScope] = useState('all') // overall, or one category's standings
   const [sortBy, setSortBy] = useState('points')
   const [gameId, setGameId] = useState(null)
 
   const overall = useMemo(() => {
     if (!stats) return []
-    const rows = [...stats.overall]
+    const rows = [...(scope === 'all' ? stats.overall : stats.categories?.[scope] ?? [])]
     if (sortBy !== 'points') rows.sort((a, b) => b[sortBy] - a[sortBy] || b.points - a.points)
     return rows
-  }, [stats, sortBy])
+  }, [stats, sortBy, scope])
 
   // the picked game, or the one with the most scores in this range
-  const gameBoards = stats?.games ?? []
+  const gameBoards = (stats?.games ?? []).filter((b) => scope === 'all' || gameById[b.gameId]?.category === scope)
   const busiest = [...gameBoards].sort(
     (a, b) => b.entries.reduce((n, e) => n + e.played, 0) - a.entries.reduce((n, e) => n + e.played, 0)
   )[0]
@@ -85,11 +95,26 @@ export default function Leaderboards({ me }) {
         <h3 className="sectiontitle">🏆 Leaderboard</h3>
         <RangeRow range={range} onChange={setRange} />
       </div>
+      <div className="scopechips leaderscope" role="group" aria-label="Standings for">
+        {[{ id: 'all', name: 'Overall' }, ...categories].map((c) => (
+          <button
+            key={c.id}
+            className={`scopechip${scope === c.id ? ' active' : ''}`}
+            aria-pressed={scope === c.id}
+            onClick={() => setScope(c.id)}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
 
       {error && <div className="flash err">{error}</div>}
       {!stats && !error && <div className="hint">loading…</div>}
       {stats && overall.length === 0 && (
-        <p className="hint">No scores {range === 'all' ? 'yet' : 'in this range'}.</p>
+        <p className="hint">
+          No scores {scope === 'all' ? '' : `in ${categories.find((c) => c.id === scope)?.name ?? 'this group'} `}
+          {range === 'all' ? 'yet' : 'in this range'}.
+        </p>
       )}
 
       {stats && overall.length > 0 && (

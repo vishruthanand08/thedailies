@@ -29,6 +29,7 @@ struct Game: Decodable, Identifiable, Hashable {
         let deals: [Deal]
     }
     let id: String
+    let category: String?
     let name: String
     let emoji: String
     let color: String
@@ -41,6 +42,13 @@ struct Game: Decodable, Identifiable, Hashable {
 
     var playURL: URL? { URL(string: url) }
     var acceptsManual: Bool { manual ?? false }
+}
+
+/// A group of games on Today (NYT, LinkedIn, Geography, ...), each with its own crown.
+struct GameCategory: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let symbol: String
 }
 
 struct BoardEntry: Decodable, Identifiable, Hashable {
@@ -70,12 +78,28 @@ struct Board: Decodable {
     let today: String
     let boards: [GameBoard]
     let crown: [CrownEntry]
+    /// Each category's crown from just its games (only categories someone played).
+    let categoryCrowns: [String: [CrownEntry]]?
     let circleSize: Int
 }
 
 struct Prefs: Codable, Equatable {
-    var order: [String]
-    var favorites: [String]
+    var order: [String] = []
+    var favorites: [String] = []
+    var categoryOrder: [String] = []
+    /// Collapsed groups: category ids, or "favorites".
+    var collapsed: [String] = []
+
+    init() {}
+
+    // an older server sends only order and favorites
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        order = try c.decodeIfPresent([String].self, forKey: .order) ?? []
+        favorites = try c.decodeIfPresent([String].self, forKey: .favorites) ?? []
+        categoryOrder = try c.decodeIfPresent([String].self, forKey: .categoryOrder) ?? []
+        collapsed = try c.decodeIfPresent([String].self, forKey: .collapsed) ?? []
+    }
 }
 
 enum DailiesError: Error, Equatable {
@@ -108,7 +132,7 @@ actor DailiesAPI {
     private struct SubmissionBody: Decodable { let submission: SubmissionResult }
     private struct MeBody: Decodable { let user: User }
     private struct ErrorBody: Decodable { let error: String }
-    private struct GamesBody: Decodable { let games: [Game] }
+    private struct GamesBody: Decodable { let games: [Game]; let categories: [GameCategory]? }
     private struct TokenBody: Decodable { let token: String; let id: Int? }
 
     func submit(text: String) async throws -> SubmissionResult {
@@ -120,8 +144,9 @@ actor DailiesAPI {
         try decode(MeBody.self, try await send("/api/auth/me")).user
     }
 
-    func games() async throws -> [Game] {
-        try decode(GamesBody.self, try await send("/api/submissions/games")).games
+    func games() async throws -> (games: [Game], categories: [GameCategory]) {
+        let body = try decode(GamesBody.self, try await send("/api/submissions/games"))
+        return (body.games, body.categories ?? [])
     }
 
     func board(date: String?) async throws -> Board {
@@ -133,10 +158,14 @@ actor DailiesAPI {
     }
 
     @discardableResult
-    func savePrefs(order: [String]? = nil, favorites: [String]? = nil) async throws -> Prefs {
+    func savePrefs(
+        order: [String]? = nil, favorites: [String]? = nil, categoryOrder: [String]? = nil, collapsed: [String]? = nil
+    ) async throws -> Prefs {
         var body: [String: Any] = [:]
         if let order { body["order"] = order }
         if let favorites { body["favorites"] = favorites }
+        if let categoryOrder { body["categoryOrder"] = categoryOrder }
+        if let collapsed { body["collapsed"] = collapsed }
         return try decode(Prefs.self, try await send("/api/prefs", method: "PUT", json: body))
     }
 

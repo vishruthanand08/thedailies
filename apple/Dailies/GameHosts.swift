@@ -9,6 +9,7 @@ enum GameHosts {
     static let all: Set<String> = [
         "worldle.teuteuf.fr", "globle-game.com", "travle.earth", "minutecryptic.com", "costcodle.com",
         "fermi.gg", "maptap.gg", "krillion.io", "hbd.gg", "geoguessr.com", "nytimes.com", "linkedin.com",
+        "timeguessr.com", "worldguessr.com",
     ]
 
     /// Title for the game browser when a link arrives without the web app's game name
@@ -17,7 +18,7 @@ enum GameHosts {
         let host = url.host ?? ""
         let path = url.path.lowercased()
         let byPath: [(String, String)] = [
-            ("wordle", "Wordle"), ("connections", "Connections"), ("mini", "The Mini"), ("queens", "Queens"),
+            ("wordle", "Wordle"), ("connections", "Connections"), ("strands", "Strands"), ("mini", "The Mini"), ("queens", "Queens"),
             ("tango", "Tango"), ("zip", "Zip"), ("pinpoint", "Pinpoint"), ("crossclimb", "Crossclimb"),
             ("wend", "Wend"), ("mini-sudoku", "Mini Sudoku"), ("patches", "Patches"),
         ]
@@ -27,7 +28,7 @@ enum GameHosts {
         }
         let byHost: [String: String] = [
             "worldle.teuteuf.fr": "Worldle", "globle-game.com": "Globle", "travle.earth": "Travle",
-            "minutecryptic.com": "Minute Cryptic", "costcodle.com": "Costcodle", "fermi.gg": "Fermi",
+            "minutecryptic.com": "Minute Cryptic", "timeguessr.com": "TimeGuessr", "worldguessr.com": "WorldGuessr", "costcodle.com": "Costcodle", "fermi.gg": "Fermi",
             "maptap.gg": "MapTap", "krillion.io": "Krillion", "hbd.gg": "EthnoGuessr", "geoguessr.com": "GeoGuessr",
         ]
         return byHost.first { host == $0.key || host.hasSuffix("." + $0.key) }?.value ?? host

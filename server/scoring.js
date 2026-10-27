@@ -2,7 +2,8 @@ import { gameById } from './parsers.js'
 
 // Competition ranking ("1-2-2-4") per game, then points = N - rank + 1
 // where N = number of players who submitted that game that day.
-// The daily crown is the sum of points across games.
+// The daily crown is the sum of points across games; each category gets its own crown from just
+// its games (categoryCrowns: { nyt: [...], linkedin: [...], ... }, only categories someone played).
 export function buildBoards(rows) {
   const byGame = new Map()
   for (const row of rows) {
@@ -12,6 +13,7 @@ export function buildBoards(rows) {
 
   const boards = []
   const crownPoints = new Map() // user_id -> { points, games }
+  const categoryPoints = new Map() // category -> user_id -> { points, games }
 
   for (const [gameId, subs] of byGame) {
     const game = gameById[gameId]
@@ -34,6 +36,12 @@ export function buildBoards(rows) {
       c.points += e.points
       c.games += 1
       crownPoints.set(e.user_id, c)
+      if (!categoryPoints.has(game.category)) categoryPoints.set(game.category, new Map())
+      const cat = categoryPoints.get(game.category)
+      const cc = cat.get(e.user_id) || { points: 0, games: 0 }
+      cc.points += e.points
+      cc.games += 1
+      cat.set(e.user_id, cc)
     }
     boards.push({
       gameId,
@@ -51,9 +59,11 @@ export function buildBoards(rows) {
   }
 
   const usernames = new Map(rows.map((r) => [r.user_id, r.username]))
-  const crown = [...crownPoints.entries()]
+  const rank = (points) => [...points.entries()]
     .map(([userId, c]) => ({ userId, username: usernames.get(userId), points: c.points, games: c.games }))
     .sort((a, b) => b.points - a.points || b.games - a.games)
+  const crown = rank(crownPoints)
+  const categoryCrowns = Object.fromEntries([...categoryPoints].map(([cat, points]) => [cat, rank(points)]))
 
-  return { boards, crown }
+  return { boards, crown, categoryCrowns }
 }

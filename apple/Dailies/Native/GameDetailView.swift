@@ -32,10 +32,8 @@ struct GameDetailView: View {
                                 .padding(.horizontal, 16)
                                 .foregroundStyle(Color.onAccent)
                                 .frame(maxWidth: .infinity, minHeight: 50)
-                                .background(Capsule().fill(Color.sun))
-                                .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 2))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressIn(.sun))
                     }
                 }
                 .frame(maxWidth: .infinity)

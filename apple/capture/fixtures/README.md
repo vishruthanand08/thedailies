@@ -14,6 +14,7 @@ Only add text captured from a real share. Don't type one from memory or adapt an
 | minutecryptic | minutecryptic.com share, 2026-10-26 |
 | krillion | krillion.io share, 2026-10-26 (from the parser's verified comment) |
 | mini | NYT Mini share link (shared/v2/mini-xwd.html), 2026-10-27 |
+| strands, timeguessr, worldguessr | web shares, 2026-10-27 |
 
 ## Still needed
 

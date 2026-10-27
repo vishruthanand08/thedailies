@@ -15,68 +15,7 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                if let error = model.error, model.board == nil {
-                    ContentUnavailableView {
-                        Label("Couldn't load", systemImage: "wifi.exclamationmark")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Try again") { Task { await model.reload() } }
-                    }
-                    .listRowBackground(Color.clear)
-                }
-
-                // the date title is part of the page, so it slides with the day instead of
-                // staying put in the navigation bar while the content moves under it
-                #if os(iOS)
-                Text(model.title)
-                    .font(.brand(.largeTitle, .heavy))
-                    .foregroundStyle(Color.ink)
-                    .oneLine()
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("dayTitle")
-                    .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 0, trailing: 0))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                #endif
-
-                if let board = model.board {
-                    CrownCard(board: board, model: model, goToFriends: goToFriends,
-                              onDrag: dragChanged, onDragEnd: dragEnded, onPage: page)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
-
-                // press and drag a row to reorder (onMove works outside edit mode)
-                if !model.favorites.isEmpty {
-                    Section {
-                        ForEach(model.favorites) { row($0) }
-                            .onMove { model.move(inFavorites: true, from: $0, to: $1) }
-                    } header: {
-                        sectionHeader("Favorites", systemImage: "star.fill")
-                    }
-                }
-
-                if !model.others.isEmpty {
-                    Section {
-                        ForEach(model.others) { row($0) }
-                            .onMove { model.move(inFavorites: false, from: $0, to: $1) }
-                    } header: {
-                        sectionHeader(model.favorites.isEmpty ? "Games" : "All games", systemImage: nil)
-                    } footer: {
-                        if model.favorites.isEmpty {
-                            Text("Swipe right on a game to favorite it. Press and drag to reorder.").oneLine()
-                        }
-                    }
-                }
-            }
-            #if os(iOS)
-            .listStyle(.insetGrouped)
-            #else
-            .listStyle(.inset)
-            #endif
+            dayPage
             .scrollContentBackground(.hidden)
             .offset(x: pageOffset)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
@@ -124,7 +63,131 @@ struct TodayView: View {
         }
     }
 
-    #if os(macOS)
+    #if os(iOS)
+    private var dayPage: some View {
+        List {
+            if let error = model.error, model.board == nil {
+                ContentUnavailableView {
+                    Label("Couldn't load", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Try again") { Task { await model.reload() } }
+                }
+                .listRowBackground(Color.clear)
+            }
+
+            // the date title is part of the page, so it slides with the day instead of
+            // staying put in the navigation bar while the content moves under it
+            #if os(iOS)
+            Text(model.title)
+                .font(.brand(.largeTitle, .heavy))
+                .foregroundStyle(Color.ink)
+                .oneLine()
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("dayTitle")
+                .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 0, trailing: 0))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            #endif
+
+            if let board = model.board {
+                CrownCard(board: board, model: model, goToFriends: goToFriends,
+                          onDrag: dragChanged, onDragEnd: dragEnded, onPage: page)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
+            // one section per group; press and drag a game to reorder it within its group
+            ForEach(model.groups) { group in
+                Section {
+                    if !model.isCollapsed(group) {
+                        ForEach(group.games) { row($0) }
+                            .onMove { model.move(in: group.id, from: $0, to: $1) }
+                    }
+                } header: {
+                    groupHeader(group)
+                } footer: {
+                    if group.id == model.groups.last?.id && model.favorites.isEmpty {
+                        Text("Tap a game to play it. Swipe right to favorite it.").oneLine()
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+    #else
+    /// The Mac follows the website: the crown card on top, then each group's games as a grid
+    /// of cards with their scores right on them.
+    private var dayPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                if let error = model.error, model.board == nil {
+                    ContentUnavailableView {
+                        Label("Couldn't load", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(error)
+                    } actions: {
+                        Button("Try again") { Task { await model.reload() } }
+                    }
+                }
+                if let board = model.board {
+                    CrownCard(board: board, model: model, goToFriends: goToFriends,
+                              onDrag: dragChanged, onDragEnd: dragEnded, onPage: page)
+                }
+                ForEach(model.groups) { group in
+                    VStack(alignment: .leading, spacing: 12) {
+                        groupHeader(group)
+                        if !model.isCollapsed(group) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 18, alignment: .top)], alignment: .leading, spacing: 18) {
+                                ForEach(group.games) { tile($0, in: group) }
+                            }
+                        }
+                    }
+                }
+                if !model.games.isEmpty && model.favorites.isEmpty {
+                    Text("Click a game to play it. ☆ adds it to Favorites, and you can drag games to rearrange them.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .oneLine()
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 20)
+            .frame(maxWidth: 1100, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func tile(_ game: Game, in group: TodayModel.Group) -> some View {
+        let mine = model.myEntry(for: game)
+        let favorite = model.prefs.favorites.contains(game.id)
+        return MacGameTile(
+            game: game, entries: model.entries(for: game), me: model.me, isToday: model.isToday, favorite: favorite,
+            onPlay: { model.play(game) },
+            onInfo: { path.append(game.id) },
+            onFavorite: { withAnimation(.snappy) { model.toggleFavorite(game) } },
+            onDelete: { entry in Task { await model.delete(entry) } }
+        )
+        // drag a card onto another in the same group to put it there
+        .draggable(game.id) { GameAvatar(game: game, size: 42) }
+        .dropDestination(for: String.self) { ids, _ in
+            guard let id = ids.first, group.games.contains(where: { $0.id == id }) else { return false }
+            withAnimation(.snappy) { model.move(in: group.id, id: id, onto: game.id) }
+            return true
+        }
+        .contextMenu {
+            if model.isToday { Button("Play \(game.name)") { model.play(game) } }
+            Button("Show Scores") { path.append(game.id) }
+            Button(favorite ? "Remove from Favorites" : "Add to Favorites") { model.toggleFavorite(game) }
+            if model.isToday, let mine {
+                Divider()
+                Button("Delete My Score", role: .destructive) { Task { await model.delete(mine) } }
+            }
+        }
+    }
+
     @ToolbarContentBuilder
     private var macToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
@@ -183,54 +246,93 @@ struct TodayView: View {
         }
     }
 
-    private func sectionHeader(_ title: String, systemImage: String?) -> some View {
-        HStack(spacing: 6) {
-            if let systemImage { Image(systemName: systemImage).foregroundStyle(Color.sun) }
-            Text(title).oneLine()
+    /// A group's header: click to open or close it; hold and drag it (or its handle) onto another
+    /// group to move it there, like the website.
+    private func groupHeader(_ group: TodayModel.Group) -> some View {
+        let open = !model.isCollapsed(group)
+        return HStack(spacing: 8) {
+            Button { withAnimation(.snappy) { model.toggleCollapsed(group) } } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.heavy))
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                    Image(systemName: group.symbol)
+                        .foregroundStyle(group.id == "favorites" ? Color.sun : Color.ink)
+                    #if os(macOS)
+                    Text(group.title).lineLimit(1)
+                    #else
+                    Text(group.title).oneLine()
+                    #endif
+                    Text("\(group.games.count)")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .background(Capsule().fill(Color.surface))
+                        .layoutPriority(1)
+                }
+                .frame(minHeight: 36)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain) // headers stay still; only games and buttons press in
+            #if os(macOS)
+            .fixedSize()
+            #endif
+            .accessibilityLabel("\(group.title), \(group.games.count) games")
+            .accessibilityValue(open ? "Expanded" : "Collapsed")
+            .accessibilityHint(open ? "Collapses the group" : "Expands the group")
+            Spacer(minLength: 0)
+            if group.movable {
+                DragDots()
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+                    #if os(macOS)
+                    .help("Drag to move this group")
+                    #endif
+                    .accessibilityHidden(true)
+            }
         }
+        #if os(macOS)
+        .font(.brand(.title3, .heavy)) // the site's big group titles
+        #else
         .font(.brand(.subheadline, .heavy))
+        #endif
         .foregroundStyle(Color.ink)
         .textCase(nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .modifier(CategoryDrag(group: group, model: model))
     }
 
     // MARK: game rows
 
+    #if os(iOS)
     private func row(_ game: Game) -> some View {
         let entries = model.entries(for: game)
         let mine = model.myEntry(for: game)
         let favorite = model.prefs.favorites.contains(game.id)
-        return NavigationLink(value: game.id) {
-            GameRow(game: game, entries: entries, mine: mine, isToday: model.isToday) { model.play(game) }
-                #if os(macOS)
-                // Mac lists run edge to edge; each game gets its own card, like the crown card
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .chunkyTile(.surface)
-                #endif
+        let info = Button { path.append(game.id) } label: {
+            Image(systemName: "info.circle")
+                .font(.title3)
+                .foregroundStyle(Color.ink.opacity(0.7))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        #if os(macOS)
-        .listRowInsets(EdgeInsets(top: 5, leading: 0, bottom: 9, trailing: 3))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-        #else
+        .buttonStyle(.pressIn)
+        .accessibilityLabel("\(game.name) scores")
+        return Button { model.play(game) } label: {
+            GameRow(game: game, entries: entries, mine: mine, isToday: model.isToday)
+                .padding(.trailing, 40) // room for the info button on top
+        }
+        .buttonStyle(.pressIn)
+        .overlay(alignment: .trailing) { info }
         .listRowBackground(Color.surface)
-        #endif
+        .accessibilityHint(model.isToday ? "Opens the game" : "")
         .swipeActions(edge: .leading) {
             Button { model.toggleFavorite(game) } label: {
                 Label(favorite ? "Unfavorite" : "Favorite", systemImage: favorite ? "star.slash" : "star.fill")
             }
             .tint(Color.sun)
         }
-        #if os(macOS)
-        .contextMenu {
-            if model.isToday { Button("Play \(game.name)") { model.play(game) } }
-            Button(favorite ? "Remove from Favorites" : "Add to Favorites") { model.toggleFavorite(game) }
-            if model.isToday, let mine {
-                Divider()
-                Button("Delete My Score", role: .destructive) { Task { await model.delete(mine) } }
-            }
-        }
-        #endif
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if model.isToday {
                 if let mine {
@@ -244,6 +346,7 @@ struct TodayView: View {
             }
         }
     }
+    #endif
 }
 
 /// The day's standings. Swipe it right for the day before, left to come forward again.
@@ -264,16 +367,41 @@ private struct CrownCard: View {
                 if !model.isToday {
                     Image(systemName: "clock.arrow.circlepath").font(.subheadline.weight(.bold)).accessibilityHidden(true)
                 }
+                // Overall, or one category's winners (NYT, LinkedIn, ...)
+                Menu {
+                    Picker("Standings", selection: Binding(get: { model.crownScope }, set: { model.crownScope = $0 })) {
+                        Text("Overall").tag("all")
+                        ForEach(model.orderedCategories) { c in
+                            Label(c.name, systemImage: c.symbol).tag(c.id)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(model.crownScopeName).lineLimit(1)
+                        Image(systemName: "chevron.down").font(.caption2.weight(.heavy))
+                    }
+                    .font(.brand(.subheadline, .bold))
+                    .foregroundStyle(Color.onAccent)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 32)
+                    .background(Capsule().fill(Color.white.opacity(0.75)))
+                    .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
+                    .layoutPriority(1)
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityLabel("Standings: \(model.crownScopeName)")
             }
             .foregroundStyle(Color.onAccent)
 
-            if board.crown.isEmpty {
-                Text(model.isToday ? "No scores yet. Play a game to take the lead." : "Nobody played this day.")
+            if model.crown.isEmpty {
+                Text(model.crownScope != "all" ? "Nobody has played these games \(model.isToday ? "yet today" : "this day")."
+                     : model.isToday ? "No scores yet. Play a game to take the lead." : "Nobody played this day.")
                     .font(.subheadline)
                     .foregroundStyle(Color.onAccent.opacity(0.8))
                     .oneLine()
             } else {
-                ForEach(Array(board.crown.enumerated()), id: \.element.id) { i, c in
+                ForEach(Array(model.crown.enumerated()), id: \.element.id) { i, c in
                     crownRow(rank: i + 1, entry: c)
                 }
             }
@@ -285,10 +413,8 @@ private struct CrownCard: View {
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .foregroundStyle(Color.onAccent)
-                        .background(Capsule().fill(Color.white.opacity(0.7)))
-                        .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressIn(.white))
             }
 
             #if os(iOS)
@@ -354,7 +480,6 @@ struct GameRow: View {
     let entries: [BoardEntry]
     let mine: BoardEntry?
     let isToday: Bool
-    let play: () -> Void
 
     private var subtitle: String {
         if let mine { return "\(ordinal(mine.rank)) of \(entries.count)" }
@@ -386,7 +511,8 @@ struct GameRow: View {
                     .foregroundStyle(Color.ink)
                     .layoutPriority(1)
             } else if isToday {
-                Button("Play", action: play)
+                // a cue only: the whole row plays the game
+                Text("Play")
                     .font(.brand(.subheadline, .heavy))
                     .lineLimit(1)
                     .foregroundStyle(Color.onAccent)
@@ -394,13 +520,184 @@ struct GameRow: View {
                     .frame(minHeight: 34)
                     .background(Capsule().fill(Color.sun))
                     .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
-                    .contentShape(Capsule().inset(by: -6))
-                    .buttonStyle(.borderless)
                     .layoutPriority(1)
-                    .accessibilityLabel("Play \(game.name)")
             }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+#if os(macOS)
+/// One game as a card, like the website's tiles: the game, then the day's scores. Clicking the
+/// card plays the game; hovering sinks it into its shadow, the same press-in as the buttons.
+private struct MacGameTile: View {
+    let game: Game
+    let entries: [BoardEntry]
+    let me: String?
+    let isToday: Bool
+    let favorite: Bool
+    let onPlay: () -> Void
+    let onInfo: () -> Void
+    let onFavorite: () -> Void
+    let onDelete: (BoardEntry) -> Void
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let shadow: CGFloat = 5
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        let down = hovering && isToday
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            if entries.isEmpty {
+                Text(isToday ? "No scores yet. Be first." : "Nobody played.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .oneLine()
+                    .padding(.horizontal, 2)
+            } else {
+                VStack(spacing: 2) {
+                    ForEach(entries) { scoreRow($0) }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(shape.fill(Color.surface))
+        .overlay(shape.strokeBorder(Color.onAccent, lineWidth: 2.5))
+        .offset(x: down ? shadow : 0, y: down ? shadow : 0)
+        .background(shape.fill(Color.onAccent).offset(x: shadow, y: shadow).opacity(down ? 0 : 1))
+        .padding(.trailing, shadow)
+        .padding(.bottom, shadow)
+        .contentShape(shape)
+        .onHover { hovering = $0 }
+        .onTapGesture { if isToday { onPlay() } }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: down)
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: "Play \(game.name)") { onPlay() }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            GameAvatar(game: game, size: 42)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(game.name).font(.brand(.headline, .heavy)).foregroundStyle(Color.ink)
+                    if game.paid != nil {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .imageScale(.small)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Needs a subscription")
+                    }
+                }
+                .oneLine()
+                if isToday {
+                    Label("Play", systemImage: "arrow.up.right")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.ink.opacity(0.75))
+                        .oneLine()
+                }
+            }
+            Button(action: onFavorite) {
+                Image(systemName: favorite ? "star.fill" : "star")
+                    .font(.title3)
+                    .foregroundStyle(favorite ? Color.sun : Color.ink.opacity(0.6))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressIn)
+            .help(favorite ? "Remove from Favorites" : "Add to Favorites")
+            .accessibilityLabel(favorite ? "Remove \(game.name) from favorites" : "Add \(game.name) to favorites")
+            Button(action: onInfo) {
+                Image(systemName: "info.circle")
+                    .font(.title3)
+                    .foregroundStyle(Color.ink.opacity(0.6))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressIn)
+            .help("Show scores")
+            .accessibilityLabel("\(game.name) scores")
+        }
+    }
+
+    private func scoreRow(_ e: BoardEntry) -> some View {
+        let mine = e.username == me
+        return HStack(spacing: 8) {
+            Text(["🥇", "🥈", "🥉"].indices.contains(e.rank - 1) ? ["🥇", "🥈", "🥉"][e.rank - 1] : "\(e.rank).")
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            HStack(spacing: 4) {
+                Text(e.username)
+                if !e.verified {
+                    Text("manual").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                }
+            }
+            .oneLine()
+            Text(e.display).font(.brand(.subheadline, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
+            if mine && isToday {
+                Button { onDelete(e) } label: {
+                    Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.pressIn)
+                .help("Delete my score")
+                .accessibilityLabel("Delete my \(game.name) score")
+            }
+        }
+        .font(.brand(.subheadline, .semibold))
+        .foregroundStyle(Color.ink)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(mine ? Color.highlight : Color.clear))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(ordinal(e.rank)), \(mine ? "you" : e.username), \(e.display)")
+    }
+}
+#endif
+
+/// Hold a category's header and drag it onto another category's header to put it there.
+/// VoiceOver gets Move Up / Move Down actions instead.
+private struct CategoryDrag: ViewModifier {
+    let group: TodayModel.Group
+    let model: TodayModel
+    static let prefix = "dailies-category:"
+
+    func body(content: Content) -> some View {
+        if group.movable {
+            content
+                .draggable(Self.prefix + group.id) {
+                    Label(group.title, systemImage: group.symbol)
+                        .font(.brand(.subheadline, .heavy))
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.surface))
+                }
+                .dropDestination(for: String.self) { items, _ in
+                    guard let item = items.first, item.hasPrefix(Self.prefix) else { return false }
+                    withAnimation(.snappy) { model.moveCategory(String(item.dropFirst(Self.prefix.count)), onto: group.id) }
+                    return true
+                }
+                .accessibilityAction(named: "Move up") { withAnimation { model.moveCategory(group.id, by: -1) } }
+                .accessibilityAction(named: "Move down") { withAnimation { model.moveCategory(group.id, by: 1) } }
+        } else {
+            content
+        }
+    }
+}
+
+/// The website's ⠿ drag handle: two columns of three dots.
+private struct DragDots: View {
+    var body: some View {
+        Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+            ForEach(0..<3, id: \.self) { _ in
+                GridRow {
+                    Circle().frame(width: 4.5, height: 4.5)
+                    Circle().frame(width: 4.5, height: 4.5)
+                }
+            }
+        }
+        .foregroundStyle(Color.ink.opacity(0.6))
     }
 }

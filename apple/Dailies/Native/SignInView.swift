@@ -85,10 +85,8 @@ struct SignInView: View {
                         .font(.brand(.headline, .heavy))
                         .foregroundStyle(Color.onAccent)
                         .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(Capsule().fill(Color.sun))
-                        .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 2.5))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressIn(.sun, weight: 2.5, shadow: 4))
                     .disabled(!canSubmit)
                     .opacity(canSubmit || busy ? 1 : 0.5)
 

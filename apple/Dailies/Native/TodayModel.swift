@@ -8,8 +8,11 @@ final class TodayModel {
     static let shared = TodayModel()
 
     private(set) var games: [Game] = []
+    private(set) var categories: [GameCategory] = []
     private(set) var board: Board?
-    private(set) var prefs = Prefs(order: [], favorites: [])
+    private(set) var prefs = Prefs()
+    /// Which standings the crown card shows: "all" or a category id.
+    var crownScope = "all"
     private(set) var loading = false
     private(set) var error: String?
     /// The date being viewed; nil means the server's today.
@@ -29,8 +32,53 @@ final class TodayModel {
             .sorted { (at[$0.element.id] ?? prefs.order.count + $0.offset) < (at[$1.element.id] ?? prefs.order.count + $1.offset) }
             .map(\.element)
     }
-    var favorites: [Game] { ordered.filter { prefs.favorites.contains($0.id) } }
-    var others: [Game] { ordered.filter { !prefs.favorites.contains($0.id) } }
+    /// Favorites in the order they were pinned (and rearranged to). They stay in their category
+    /// too, so a favorite shows up in both places.
+    var favorites: [Game] {
+        let byId = Dictionary(uniqueKeysWithValues: games.map { ($0.id, $0) })
+        return prefs.favorites.compactMap { byId[$0] }
+    }
+
+    /// A section on Today: Favorites, then each category in the player's order.
+    struct Group: Identifiable {
+        let id: String
+        let title: String
+        let symbol: String
+        let games: [Game]
+        let movable: Bool
+    }
+
+    var orderedCategories: [GameCategory] {
+        let at = Dictionary(uniqueKeysWithValues: prefs.categoryOrder.enumerated().map { ($1, $0) })
+        return categories.enumerated()
+            .sorted { (at[$0.element.id] ?? 100 + $0.offset) < (at[$1.element.id] ?? 100 + $1.offset) }
+            .map(\.element)
+    }
+
+    var groups: [Group] {
+        var out = [Group(id: "favorites", title: "Favorites", symbol: "star.fill", games: favorites, movable: false)]
+        for c in orderedCategories {
+            out.append(Group(id: c.id, title: c.name, symbol: c.symbol,
+                             games: ordered.filter { $0.category == c.id }, movable: true))
+        }
+        // games outside every known category (or a server that doesn't send categories yet)
+        // still show up, in one group at the end
+        let known = Set(categories.map(\.id))
+        out.append(Group(id: "other", title: categories.isEmpty ? "Games" : "More Games", symbol: "square.grid.2x2.fill",
+                         games: ordered.filter { !known.contains($0.category ?? "") }, movable: false))
+        return out.filter { !$0.games.isEmpty }
+    }
+
+    func isCollapsed(_ group: Group) -> Bool { prefs.collapsed.contains(group.id) }
+
+    var crown: [Board.CrownEntry] {
+        guard let board else { return [] }
+        return crownScope == "all" ? board.crown : board.categoryCrowns?[crownScope] ?? []
+    }
+
+    var crownScopeName: String {
+        categories.first { $0.id == crownScope }?.name ?? "Overall"
+    }
 
     func entries(for game: Game) -> [BoardEntry] {
         board?.boards.first { $0.gameId == game.id }?.entries ?? []
@@ -46,7 +94,7 @@ final class TodayModel {
         loading = true
         defer { loading = false }
         do {
-            if games.isEmpty { games = try await DailiesAPI.shared.games() }
+            if games.isEmpty { (games, categories) = try await DailiesAPI.shared.games() }
             async let b = DailiesAPI.shared.board(date: date)
             async let p = DailiesAPI.shared.prefs()
             let (newBoard, newPrefs) = try await (b, p)
@@ -121,14 +169,56 @@ final class TodayModel {
         Task { try? await DailiesAPI.shared.savePrefs(favorites: favs) }
     }
 
-    /// Reorders within one section (favorites or the rest); the saved order is the two sections joined.
-    func move(inFavorites: Bool, from: IndexSet, to: Int) {
-        var favs = favorites.map(\.id)
-        var rest = others.map(\.id)
-        if inFavorites { favs.move(fromOffsets: from, toOffset: to) } else { rest.move(fromOffsets: from, toOffset: to) }
-        prefs.order = favs + rest
+    /// Reorders games within one group. Favorites are ordered by the favorites list itself and
+    /// categories by the game order (every category's games joined), so one never reshuffles the other.
+    func move(in groupId: String, from: IndexSet, to: Int) {
+        if groupId == "favorites" {
+            var favs = favorites.map(\.id)
+            favs.move(fromOffsets: from, toOffset: to)
+            prefs.favorites = favs
+            Task { try? await DailiesAPI.shared.savePrefs(favorites: favs) }
+            return
+        }
+        var lists = groups.filter { $0.id != "favorites" }.map { ($0.id, $0.games.map(\.id)) }
+        guard let i = lists.firstIndex(where: { $0.0 == groupId }) else { return }
+        lists[i].1.move(fromOffsets: from, toOffset: to)
+        prefs.order = lists.flatMap(\.1)
         let order = prefs.order
         Task { try? await DailiesAPI.shared.savePrefs(order: order) }
+    }
+
+    /// Puts game `id` where `target` is in the group (dragging one card onto another).
+    func move(in groupId: String, id: String, onto target: String) {
+        guard let games = groups.first(where: { $0.id == groupId })?.games,
+              let from = games.firstIndex(where: { $0.id == id }),
+              let to = games.firstIndex(where: { $0.id == target }), from != to else { return }
+        move(in: groupId, from: IndexSet(integer: from), to: to > from ? to + 1 : to)
+    }
+
+    func toggleCollapsed(_ group: Group) {
+        var collapsed = prefs.collapsed
+        if let i = collapsed.firstIndex(of: group.id) { collapsed.remove(at: i) } else { collapsed.append(group.id) }
+        prefs.collapsed = collapsed
+        Task { try? await DailiesAPI.shared.savePrefs(collapsed: collapsed) }
+    }
+
+    /// Moves a category group one place up (-1) or down (1).
+    func moveCategory(_ id: String, by step: Int) {
+        var ids = orderedCategories.map(\.id)
+        guard let i = ids.firstIndex(of: id), ids.indices.contains(i + step) else { return }
+        ids.swapAt(i, i + step)
+        prefs.categoryOrder = ids
+        Task { try? await DailiesAPI.shared.savePrefs(categoryOrder: ids) }
+    }
+
+    /// Puts category `id` where `target` is (dragging one header onto another).
+    func moveCategory(_ id: String, onto target: String) {
+        var ids = orderedCategories.map(\.id)
+        guard let from = ids.firstIndex(of: id), let to = ids.firstIndex(of: target), from != to else { return }
+        ids.remove(at: from)
+        ids.insert(id, at: to)
+        prefs.categoryOrder = ids
+        Task { try? await DailiesAPI.shared.savePrefs(categoryOrder: ids) }
     }
 
     // MARK: scores

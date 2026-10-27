@@ -57,6 +57,7 @@ struct DebugMenu: View {
 ///   -dailiesTab feed|friends|you  start on that tab (native iOS UI)
 ///   -dailiesGame <gameId>       open that game's screen on Today (native iOS UI)
 ///   -dailiesAddSheet YES        open the Add a score sheet (native iOS UI)
+///   -dailiesSignIn "<user> <password>"  sign in with a local test account (local server only)
 @MainActor
 enum DebugHooks {
     private static var evalDone = false
@@ -75,6 +76,11 @@ enum DebugHooks {
                 try? await Task.sleep(for: .milliseconds(600))
                 WebController.shared.open(url, name: GameHosts.name(for: url))
             }
+        }
+        // local server only, so a real account's password never ends up in launch arguments
+        if Server.current == .local, AppSession.shared.username == nil,
+           let parts = args.string(forKey: "dailiesSignIn")?.split(separator: " ", maxSplits: 1), parts.count == 2 {
+            Task { try? await AppSession.shared.signIn(username: String(parts[0]), password: String(parts[1]), register: false) }
         }
         guard args.bool(forKey: "dailiesTestWordle") else { return }
         Task {

@@ -7,6 +7,8 @@ import { clockToSeconds, secondsToClock, dateForPuzzle } from './util.js'
 // `manual`: game also accepts a typed-in score (stored as unverified).
 // `embed`: the site can be played in an iframe on thedailies.lol (checked 2026-10-26; NYT, LinkedIn,
 // Krillion, EthnoGuessr and GeoGuessr refuse framing, and Worldle/Travle ask not to be framed).
+// `category`: one of CATEGORIES (the Today page groups games by it, and each has its own daily
+// crown and all-time standings).
 // `paid`: { what, deals: [{ label, url|null }] } for games behind a subscription; the tile shows a $
 // badge that opens these. Free-with-an-account games (GeoGuessr's daily) don't get one.
 
@@ -21,6 +23,14 @@ function parseLongDate(text) {
   return `${m[3]}-${String(mi + 1).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`
 }
 
+// "October 26" with no year (MapTap, WorldGuessr): assume the current year in US Eastern
+function yearlessDate(monthName, day) {
+  const mi = MONTHS.indexOf(monthName.slice(0, 3).toLowerCase())
+  if (mi === -1) return null
+  const year = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).slice(0, 4)
+  return `${year}-${String(mi + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 function num(s) {
   return parseInt(String(s).replace(/,/g, ''), 10)
 }
@@ -29,7 +39,7 @@ const SQUARES = new Set(['🟨', '🟩', '🟦', '🟪'])
 
 function linkedinGame(id, name, emoji, color, url, epochDate, kind) {
   return {
-    id, name, emoji, color, url,
+    id, category: 'linkedin', name, emoji, color, url,
     metricLabel: kind === 'guesses' ? 'guesses' : 'time',
     better: 'lower',
     epoch: epochDate ? { date: epochDate, first: 1 } : null,
@@ -54,9 +64,18 @@ function linkedinGame(id, name, emoji, color, url, epochDate, kind) {
   }
 }
 
+// Order is the default order of the groups on Today; players can collapse and reorder them.
+// `symbol` is the SF Symbol the iPhone/Mac app shows, `emoji` what the website shows.
+export const CATEGORIES = [
+  { id: 'nyt', name: 'NYT Games', symbol: 'newspaper.fill', emoji: '📰' },
+  { id: 'linkedin', name: 'LinkedIn', symbol: 'briefcase.fill', emoji: '💼' },
+  { id: 'geography', name: 'Geography', symbol: 'globe.americas.fill', emoji: '🌍' },
+  { id: 'words', name: 'Words & Trivia', symbol: 'textformat', emoji: '🔤' },
+]
+
 export const GAMES = [
   {
-    id: 'worldle', name: 'Worldle', emoji: '🗺️', color: '#AFE3C0',
+    id: 'worldle', category: 'geography', name: 'Worldle', emoji: '🗺️', color: '#AFE3C0',
     url: 'https://worldle.teuteuf.fr', metricLabel: 'guesses', better: 'lower',
     epoch: { date: '2022-01-22', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
@@ -68,7 +87,7 @@ export const GAMES = [
     },
   },
   {
-    id: 'wordle', name: 'Wordle', emoji: '🟩', color: '#C8E6B8',
+    id: 'wordle', category: 'nyt', name: 'Wordle', emoji: '🟩', color: '#C8E6B8',
     url: 'https://www.nytimes.com/games/wordle', metricLabel: 'guesses', better: 'lower',
     epoch: { date: '2021-06-19', first: 0 }, dateTolerance: 1, manual: false,
     parse(text) {
@@ -79,7 +98,7 @@ export const GAMES = [
     },
   },
   {
-    id: 'connections', name: 'Connections', emoji: '🟪', color: '#D9C7F2',
+    id: 'connections', category: 'nyt', name: 'Connections', emoji: '🟪', color: '#D9C7F2',
     url: 'https://www.nytimes.com/games/connections', metricLabel: 'mistakes', better: 'lower',
     epoch: { date: '2023-06-12', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
@@ -102,7 +121,24 @@ export const GAMES = [
     },
   },
   {
-    id: 'mini', name: 'The Mini', emoji: '✏️', color: '#BBD8F7',
+    id: 'strands', category: 'nyt', name: 'Strands', emoji: '🧵', color: '#C5E4E7',
+    url: 'https://www.nytimes.com/games/strands', metricLabel: 'hints', better: 'lower',
+    // Real share 2026-10-27: "Strands #968\n“Who ya gonna call?”\n💡🔵💡🔵\n🟡🔵🔵💡\n🔵💡💡🔵"
+    // (🔵 theme word, 🟡 spangram, 💡 a hint used). Fewer hints is better.
+    epoch: { date: '2024-03-04', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/(?:^|\n)\s*Strands\s+#([\d,]+)/i)
+      if (!m) return null
+      const hints = Array.from(text).filter((ch) => ch === '💡').length
+      return {
+        puzzleNumber: num(m[1]),
+        metric: hints,
+        display: hints === 0 ? 'No hints' : `${hints} hint${hints === 1 ? '' : 's'}`,
+      }
+    },
+  },
+  {
+    id: 'mini', category: 'nyt', name: 'The Mini', emoji: '✏️', color: '#BBD8F7',
     url: 'https://www.nytimes.com/crosswords/game/mini', metricLabel: 'time', better: 'lower',
     epoch: null, dateTolerance: 1, manual: false,
     paid: {
@@ -168,7 +204,7 @@ export const GAMES = [
   },
 
   {
-    id: 'minutecryptic', name: 'Minute Cryptic', emoji: '🔍', color: '#DCCCF0',
+    id: 'minutecryptic', category: 'words', name: 'Minute Cryptic', emoji: '🔍', color: '#DCCCF0',
     url: 'https://www.minutecryptic.com', embed: true, metricLabel: 'hints', better: 'lower',
     // Verified from a real share 2026-10-26: "Minute Cryptic - 26 October, 2026\n"<clue>" (4)\n
     // 🟣🟣🟣🟣🟣🟣🟣\n🏆 0 hints – 1 under the community par (...)". Par is the same for
@@ -193,7 +229,7 @@ export const GAMES = [
   },
 
   {
-    id: 'geoguessr', name: 'GeoGuessr Daily', emoji: '🌍', color: '#B8E0C8',
+    id: 'geoguessr', category: 'geography', name: 'GeoGuessr Daily', emoji: '🌍', color: '#B8E0C8',
     url: 'https://www.geoguessr.com/daily-challenges', metricLabel: 'points', better: 'higher',
     note: 'GeoGuessr has no official share text — tap “+ score”, or paste GGShare extension text.',
     epoch: null, dateTolerance: null, manual: true,
@@ -206,7 +242,7 @@ export const GAMES = [
     },
   },
   {
-    id: 'globle', name: 'Globle', emoji: '🌎', color: '#A9D7B4',
+    id: 'globle', category: 'geography', name: 'Globle', emoji: '🌎', color: '#A9D7B4',
     url: 'https://globle-game.com', embed: true, metricLabel: 'guesses', better: 'lower',
     epoch: null, dateTolerance: 1, manual: false,
     parse(text) {
@@ -223,7 +259,7 @@ export const GAMES = [
     },
   },
   {
-    id: 'travle', name: 'Travle', emoji: '🧭', color: '#F2C7A7',
+    id: 'travle', category: 'geography', name: 'Travle', emoji: '🧭', color: '#F2C7A7',
     url: 'https://travle.earth', metricLabel: 'extra guesses', better: 'lower',
     epoch: null, dateTolerance: null, manual: false,
     parse(text) {
@@ -242,7 +278,7 @@ export const GAMES = [
   },
 
   {
-    id: 'costcodle', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
+    id: 'costcodle', category: 'words', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
     url: 'https://costcodle.com', embed: true, metricLabel: 'guesses', better: 'lower',
     epoch: null, dateTolerance: null, manual: false,
     parse(text) {
@@ -253,7 +289,7 @@ export const GAMES = [
     },
   },
   {
-    id: 'fermi', name: 'Fermi', emoji: '🔢', color: '#E3C9F0',
+    id: 'fermi', category: 'words', name: 'Fermi', emoji: '🔢', color: '#E3C9F0',
     url: 'https://fermi.gg', embed: true, metricLabel: 'avg multiple', better: 'lower',
     // Verified live 2026-10-26: "Fermi · No. 92\n01  1.56×\n...\n1.19× score · top 3%"
     epoch: { date: '2026-07-27', first: 1 }, dateTolerance: 1, manual: true,
@@ -269,7 +305,7 @@ export const GAMES = [
     },
   },
   {
-    id: 'maptap', name: 'MapTap', emoji: '📍', color: '#F7D9B8',
+    id: 'maptap', category: 'geography', name: 'MapTap', emoji: '📍', color: '#F7D9B8',
     url: 'https://maptap.gg', embed: true, metricLabel: 'points', better: 'higher',
     // Verified live 2026-10-26: "www.maptap.gg October 26\n75🤗 69😁 ...\nFinal score: 457"
     epoch: null, dateTolerance: 1, manual: true,
@@ -282,19 +318,13 @@ export const GAMES = [
       let date = parseLongDate(text)
       if (!date) {
         const md = text.match(/([A-Za-z]{3,9})\.?\s+(\d{1,2})(?!\d)/)
-        if (md) {
-          const mi = MONTHS.indexOf(md[1].slice(0, 3).toLowerCase())
-          if (mi !== -1) {
-            const year = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).slice(0, 4)
-            date = `${year}-${String(mi + 1).padStart(2, '0')}-${String(md[2]).padStart(2, '0')}`
-          }
-        }
+        if (md) date = yearlessDate(md[1], md[2])
       }
       return { date, metric: pts, display: `${pts.toLocaleString()} pts` }
     },
   },
   {
-    id: 'krillion', name: 'Krillion', emoji: '🐳', color: '#B8D4F0',
+    id: 'krillion', category: 'words', name: 'Krillion', emoji: '🐳', color: '#B8D4F0',
     url: 'https://krillion.io', metricLabel: 'score', better: 'higher',
     // Verified live 2026-10-26: "Krillion #103 🦐\n365\n\n🏮🦑🫧🐟🦑🦑🦑"
     epoch: { date: '2026-07-16', first: 1 }, dateTolerance: 1, manual: true,
@@ -315,7 +345,34 @@ export const GAMES = [
     },
   },
   {
-    id: 'ethnoguessr', name: 'EthnoGuessr', emoji: '🧬', color: '#D8D3F2',
+    id: 'timeguessr', category: 'geography', name: 'TimeGuessr', emoji: '⏳', color: '#F2E1B8',
+    url: 'https://timeguessr.com/play?mode=daily', metricLabel: 'points', better: 'higher',
+    // Real share 2026-10-27: "TimeGuessr #1245 — 28,325/50,000\n\n1️⃣ 🏆779 · 📅 48y · 🌍 2500.1mi ..."
+    epoch: { date: '2026-10-27', first: 1245 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/TimeGuessr\s+#([\d,]+)\s*[—–-]?\s*([\d,]+)\s*\/\s*([\d,]+)/i)
+      if (!m) return null
+      const pts = num(m[2])
+      return { puzzleNumber: num(m[1]), metric: pts, display: `${pts.toLocaleString()} pts` }
+    },
+  },
+  {
+    id: 'worldguessr', category: 'geography', name: 'WorldGuessr', emoji: '🗺️', color: '#BFE3D0',
+    url: 'https://www.worldguessr.com/daily', metricLabel: 'points', better: 'higher',
+    // Real share 2026-10-27: "My WorldGuessr Daily Score · Oct 27\n6280 / 15000  ·  Beat 43% players
+    // worldwide\n🔴🟡🟢\nhttps://www.worldguessr.com/daily". The date has no year.
+    epoch: null, dateTolerance: 1, manual: false,
+    parse(text) {
+      if (!/worldguessr/i.test(text)) return null
+      const m = text.match(/([\d,]+)\s*\/\s*15,?000/) || text.match(/([\d,]+)\s*\/\s*([\d,]+)/)
+      if (!m) return null
+      const pts = num(m[1])
+      const md = text.match(/Daily Score\s*[·•-]?\s*([A-Za-z]{3,9})\.?\s+(\d{1,2})(?!\d)/i)
+      return { date: md ? yearlessDate(md[1], md[2]) : null, metric: pts, display: `${pts.toLocaleString()} pts` }
+    },
+  },
+  {
+    id: 'ethnoguessr', category: 'geography', name: 'EthnoGuessr', emoji: '🧬', color: '#D8D3F2',
     url: 'https://hbd.gg/play/', metricLabel: 'avg points', better: 'higher',
     // Verified from a real share 2026-10-26: "I scored an average of 1133 over 10 rounds
     // in today's EthnoGuessr! Can you beat my score of 3002 points on round 4? ..."
