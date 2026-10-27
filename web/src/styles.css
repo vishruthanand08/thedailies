@@ -111,6 +111,12 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 .pastebox { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
 .pastebox .row { display: flex; gap: 10px; align-items: flex-start; }
 .pastebox .btn { white-space: nowrap; }
+.backprompt {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--yellow); border: var(--border); border-radius: 12px; padding: 10px 12px;
+  box-shadow: var(--shadow-sm); font-weight: 600; font-size: 14px;
+}
+.backprompt span { flex: 1; min-width: 180px; }
 .flash {
   border: var(--border); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 14px;
   box-shadow: var(--shadow-sm);
@@ -224,11 +230,13 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
   }
   .pastebox .row { align-items: stretch; }
   .pastebox .flash { order: -1; }
+  .pastebox .backprompt { order: -2; }
   /* 16px keeps iOS from zooming in on focus */
   .pastebox textarea.input { min-height: 46px; max-height: 30vh; height: 46px; resize: none; font-size: 16px; padding: 11px 12px; }
   .pastebox textarea.input:focus { height: 96px; }
   .pastebox .btn { min-height: 46px; padding: 0 16px; }
   .container:has(.pastebox) { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
+  .container:has(.backprompt) { padding-bottom: calc(230px + env(safe-area-inset-bottom)); }
 
   /* the game gets the whole screen on phones */
   .gamepanel-backdrop { padding: 0; }

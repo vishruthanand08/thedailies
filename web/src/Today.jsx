@@ -28,6 +28,70 @@ export default function Today({ me }) {
   const [playing, setPlaying] = useState(null) // game open in the embedded panel
   const closePanel = useCallback(() => setPlaying(null), [])
   const canReadClipboard = Boolean(navigator.clipboard?.readText)
+  const [backFrom, setBackFrom] = useState(null) // gameId to offer a paste for after a new-tab game
+  const promptRef = useRef(null)
+
+  // A game opened in a new tab: when the player comes back, offer to paste its result.
+  // Kept in sessionStorage so it survives mobile browsers unloading this tab meanwhile.
+  const AWAY_KEY = 'dailies.awayGame'
+  const AWAY_MAX_MS = 3 * 60 * 60 * 1000
+  const readAway = () => {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(AWAY_KEY) || 'null')
+      return v && Date.now() - v.at < AWAY_MAX_MS ? v : null
+    } catch {
+      return null
+    }
+  }
+  const clearAway = useCallback(() => {
+    setBackFrom(null)
+    try {
+      sessionStorage.removeItem(AWAY_KEY)
+    } catch {
+      // storage unavailable: the prompt just won't survive a reload
+    }
+  }, [])
+  const leftForGame = (game) => {
+    try {
+      sessionStorage.setItem(AWAY_KEY, JSON.stringify({ id: game.id, at: Date.now(), hidden: false }))
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  useEffect(() => {
+    // reloaded while away (mobile tab eviction): the player has been gone, offer it now
+    const pending = readAway()
+    if (pending?.hidden) setBackFrom(pending.id)
+    // "left" = this page was hidden (tab switch) or lost focus (game in a window beside it);
+    // "back" = visible and focused again
+    const left = () => {
+      const away = readAway()
+      if (!away || away.hidden) return
+      try {
+        sessionStorage.setItem(AWAY_KEY, JSON.stringify({ ...away, hidden: true }))
+      } catch {
+        // storage unavailable
+      }
+    }
+    const back = () => {
+      const away = readAway()
+      if (away?.hidden) setBackFrom(away.id)
+    }
+    const onVisibility = () => (document.visibilityState === 'hidden' ? left() : back())
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('blur', left)
+    window.addEventListener('focus', back)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('blur', left)
+      window.removeEventListener('focus', back)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (backFrom) requestAnimationFrame(() => promptRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+  }, [backFrom])
 
   useEffect(() => {
     api.get('/submissions/games').then((d) => setGames(d.games))
@@ -84,6 +148,7 @@ export default function Today({ me }) {
       const d = await api.post('/submissions', { text: value })
       setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added ✓` })
       setText('')
+      clearAway()
       load(date)
     } catch (err) {
       setFlash({ kind: 'err', msg: err.message })
@@ -129,6 +194,9 @@ export default function Today({ me }) {
   if (!board) return <div className="spin">loading…</div>
   const today = board.today
   const isToday = date === today
+  const backGame = backFrom && games.find((g) => g.id === backFrom)
+  // nothing to offer once that game already has my score
+  const showBackPrompt = backGame && !boardsByGame[backGame.id]?.some((e) => e.userId === me.id)
 
   return (
     <div>
@@ -140,6 +208,19 @@ export default function Today({ me }) {
 
       {isToday && !nativeCapture && (
         <div className="pastebox">
+          {showBackPrompt && (
+            <div className="backprompt" ref={promptRef} role="status">
+              <span>
+                Back from {backGame.emoji} {backGame.name}? Tap Share or Copy in the game, then paste your result.
+              </span>
+              {canReadClipboard && (
+                <button className="btn coral small" onClick={pasteFromClipboard} disabled={busy}>
+                  📋 Paste result
+                </button>
+              )}
+              <button className="btn ghost small" onClick={clearAway} aria-label="Dismiss">✕</button>
+            </div>
+          )}
           <div className="row">
             <textarea
               ref={textRef}
@@ -191,6 +272,7 @@ export default function Today({ me }) {
             onRemove={remove}
             onManual={submitManual}
             onPlay={setPlaying}
+            onLeave={leftForGame}
           />
         ))}
       </div>
@@ -200,7 +282,7 @@ export default function Today({ me }) {
   )
 }
 
-function GameTile({ game, entries, me, isToday, onRemove, onManual, onPlay }) {
+function GameTile({ game, entries, me, isToday, onRemove, onManual, onPlay, onLeave }) {
   const [manualOpen, setManualOpen] = useState(false)
   const [manualVal, setManualVal] = useState('')
   const mine = entries.find((e) => e.userId === me.id)
@@ -227,7 +309,10 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual, onPlay }) {
               if (game.embed && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)) {
                 e.preventDefault()
                 onPlay(game)
+                return
               }
+              // a new tab: offer to paste the result when the player comes back
+              if (isToday) onLeave(game)
             }}
           >
             Play ↗
