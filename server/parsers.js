@@ -5,6 +5,8 @@ import { clockToSeconds, secondsToClock, dateForPuzzle } from './util.js'
 // `better`: 'lower' | 'higher'. `epoch`: date of puzzle #first (null = can't
 // derive a date from the puzzle number, so no staleness check).
 // `manual`: game also accepts a typed-in score (stored as unverified).
+// `embed`: the site can be played in an iframe on thedailies.lol (checked 2026-10-26; NYT, LinkedIn,
+// Krillion, EthnoGuessr and GeoGuessr refuse framing, and Worldle/Travle ask not to be framed).
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
@@ -150,7 +152,7 @@ export const GAMES = [
 
   {
     id: 'minutecryptic', name: 'Minute Cryptic', emoji: '🔍', color: '#DCCCF0',
-    url: 'https://www.minutecryptic.com', metricLabel: 'hints', better: 'lower',
+    url: 'https://www.minutecryptic.com', embed: true, metricLabel: 'hints', better: 'lower',
     // Verified from a real share 2026-10-26: "Minute Cryptic - 26 October, 2026\n"<clue>" (4)\n
     // 🟣🟣🟣🟣🟣🟣🟣\n🏆 0 hints – 1 under the community par (...)". Par is the same for
     // everyone on a given day, so ranking by hints is equivalent to ranking vs par.
@@ -188,7 +190,7 @@ export const GAMES = [
   },
   {
     id: 'globle', name: 'Globle', emoji: '🌎', color: '#A9D7B4',
-    url: 'https://globle-game.com', metricLabel: 'guesses', better: 'lower',
+    url: 'https://globle-game.com', embed: true, metricLabel: 'guesses', better: 'lower',
     epoch: null, dateTolerance: 1, manual: false,
     parse(text) {
       if (!/#globle/i.test(text) && !/globle-game\.com/i.test(text)) return null
@@ -224,7 +226,7 @@ export const GAMES = [
 
   {
     id: 'costcodle', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
-    url: 'https://costcodle.com', metricLabel: 'guesses', better: 'lower',
+    url: 'https://costcodle.com', embed: true, metricLabel: 'guesses', better: 'lower',
     epoch: null, dateTolerance: null, manual: false,
     parse(text) {
       const m = text.match(/Costcodle\s+#([\d,]+)\s+([1-6X])\/6/i)
@@ -235,7 +237,7 @@ export const GAMES = [
   },
   {
     id: 'fermi', name: 'Fermi', emoji: '🔢', color: '#E3C9F0',
-    url: 'https://fermi.gg', metricLabel: 'avg multiple', better: 'lower',
+    url: 'https://fermi.gg', embed: true, metricLabel: 'avg multiple', better: 'lower',
     // Verified live 2026-10-26: "Fermi · No. 92\n01  1.56×\n...\n1.19× score · top 3%"
     epoch: { date: '2026-07-27', first: 1 }, dateTolerance: 1, manual: true,
     parse(text) {
@@ -251,7 +253,7 @@ export const GAMES = [
   },
   {
     id: 'maptap', name: 'MapTap', emoji: '📍', color: '#F7D9B8',
-    url: 'https://maptap.gg', metricLabel: 'points', better: 'higher',
+    url: 'https://maptap.gg', embed: true, metricLabel: 'points', better: 'higher',
     // Verified live 2026-10-26: "www.maptap.gg October 26\n75🤗 69😁 ...\nFinal score: 457"
     epoch: null, dateTolerance: 1, manual: true,
     parse(text) {

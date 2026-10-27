@@ -46,6 +46,7 @@ Debug builds accept launch arguments for scripted Simulator runs: `-dailiesServe
 - `epoch: { date, first }`: the date of puzzle `#first`, used to derive the puzzle's date from its number. If it is `null`, the date can only come from text embedded in the share.
 - `dateTolerance`: the number of days the derived date may differ from today. If no date can be derived, the staleness check is skipped.
 - `manual`: also accept a typed-in score.
+- `embed`: the site allows being framed, so Play on the website opens it in `GamePanel.jsx` (iframe plus a clipboard Paste button). Only games verified to render in an iframe get this; NYT, LinkedIn, Krillion, EthnoGuessr and GeoGuessr refuse framing, and Worldle/Travle ask not to be framed.
 
 `detect()` tries each game **in array order** and returns the first non-null result, with exceptions swallowed per game. A new or loosened regex can therefore steal another game's share text, so put specific patterns before general ones. LinkedIn games share a single `linkedinGame()` factory. Their epoch dates are best-effort, which is why they have `dateTolerance: 3`. Failed puzzles are mapped to a worse-than-max metric (e.g. Wordle `X` → 7, failed Connections → 5).
 

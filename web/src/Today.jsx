@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { inApp, nativeCapture, tellNative } from './native.js'
+import GamePanel from './GamePanel.jsx'
 
 function shiftDate(iso, days) {
   const d = new Date(iso + 'T12:00:00Z')
@@ -24,6 +25,8 @@ export default function Today({ me }) {
   const [flash, setFlash] = useState(null) // {kind, msg}
   const [busy, setBusy] = useState(false)
   const textRef = useRef(null)
+  const [playing, setPlaying] = useState(null) // game open in the embedded panel
+  const closePanel = useCallback(() => setPlaying(null), [])
   const canReadClipboard = Boolean(navigator.clipboard?.readText)
 
   useEffect(() => {
@@ -187,14 +190,17 @@ export default function Today({ me }) {
             isToday={isToday}
             onRemove={remove}
             onManual={submitManual}
+            onPlay={setPlaying}
           />
         ))}
       </div>
+
+      {playing && <GamePanel game={playing} onClose={closePanel} onSaved={() => load(dateRef.current)} />}
     </div>
   )
 }
 
-function GameTile({ game, entries, me, isToday, onRemove, onManual }) {
+function GameTile({ game, entries, me, isToday, onRemove, onManual, onPlay }) {
   const [manualOpen, setManualOpen] = useState(false)
   const [manualVal, setManualVal] = useState('')
   const mine = entries.find((e) => e.userId === me.id)
@@ -212,9 +218,16 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual }) {
             rel="noreferrer"
             onClick={(e) => {
               // in the app, native decides between the in-app game browser and Safari
-              if (!inApp) return
-              e.preventDefault()
-              tellNative({ type: 'open', url: game.url, gameId: game.id, name: game.name })
+              if (inApp) {
+                e.preventDefault()
+                tellNative({ type: 'open', url: game.url, gameId: game.id, name: game.name })
+                return
+              }
+              // on the site, games that allow framing open in a panel; cmd/ctrl-click still opens a tab
+              if (game.embed && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)) {
+                e.preventDefault()
+                onPlay(game)
+              }
             }}
           >
             Play ↗

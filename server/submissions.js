@@ -11,8 +11,8 @@ submissionsRouter.use(requireAuth)
 
 submissionsRouter.get('/games', (req, res) => {
   res.json({
-    games: GAMES.map(({ id, name, emoji, color, url, metricLabel, better, manual, note }) => ({
-      id, name, emoji, color, url, metricLabel, better, manual, note,
+    games: GAMES.map(({ id, name, emoji, color, url, metricLabel, better, manual, note, embed }) => ({
+      id, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed,
     })),
   })
 })
