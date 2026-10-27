@@ -71,7 +71,7 @@ struct DebugMenu: View {
 ///   -dailiesServer local        use the local dev server
 ///   -dailiesEval "<js>"         run once in the main web view after the first page load
 ///   -dailiesTestWordle YES      submit today's Wordle once a device token is in the keychain
-///   -dailiesInAppGames YES      turn on the in-app game browser (-dailiesExperimentalGames YES for NYT/LinkedIn)
+///   -dailiesInAppGames NO       turn off the in-app game browser (on by default; -dailiesExperimentalGames NO for NYT/LinkedIn)
 ///   -dailiesOpenGame <url>      open that game through the normal Play routing after launch
 ///   -dailiesOpenHarness YES     open the bundled capture harness after launch
 ///   -dailiesGameEval "<js>"     run once in the game browser after its first page load

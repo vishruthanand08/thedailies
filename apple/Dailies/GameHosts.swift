@@ -10,11 +10,12 @@ enum GameHosts {
     ]
     static let experimental: Set<String> = ["www.nytimes.com", "nytimes.com", "www.linkedin.com", "linkedin.com"]
 
-    /// Debug toggle (default off). Launch argument: -dailiesInAppGames YES
+    /// Debug toggle, on by default so Play opens games in the app. Release builds never enable it.
+    /// Launch argument: -dailiesInAppGames NO
     static var inAppEnabled: Bool {
         get {
             #if DEBUG
-            UserDefaults.standard.bool(forKey: "dailiesInAppGames")
+            UserDefaults.standard.object(forKey: "dailiesInAppGames") as? Bool ?? true
             #else
             false
             #endif
@@ -22,9 +23,10 @@ enum GameHosts {
         set { UserDefaults.standard.set(newValue, forKey: "dailiesInAppGames") }
     }
 
-    /// "Experimental: NYT and LinkedIn in-app (personal use only)". Launch argument: -dailiesExperimentalGames YES
+    /// "Experimental: NYT and LinkedIn in-app (personal use only)", on by default in Debug builds.
+    /// Launch argument: -dailiesExperimentalGames NO
     static var experimentalEnabled: Bool {
-        get { inAppEnabled && UserDefaults.standard.bool(forKey: "dailiesExperimentalGames") }
+        get { inAppEnabled && (UserDefaults.standard.object(forKey: "dailiesExperimentalGames") as? Bool ?? true) }
         set { UserDefaults.standard.set(newValue, forKey: "dailiesExperimentalGames") }
     }
 

@@ -6,8 +6,9 @@
 shares to native, which submits it like a paste. Share sheets are suppressed (`SUPPRESS_SHARE_SHEET`);
 clipboard writes still go through so the game's "Copied!" UI works.
 
-The browser is Debug-only and off by default: gear button > "Play games in the app". NYT and
-LinkedIn need the separate "Experimental" toggle. GeoGuessr is never allowlisted.
+The browser is Debug-only and on by default, including NYT and LinkedIn: Play opens allowlisted
+games in the app. Turn either off with the gear button ("Play games in the app", "Experimental").
+Release builds never enable it. GeoGuessr is never allowlisted.
 
 ## Harness
 

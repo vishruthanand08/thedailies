@@ -28,7 +28,7 @@ cd apple && xcodegen generate     # export DAILIES_TEAM=<team id> first to sign;
 xcodebuild -project apple/Dailies.xcodeproj -scheme Dailies -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath apple/build/DerivedData build
 ```
 
-Debug builds accept launch arguments for scripted Simulator runs: `-dailiesServer local`, `-dailiesEval "<js>"` (runs once after the first page load), `-dailiesTestWordle YES`, and for the in-app game browser `-dailiesInAppGames YES`, `-dailiesExperimentalGames YES`, `-dailiesOpenGame <url>`, `-dailiesOpenHarness YES`, `-dailiesGameEval "<js>"` (full list in `apple/Dailies/DebugMenu.swift`). On the Mac use `/usr/bin/log`, because zsh has a `log` builtin. Logs: `xcrun simctl spawn booted log show --info --predicate 'subsystem == "lol.thedailies"'`.
+Debug builds accept launch arguments for scripted Simulator runs: `-dailiesServer local`, `-dailiesEval "<js>"` (runs once after the first page load), `-dailiesTestWordle YES`, and for the in-app game browser `-dailiesInAppGames NO`, `-dailiesExperimentalGames NO` (both on by default in Debug), `-dailiesOpenGame <url>`, `-dailiesOpenHarness YES`, `-dailiesGameEval "<js>"` (full list in `apple/Dailies/DebugMenu.swift`). On the Mac use `/usr/bin/log`, because zsh has a `log` builtin. Logs: `xcrun simctl spawn booted log show --info --predicate 'subsystem == "lol.thedailies"'`.
 
 ## Architecture
 
