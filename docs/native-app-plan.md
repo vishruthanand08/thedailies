@@ -297,6 +297,8 @@ The extension shows a one-time "paste your device token" field (token from the w
 
 ## Stage 4: In-app game browser with capture.js (optional, Debug-gated)
 
+> **Superseded (2026-10-27):** capture.js was removed. The in-app browser now ships in all builds for every game, with no script injection: the player taps the game's Share or Copy, then Paste in the browser's bottom bar, the same flow as the website. The rest of this section is kept for history.
+
 Only after Stages 0 to 3 are done and verified. This exists so the developer can play indie games inside the app without a share-sheet hop. It is off by default and never part of a submission.
 
 ### 4.1 Allowlist

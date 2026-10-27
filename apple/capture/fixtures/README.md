@@ -13,11 +13,12 @@ Only add text captured from a real share. Don't type one from memory or adapt an
 | wend, minisudoku, patches | LinkedIn web shares, 2026-10-26 |
 | minutecryptic | minutecryptic.com share, 2026-10-26 |
 | krillion | krillion.io share, 2026-10-26 (from the parser's verified comment) |
+| mini | NYT Mini share link (shared/v2/mini-xwd.html), 2026-10-27 |
 
 ## Still needed
 
 Capture these from the share extension or the Shortcut (Stage 3 acceptance), especially from
 the NYT Games and LinkedIn **apps**, whose text may differ from the web version:
 
-wordle, connections, mini, queens, tango, zip, pinpoint, crossclimb, worldle, globle,
+wordle, connections, queens, tango, zip, pinpoint, crossclimb, worldle, globle,
 travle, costcodle, fermi, maptap, ethnoguessr

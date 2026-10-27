@@ -6,8 +6,6 @@ import WebKit
 struct DebugMenu: View {
     @Environment(\.dismiss) private var dismiss
     @State private var server = Server.current
-    @State private var inApp = GameHosts.inAppEnabled
-    @State private var experimental = GameHosts.experimentalEnabled
 
     var body: some View {
         NavigationStack {
@@ -31,28 +29,10 @@ struct DebugMenu: View {
                         Text("No token in the keychain yet")
                     }
                 }
-                Section {
-                    Toggle("Play games in the app", isOn: $inApp)
-                        .onChange(of: inApp) { _, on in
-                            GameHosts.inAppEnabled = on
-                            WebController.shared.refreshNativeFlags()
-                        }
-                    Toggle("Experimental: NYT and LinkedIn in-app (personal use only)", isOn: $experimental)
-                        .disabled(!inApp)
-                        .onChange(of: experimental) { _, on in GameHosts.experimentalEnabled = on }
-                } header: {
-                    Text("In-app game browser")
-                } footer: {
-                    Text("Play opens allowlisted games inside the app and saves the score when you tap the game's Share button. Everything else opens in Safari.")
-                }
                 Section("Test") {
                     Button("Submit today's Wordle (3/6)") {
                         SubmissionQueue.shared.enqueue(DebugSamples.wordleToday())
                         dismiss()
-                    }
-                    Button("Open capture harness") {
-                        dismiss()
-                        DebugHooks.openHarness()
                     }
                 }
             }
@@ -71,25 +51,15 @@ struct DebugMenu: View {
 ///   -dailiesServer local        use the local dev server
 ///   -dailiesEval "<js>"         run once in the main web view after the first page load
 ///   -dailiesTestWordle YES      submit today's Wordle once a device token is in the keychain
-///   -dailiesInAppGames NO       turn off the in-app game browser (on by default; -dailiesExperimentalGames NO for NYT/LinkedIn)
 ///   -dailiesOpenGame <url>      open that game through the normal Play routing after launch
-///   -dailiesOpenHarness YES     open the bundled capture harness after launch
 ///   -dailiesGameEval "<js>"     run once in the game browser after its first page load
+///   -dailiesScreenshots YES     hide the debug gear (App Store screenshots)
+///   -dailiesTab feed|friends|you  start on that tab (native iOS UI)
+///   -dailiesGame <gameId>       open that game's screen on Today (native iOS UI)
+///   -dailiesAddSheet YES        open the Add a score sheet (native iOS UI)
 @MainActor
 enum DebugHooks {
     private static var evalDone = false
-
-    static func openHarness() {
-        guard let url = Bundle.main.url(forResource: "harness", withExtension: "html") else {
-            log.error("harness.html missing from the bundle")
-            return
-        }
-        // let the debug sheet finish dismissing before presenting another
-        Task {
-            try? await Task.sleep(for: .milliseconds(600))
-            WebController.shared.presentGame?(GameLaunch(url: url, name: "Capture harness", harness: true))
-        }
-    }
 
     static func pageLoaded(_ webView: WKWebView) {
         guard !evalDone, let js = UserDefaults.standard.string(forKey: "dailiesEval") else { return }
@@ -100,12 +70,10 @@ enum DebugHooks {
 
     static func start() {
         let args = UserDefaults.standard
-        if args.bool(forKey: "dailiesOpenHarness") {
-            openHarness()
-        } else if let s = args.string(forKey: "dailiesOpenGame"), let url = URL(string: s) {
+        if let s = args.string(forKey: "dailiesOpenGame"), let url = URL(string: s) {
             Task {
                 try? await Task.sleep(for: .milliseconds(600))
-                WebController.shared.open(url, name: url.host ?? "Game")
+                WebController.shared.open(url, name: GameHosts.name(for: url))
             }
         }
         guard args.bool(forKey: "dailiesTestWordle") else { return }

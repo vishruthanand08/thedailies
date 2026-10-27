@@ -34,7 +34,7 @@ submissionsRouter.post('/', async (req, res) => {
     if (derived && game.dateTolerance != null) {
       if (daysApart(derived, today) > game.dateTolerance) {
         return res.status(400).json({
-          error: `That looks like the ${game.name} from ${derived}, not today's. Only today's puzzle counts.`,
+          error: `That looks like ${/^the /i.test(game.name) ? '' : 'the '}${game.name} from ${derived}, not today's. Only today's puzzle counts.`,
         })
       }
       puzzleDate = derived <= today ? derived : today

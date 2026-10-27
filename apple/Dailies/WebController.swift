@@ -14,11 +14,13 @@ final class WebController {
 
     let webView: WKWebView
     private(set) var username: String?
-    /// Play taps from the web app: the in-app game browser when allowed, else the system browser.
+    /// Play taps from the web app: the in-app game browser for game sites, else the system browser.
     @ObservationIgnored var presentGame: ((GameLaunch) -> Void)?
 
     @ObservationIgnored private let bridge = Bridge()
     @ObservationIgnored private var issuingToken = false
+    /// The web app tab the native tab bar last asked for (iOS); re-applied after each page load.
+    @ObservationIgnored private var webTab: String?
 
     private init() {
         let config = WKWebViewConfiguration()
@@ -26,7 +28,14 @@ final class WebController {
         config.websiteDataStore = .default() // login cookie persists across launches
 
         config.userContentController.add(bridge, contentWorld: .page, name: "dailies")
-        Self.addFlagsScript(to: config.userContentController)
+        // the native tab bar (iPhone) or sidebar (Mac) replaces the site's header and tabs
+        config.userContentController.addUserScript(WKUserScript(
+            source: """
+            const s = document.createElement('style');
+            s.textContent = '.header, .tabs { display: none !important } .container { padding-top: 12px }';
+            document.documentElement.appendChild(s);
+            """,
+            injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .page))
 
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = bridge
@@ -47,32 +56,9 @@ final class WebController {
         load()
     }
 
-    /// The share extension (iOS) or the in-app game browser saves scores without pasting;
-    /// the web app hides its paste bar then.
-    private static var hasNativeCapture: Bool {
-        #if os(iOS)
-        true
-        #else
-        GameHosts.inAppEnabled
-        #endif
-    }
-
-    private static func addFlagsScript(to controller: WKUserContentController) {
-        controller.addUserScript(WKUserScript(
-            source: "window.__dailiesNative = { capture: \(hasNativeCapture) };",
-            injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
-    }
-
-    /// Re-injects the flags (after a Debug toggle changes them) and reloads the site.
-    func refreshNativeFlags() {
-        webView.configuration.userContentController.removeAllUserScripts()
-        Self.addFlagsScript(to: webView.configuration.userContentController)
-        webView.reload()
-    }
-
-    /// Routes a Play tap: in-app when the browser is on and the host is allowlisted, else Safari.
+    /// Routes a Play tap: game sites open in the in-app game browser, anything else in Safari.
     func open(_ url: URL, name: String) {
-        if GameHosts.inAppEnabled, GameHosts.isAllowed(url.host), let presentGame {
+        if GameHosts.isGame(url.host), let presentGame {
             presentGame(GameLaunch(url: url, name: name))
         } else {
             openExternally(url)
@@ -85,6 +71,23 @@ final class WebController {
 
     func reload() {
         webView.reload()
+    }
+
+    /// Shows one of the web app's tabs ("Feed", "Friends", "You") by clicking its hidden tab button.
+    func showTab(_ label: String) {
+        webTab = label
+        applyWebTab()
+    }
+
+    fileprivate func applyWebTab() {
+        guard let webTab else { return }
+        webView.callAsyncJavaScript("""
+            for (let i = 0; i < 40; i++) {
+                const t = [...document.querySelectorAll('.tabs .tab')].find((b) => b.textContent === label)
+                if (t) { t.click(); return }
+                await new Promise((r) => setTimeout(r, 100))
+            }
+            """, arguments: ["label": webTab], in: nil, in: .page) { _ in }
     }
 
     /// Asks the Today view to reload the board (see `dailies:refresh` in web/src/Today.jsx).
@@ -113,6 +116,7 @@ final class WebController {
         let server = Server.current.rawValue
         guard let name = user?["username"] as? String else {
             username = nil
+            AppSession.shared.webSignedOut()
             if let old = Keychain.load() {
                 Keychain.clear()
                 Task { await DailiesAPI.shared.revoke(old) }
@@ -220,6 +224,7 @@ private final class Bridge: NSObject, WKScriptMessageHandler, WKNavigationDelega
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        owner?.applyWebTab()
         #if DEBUG
         DebugHooks.pageLoaded(webView)
         #endif

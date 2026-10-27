@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from './api.js'
+import { inApp } from './native.js'
 
 export default function Auth({ onAuth }) {
   const [mode, setMode] = useState('login')
@@ -70,6 +71,11 @@ export default function Auth({ onAuth }) {
             <>Already in? <button type="button" className="linklike" onClick={() => setMode('login')}>Sign in</button></>
           )}
         </div>
+        {/* app-only until the app ships: the pages describe the iPhone/Mac app */}
+        {inApp && <div className="authtoggle legal">
+          <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> ·{' '}
+          <a href="/support" target="_blank" rel="noreferrer">Support</a>
+        </div>}
       </form>
     </div>
   )

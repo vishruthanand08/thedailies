@@ -32,7 +32,7 @@ app.use((err, req, res, next) => {
 // Production: serve the built frontend from the same service.
 const dist = path.join(__dirname, '../web/dist')
 if (fs.existsSync(dist)) {
-  app.use(express.static(dist))
+  app.use(express.static(dist, { extensions: ['html'] })) // /privacy -> privacy.html
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next()
     res.sendFile(path.join(dist, 'index.html'))

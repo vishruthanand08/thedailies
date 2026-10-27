@@ -7,3 +7,4 @@ data/
 apple/*.xcodeproj
 apple/build/
 apple/DerivedData/
+appstore/screenshots/

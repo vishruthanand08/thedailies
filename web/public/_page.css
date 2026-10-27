@@ -1,0 +1,14 @@
+:root { --bg: #e9e4f7; --ink: #16162e; --muted: #5c5c78; --coral: #f2735c; --yellow: #f8d34c; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 'Poppins', system-ui, sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 28px 16px 64px; }
+.logo { display: inline-flex; align-items: center; gap: 2px; font-weight: 800; font-size: 22px; color: var(--ink); text-decoration: none; }
+.logo .pill { background: var(--ink); color: #fff; padding: 1px 10px; border-radius: 9px; transform: rotate(-3deg); display: inline-block; }
+.logo .rest { padding-left: 6px; }
+.card { background: #fff; border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 5px 5px 0 var(--ink); padding: 8px 24px 20px; margin-top: 22px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 18px 0 4px; }
+h2 { font-size: 18px; margin: 22px 0 6px; }
+p, li { color: #2a2a44; }
+.muted { color: var(--muted); font-size: 14px; }
+a { color: var(--ink); font-weight: 600; }
+ul { padding-left: 20px; }

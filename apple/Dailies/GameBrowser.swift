@@ -1,7 +1,8 @@
 import SwiftUI
 import WebKit
 
-/// One game page in its own WKWebView, with capture.js injected. Created per sheet/window.
+/// One game page in its own WKWebView. Created per sheet/window. The page runs untouched; the
+/// score comes from the paste bar after the player taps the game's own Share or Copy.
 @MainActor
 @Observable
 final class GameBrowser {
@@ -17,14 +18,6 @@ final class GameBrowser {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = GameHosts.dataStore // default UA, no TheDailiesApp suffix
 
-        // the harness is a bundled file:// page, whose host is ""
-        let hosts = launch.harness ? [""] : Array(GameHosts.active).sorted()
-        let controller = config.userContentController
-        controller.add(bridge, contentWorld: .page, name: "dailiesCapture")
-        controller.addUserScript(WKUserScript(
-            source: GameHosts.captureScript(hosts: hosts),
-            injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
-
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = bridge
         webView.uiDelegate = bridge
@@ -32,35 +25,16 @@ final class GameBrowser {
         webView.isInspectable = true
         #endif
         bridge.owner = self
-
-        if launch.url.isFileURL {
-            webView.loadFileURL(launch.url, allowingReadAccessTo: launch.url.deletingLastPathComponent())
-        } else {
-            webView.load(URLRequest(url: launch.url))
-        }
+        webView.load(URLRequest(url: launch.url))
     }
 
     func close() {
         webView.stopLoading()
-        webView.configuration.userContentController.removeAllScriptMessageHandlers()
-    }
-
-    fileprivate func allows(_ host: String?) -> Bool {
-        launch.harness ? host == "" : GameHosts.isAllowed(host)
-    }
-
-    fileprivate func captured(text: String, via: String, host: String) {
-        log.info("captured via \(via, privacy: .public) on \(host, privacy: .public)")
-        if launch.harness {
-            SubmissionQueue.shared.show(.ok, "Captured via \(via): \(text)")
-        } else {
-            SubmissionQueue.shared.enqueue(text)
-        }
     }
 
     fileprivate func pageLoaded() {
         canGoBack = webView.canGoBack
-        log.info("game page loaded: \(self.webView.url?.host ?? "file", privacy: .public)")
+        log.info("game page loaded: \(self.webView.url?.host ?? "?", privacy: .public)")
         #if DEBUG
         // -dailiesGameEval "<js>": run once after the first game page load (scripted Simulator tests)
         if !evalDone, let js = UserDefaults.standard.string(forKey: "dailiesGameEval") {
@@ -76,25 +50,14 @@ final class GameBrowser {
 }
 
 @MainActor
-private final class GameBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
+private final class GameBridge: NSObject, WKNavigationDelegate, WKUIDelegate {
     weak var owner: GameBrowser?
 
-    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        let host = message.frameInfo.securityOrigin.host
-        // checked again here: the script's own host check runs in the page and can't be trusted
-        guard let owner, owner.allows(host),
-              let body = message.body as? [String: Any], let text = body["text"] as? String else {
-            log.error("ignored capture from \(host, privacy: .public)")
-            return
-        }
-        owner.captured(text: text, via: body["via"] as? String ?? "?", host: host)
-    }
-
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
-        guard let owner, let url = action.request.url, action.targetFrame?.isMainFrame ?? true,
+        guard let url = action.request.url, action.targetFrame?.isMainFrame ?? true,
               url.scheme == "http" || url.scheme == "https" else { return .allow }
-        // links off the game (and off the allowlist) open in the system browser
-        if owner.allows(url.host) { return .allow }
+        // links off the game sites open in the system browser
+        if GameHosts.isGame(url.host) { return .allow }
         WebController.shared.openExternally(url)
         return .cancel
     }
@@ -107,9 +70,9 @@ private final class GameBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
         for action: WKNavigationAction, windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        // target=_blank / window.open: stay in this view when allowed, else the system browser
+        // target=_blank / window.open: stay in this view on a game site, else the system browser
         if let url = action.request.url {
-            if owner?.allows(url.host) == true { webView.load(URLRequest(url: url)) } else { WebController.shared.openExternally(url) }
+            if GameHosts.isGame(url.host) { webView.load(URLRequest(url: url)) } else { WebController.shared.openExternally(url) }
         }
         return nil
     }
@@ -132,7 +95,9 @@ struct GameBrowserView: View {
                     Color.clear
                 }
             }
-            .ignoresSafeArea(edges: .bottom)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PasteBar(gameName: launch.name) { queue.enqueue($0) }
+            }
             .navigationTitle(launch.name)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -160,7 +125,38 @@ struct GameBrowserView: View {
         }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 700)
+        .background(FullScreenOnOpen())
         #endif
+    }
+}
+
+/// The same for every game, and the same flow as the website's game panel: the game's Share or
+/// Copy puts the result on the clipboard, Paste saves it. The system PasteButton reads the
+/// clipboard without the "Allow Paste?" prompt.
+private struct PasteBar: View {
+    let gameName: String
+    let onPaste: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Finished?").font(.system(.subheadline, design: .rounded, weight: .heavy))
+                Text("Tap Share or Copy in \(gameName), then paste.").font(.footnote).opacity(0.75)
+            }
+            .lineLimit(1)
+            .foregroundStyle(Color("OnAccent"))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            PasteButton(payloadType: String.self) { strings in
+                guard let text = strings.first else { return }
+                Task { @MainActor in onPaste(text) }
+            }
+            .labelStyle(.titleAndIcon)
+            .buttonBorderShape(.capsule)
+            .tint(Color("OnAccent"))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color("Sun")) // same yellow bar as the Today tab
     }
 }
 
@@ -175,5 +171,20 @@ private struct GameWebView: NSViewRepresentable {
     let webView: WKWebView
     func makeNSView(context: Context) -> WKWebView { webView }
     func updateNSView(_ view: WKWebView, context: Context) {}
+}
+
+/// Puts a game's window into full screen (its own Space) as soon as it opens. Done or Cmd-W
+/// closes it and returns to The Dailies; Esc leaves full screen and keeps the window.
+private struct FullScreenOnOpen: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window, !window.styleMask.contains(.fullScreen) else { return }
+            window.collectionBehavior.insert(.fullScreenPrimary)
+            window.toggleFullScreen(nil)
+        }
+        return view
+    }
+    func updateNSView(_ view: NSView, context: Context) {}
 }
 #endif

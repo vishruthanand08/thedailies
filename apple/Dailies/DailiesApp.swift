@@ -2,6 +2,10 @@ import SwiftUI
 
 @main
 struct DailiesApp: App {
+    #if os(iOS)
+    init() { Appearance.configure() }
+    #endif
+
     var body: some Scene {
         #if os(iOS)
         WindowGroup {
@@ -12,7 +16,8 @@ struct DailiesApp: App {
         Window("The Dailies", id: "main") {
             RootView()
         }
-        .defaultSize(width: 480, height: 860)
+        .defaultSize(width: 1000, height: 760)
+        .commands { DailiesCommands() }
 
         // the in-app game browser opens each game in its own window
         WindowGroup(id: "game", for: GameLaunch.self) { $launch in

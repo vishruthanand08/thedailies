@@ -118,6 +118,26 @@ authRouter.post('/password', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
+// Deletes the account and everything tied to it (App Store guideline 5.1.1(v): accounts made in
+// the app must be deletable in the app). Children first, since the tables reference users(id).
+authRouter.delete('/account', requireAuth, async (req, res) => {
+  const password = String(req.body?.password || '')
+  const { rows } = await q('SELECT password_hash FROM users WHERE id = $1', [req.user.id])
+  if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash))) {
+    return res.status(400).json({ error: 'Your password is wrong' })
+  }
+  const id = req.user.id
+  await q('DELETE FROM game_suggestion_votes WHERE user_id = $1', [id])
+  await q('DELETE FROM game_suggestions WHERE user_id = $1', [id]) // their votes cascade
+  await q('DELETE FROM api_tokens WHERE user_id = $1', [id])
+  await q('DELETE FROM user_prefs WHERE user_id = $1', [id])
+  await q('DELETE FROM submissions WHERE user_id = $1', [id])
+  await q('DELETE FROM friendships WHERE user_a = $1 OR user_b = $1 OR requested_by = $1', [id])
+  await q('DELETE FROM users WHERE id = $1', [id])
+  res.clearCookie(COOKIE)
+  res.json({ ok: true })
+})
+
 // ---------- device tokens ----------
 // Plaintext is "dly_" + 32 random bytes (base64url), returned exactly once.
 

@@ -18,7 +18,7 @@ export const api = {
   get: (p) => call(p),
   post: (p, body) => call(p, { method: 'POST', body }),
   put: (p, body) => call(p, { method: 'PUT', body }),
-  del: (p) => call(p, { method: 'DELETE' }),
+  del: (p, body) => call(p, { method: 'DELETE', body }),
 }
 
 export function timeAgo(iso) {

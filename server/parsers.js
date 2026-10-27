@@ -114,10 +114,17 @@ export const GAMES = [
       ],
     },
     parse(text) {
-      const url = text.match(/mini\.html\?d=(\d{4}-\d{2}-\d{2})&(?:amp;)?t=(\d+)/i)
-      if (url) {
-        const secs = num(url[2])
-        return { date: url[1], metric: secs, display: secondsToClock(secs) }
+      // The share link: older mini.html?d=…&t=… or current shared/v2/mini-xwd.html?d=…&t=…&c=…
+      // (t = solve time in seconds; parameters may come in any order)
+      const link = text.match(/mini(?:-xwd)?\.html\?(\S+)/i)
+      if (link) {
+        const q = link[1].replace(/&amp;/g, '&')
+        const d = q.match(/(?:^|&)d=(\d{4}-\d{2}-\d{2})/)
+        const t = q.match(/(?:^|&)t=(\d+)/)
+        if (d && t && num(t[1]) > 0 && num(t[1]) < 24 * 3600) {
+          const secs = num(t[1])
+          return { date: d[1], metric: secs, display: secondsToClock(secs) }
+        }
       }
       const m = text.match(/Mini Crossword in (\d+:\d{2})/i)
       if (!m) return null

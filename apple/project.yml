@@ -13,8 +13,10 @@ settings:
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "${DAILIES_TEAM}"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "0.1"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1" # bump for every upload to App Store Connect
+    # HTTPS only, no custom encryption: skips the export-compliance question on each upload
+    INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_EMIT_LOC_STRINGS: NO
 targets:
@@ -25,9 +27,6 @@ targets:
     sources:
       - Dailies
       - Shared
-      - path: capture
-        includes: [capture.js, harness.html]
-        buildPhase: resources
     dependencies:
       - target: DailiesShare
         destinationFilters: [iOS]
@@ -39,6 +38,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: The Dailies
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.games
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
@@ -70,3 +70,26 @@ targets:
       configs:
         Debug:
           INFOPLIST_FILE: Config/DailiesShare-Debug-Info.plist
+
+  # UI tests that drive gestures the Simulator can't take by hand (swipes, drags).
+  # Run: xcodebuild test -project apple/Dailies.xcodeproj -scheme DailiesUITests -destination '<simulator>'
+  DailiesUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [DailiesUITests]
+    dependencies:
+      - target: Dailies
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: lol.thedailies.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Dailies
+
+schemes:
+  DailiesUITests:
+    build:
+      targets:
+        DailiesUITests: [test]
+    test:
+      targets: [DailiesUITests]
+

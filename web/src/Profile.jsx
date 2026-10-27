@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from './api.js'
 import { RangeRow, unitFor, useGames, useStats } from './Leaderboards.jsx'
 import Devices, { showDevices } from './Devices.jsx'
+import { inApp } from './native.js'
 
 // The You tab: my own stats, plus account things (password, log out, devices).
 export default function Profile({ me, onLogout }) {
@@ -110,6 +111,15 @@ export default function Profile({ me, onLogout }) {
 
       <ChangePassword />
       {showDevices && <Devices />}
+      <DeleteAccount onDeleted={onLogout} />
+
+      {/* app-only until the app ships (the pages describe the app). _blank: in the app these open
+          in Safari, since the app's main view has no back button */}
+      {inApp && <p className="hint profilelinks">
+        <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>
+        <a href="/support" target="_blank" rel="noreferrer">Help & support</a>
+        <a href="mailto:support@thedailies.lol?subject=Report%20a%20problem">Report a problem or a user</a>
+      </p>}
     </div>
   )
 }
@@ -186,6 +196,66 @@ function ChangePassword() {
         </form>
       )}
       {flash && <div className={`flash ${flash.kind}`} role="status" style={{ marginTop: 10 }}>{flash.msg}</div>}
+    </div>
+  )
+}
+
+// App Store guideline 5.1.1(v): an account made in the app must be deletable in the app.
+function DeleteAccount({ onDeleted }) {
+  const [open, setOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await api.del('/auth/account', { password })
+      onDeleted()
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card dangercard">
+      <div className="cardhead">
+        <h3 className="sectiontitle">Delete account</h3>
+        {!open && (
+          <button className="btn ghost small" onClick={() => setOpen(true)}>
+            Delete account
+          </button>
+        )}
+      </div>
+      {open && (
+        <form className="suggestform" onSubmit={submit}>
+          <p className="hint" style={{ margin: 0 }}>
+            This permanently deletes your account, scores, friendships and suggestions. It can't be undone.
+          </p>
+          <input
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Your password"
+            aria-label="Your password, to confirm"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+          />
+          <div className="row">
+            <button className="btn danger small" type="submit" disabled={busy || !password}>
+              Delete my account
+            </button>
+            <button className="btn ghost small" type="button" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+          {error && <div className="flash err" role="status">{error}</div>}
+        </form>
+      )}
     </div>
   )
 }
