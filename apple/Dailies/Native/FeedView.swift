@@ -74,8 +74,29 @@ struct FeedView: View {
                     "Nothing here yet", systemImage: "list.bullet.rectangle.portrait",
                     description: Text("Scores you and your friends add show up here. Add some friends and start playing."))
             }
-            ForEach(feed.cards) { card in
-                DayCard(card: card, model: model).id(card.id)
+            // one section per day, so a player's earlier days read as earlier days
+            ForEach(days(feed), id: \.date) { day in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(model.dayLabel(day.date)).font(.brand(.title2, .heavy))
+                    if !day.cards.isEmpty {
+                        Text("\(day.cards.count) \(day.cards.count == 1 ? "player" : "players")")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .foregroundStyle(Color.ink)
+                .oneLine()
+                .padding(.top, 6)
+                .accessibilityAddTraits(.isHeader)
+                if day.date == feed.today, let waiting = feed.waiting, !waiting.isEmpty {
+                    Text("Haven't played yet today: \(waiting.joined(separator: ", "))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .oneLine()
+                }
+                ForEach(day.cards) { card in
+                    DayCard(card: card, model: model).id(card.id)
+                }
             }
             if feed.nextBefore != nil {
                 // the next few days load as the end of the list comes into view
@@ -85,6 +106,20 @@ struct FeedView: View {
                     .task(id: feed.cards.count) { await model.loadMore() }
             }
         }
+    }
+}
+
+private extension FeedView {
+    struct Day { let date: String; var cards: [Feed.Card] }
+
+    /// Cards arrive newest day first. Today always leads while someone is still to play.
+    func days(_ feed: Feed) -> [Day] {
+        var out = [Day(date: feed.today, cards: [])]
+        for card in feed.cards {
+            if out[out.count - 1].date != card.date { out.append(Day(date: card.date, cards: [])) }
+            out[out.count - 1].cards.append(card)
+        }
+        return out.filter { !$0.cards.isEmpty || ($0.date == feed.today && !(feed.waiting ?? []).isEmpty) }
     }
 }
 
@@ -171,7 +206,7 @@ private struct DayCard: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(mine ? "You" : card.username).font(.brand(.headline, .heavy)).oneLine()
                 HStack(spacing: 4) {
-                    Text("\(model.dayLabel(card.date)) · \(card.games.count) \(card.games.count == 1 ? "game" : "games")")
+                    Text("\(card.games.count) \(card.games.count == 1 ? "game" : "games")")
                     if card.streak > 1 {
                         Text("·")
                         Label("\(card.streak)", systemImage: "flame.fill").labelStyle(.titleAndIcon)

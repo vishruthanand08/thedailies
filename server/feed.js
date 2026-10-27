@@ -120,6 +120,13 @@ feedRouter.get('/', async (req, res) => {
   const list = [...cards.values()].sort(
     (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : new Date(b.lastActivity) - new Date(a.lastActivity))
   )
+  // friends with nothing posted today, named under Today
+  const playedToday = new Set(list.filter((c) => c.date === today).map((c) => c.userId))
+  const { rows: circle } = before
+    ? { rows: [] }
+    : await q('SELECT id, username FROM users WHERE id = ANY($1) ORDER BY lower(username)', [ids])
+  const waiting = circle.filter((u) => u.id !== me && !playedToday.has(u.id)).map((u) => u.username)
+
   const highlights = before
     ? []
     : list
@@ -145,6 +152,7 @@ feedRouter.get('/', async (req, res) => {
     today,
     cards: list,
     highlights,
+    waiting,
     notices,
     nextBefore: dateRows.length === DAYS_PER_PAGE ? oldest : null,
   })

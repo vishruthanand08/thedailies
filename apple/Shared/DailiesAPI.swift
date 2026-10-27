@@ -175,6 +175,8 @@ struct Feed: Decodable {
     let today: String
     var cards: [Card]
     let highlights: [Highlight]
+    /// Friends with nothing posted today (older servers don't send it).
+    let waiting: [String]?
     let notices: [Notice]
     var nextBefore: String?
 }

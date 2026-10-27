@@ -16,6 +16,16 @@ function names(list) {
   return `${list.slice(0, 2).join(', ')} and ${list.length - 2} more`
 }
 
+// cards arrive newest day first; one section per day, always starting with today
+function byDay(cards, today, waiting = []) {
+  const days = [[today, []]]
+  for (const c of cards) {
+    if (days[days.length - 1]?.[0] !== c.date) days.push([c.date, []])
+    days[days.length - 1][1].push(c)
+  }
+  return days.filter(([date, list]) => list.length || (date === today && waiting.length))
+}
+
 // One card per player per day, like a Strava activity. Their highlight leads in yellow; friends
 // give the day kudos. Today's friends' highlights sit in a row at the top.
 export default function Feed({ me, onSeen }) {
@@ -128,15 +138,26 @@ export default function Feed({ me, onSeen }) {
         </section>
       )}
 
-      {data.cards.map((card) => (
-        <DayCard
-          key={`${card.userId}-${card.date}`}
-          card={card}
-          me={me}
-          today={data.today}
-          onKudos={() => toggleKudos(card)}
-          onHighlight={(game) => highlight(card, game)}
-        />
+      {byDay(data.cards, data.today, data.waiting).map(([date, cards]) => (
+        <section key={date} className="feedday" aria-label={dayLabel(date, data.today)}>
+          <h3 className="sectiontitle dayheader">
+            {dayLabel(date, data.today)}
+            {cards.length > 0 && <span>{cards.length} {cards.length === 1 ? 'player' : 'players'}</span>}
+          </h3>
+          {date === data.today && data.waiting?.length > 0 && (
+            <p className="hint small waiting">Haven't played yet today: {data.waiting.join(', ')}</p>
+          )}
+          {cards.map((card) => (
+            <DayCard
+              key={`${card.userId}-${card.date}`}
+              card={card}
+              me={me}
+              onKudos={() => toggleKudos(card)}
+              onHighlight={(game) => highlight(card, game)}
+              pickable={card.userId === me.id && card.date === data.today}
+            />
+          ))}
+        </section>
       ))}
 
       {data.nextBefore && (
@@ -148,11 +169,11 @@ export default function Feed({ me, onSeen }) {
   )
 }
 
-function DayCard({ card, me, today, onKudos, onHighlight }) {
+function DayCard({ card, me, pickable, onKudos, onHighlight }) {
   const [expanded, setExpanded] = useState(false)
   const [receipt, setReceipt] = useState(null) // submissionId whose share text is open
   const mine = card.userId === me.id
-  const canPick = mine && card.date === today && card.games.length > 1
+  const canPick = pickable && card.games.length > 1
   const games = expanded ? card.games : card.games.slice(0, SHOWN)
 
   return (
@@ -162,7 +183,7 @@ function DayCard({ card, me, today, onKudos, onHighlight }) {
         <div className="feedwho">
           <b>{mine ? 'You' : card.username}</b>
           <span className="daymeta">
-            {dayLabel(card.date, today)} · {card.games.length} {card.games.length === 1 ? 'game' : 'games'}
+            {card.games.length} {card.games.length === 1 ? 'game' : 'games'}
             {card.streak > 1 && <> · 🔥 {card.streak}</>}
           </span>
         </div>
