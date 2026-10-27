@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,magenta \"PORT=3001 node --watch server/index.js\" \"npm --prefix web run dev\"",
     "build": "npm --prefix web install && npm --prefix web run build",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "node --test server/parsers.test.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.14",

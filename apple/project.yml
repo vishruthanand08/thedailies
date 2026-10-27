@@ -25,6 +25,9 @@ targets:
     sources:
       - Dailies
       - Shared
+    dependencies:
+      - target: DailiesShare
+        destinationFilters: [iOS]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: lol.thedailies.app
@@ -43,3 +46,24 @@ targets:
         # Debug-only ATS exception for the local dev server (NSAllowsLocalNetworking)
         Debug:
           INFOPLIST_FILE: Config/Dailies-Debug-Info.plist
+
+  DailiesShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - DailiesShare
+      - path: Shared
+        excludes: [SubmissionQueue.swift] # the extension submits directly, no queue
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: lol.thedailies.app.share
+        PRODUCT_NAME: DailiesShare
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Config/DailiesShare-Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: The Dailies
+        CODE_SIGN_ENTITLEMENTS: DailiesShare/DailiesShare.entitlements
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          INFOPLIST_FILE: Config/DailiesShare-Debug-Info.plist
