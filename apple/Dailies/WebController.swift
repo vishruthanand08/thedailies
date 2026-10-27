@@ -211,9 +211,9 @@ private final class Bridge: NSObject, WKScriptMessageHandler, WKNavigationDelega
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let owner, let url = action.request.url else { return .allow }
         let isHTTP = url.scheme == "http" || url.scheme == "https"
-        // same-site links load here; anything else goes to the system browser
+        // same-site links load here; game links go to the game browser; anything else to the system browser
         if isHTTP, action.targetFrame?.isMainFrame ?? true, !owner.isOwnSite(url) {
-            owner.openExternally(url)
+            owner.open(url, name: GameHosts.name(for: url))
             return .cancel
         }
         return .allow
@@ -229,7 +229,9 @@ private final class Bridge: NSObject, WKScriptMessageHandler, WKNavigationDelega
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
         for action: WKNavigationAction, windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        if let url = action.request.url { owner?.openExternally(url) }
+        // target=_blank links, including the Play links on a site version without the native
+        // bridge: same routing as an `open` message
+        if let url = action.request.url { owner?.open(url, name: GameHosts.name(for: url)) }
         return nil
     }
 }

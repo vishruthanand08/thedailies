@@ -30,6 +30,28 @@ enum GameHosts {
         set { UserDefaults.standard.set(newValue, forKey: "dailiesExperimentalGames") }
     }
 
+    /// Title for the game browser when a link arrives without the web app's game name
+    /// (e.g. the live site's plain Play links).
+    static func name(for url: URL) -> String {
+        let host = url.host ?? ""
+        let path = url.path.lowercased()
+        let byPath: [(String, String)] = [
+            ("wordle", "Wordle"), ("connections", "Connections"), ("mini", "The Mini"), ("queens", "Queens"),
+            ("tango", "Tango"), ("zip", "Zip"), ("pinpoint", "Pinpoint"), ("crossclimb", "Crossclimb"),
+            ("wend", "Wend"), ("mini-sudoku", "Mini Sudoku"), ("patches", "Patches"),
+        ]
+        if host.hasSuffix("nytimes.com") || host.hasSuffix("linkedin.com") {
+            // longest match first so "mini-sudoku" wins over "mini"
+            for (key, name) in byPath.sorted(by: { $0.0.count > $1.0.count }) where path.contains(key) { return name }
+        }
+        let byHost: [String: String] = [
+            "worldle.teuteuf.fr": "Worldle", "globle-game.com": "Globle", "travle.earth": "Travle",
+            "minutecryptic.com": "Minute Cryptic", "costcodle.com": "Costcodle", "fermi.gg": "Fermi",
+            "maptap.gg": "MapTap", "krillion.io": "Krillion", "hbd.gg": "EthnoGuessr",
+        ]
+        return byHost.first { host == $0.key || host.hasSuffix("." + $0.key) }?.value ?? host
+    }
+
     static var active: Set<String> {
         experimentalEnabled ? indie.union(experimental) : indie
     }
