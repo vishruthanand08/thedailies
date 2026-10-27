@@ -1,21 +1,23 @@
 #if os(iOS)
 import SwiftUI
 
-/// The signed-in app: native tab bar. Today is native; Feed, Friends and You still show the
+/// The signed-in app: native tab bar. Today and Feed are native; Friends and You still show the
 /// website (without its own header and tabs) until they're rebuilt.
 struct AppTabs: View {
     enum Tab: String { case today, feed, add, friends, you }
     @State private var selection: Tab = .today
     @State private var shown: Tab = .today // the screen behind the + (which only opens a sheet)
     @State private var adding = false
+    @State private var feed = FeedModel.shared
 
     var body: some View {
         TabView(selection: $selection) {
             TodayView(goToFriends: { selection = .friends })
                 .tabItem { Label("Today", systemImage: "sun.max.fill") }
                 .tag(Tab.today)
-            WebTab(title: "Feed", webTab: "Feed", active: selection == .feed)
+            FeedView()
                 .tabItem { Label("Feed", systemImage: "list.bullet.rectangle.portrait.fill") }
+                .badge(feed.unseen) // kudos not seen yet
                 .tag(Tab.feed)
             // + in the middle of the tab bar: opens Add a score over whatever tab you're on
             Color.canvas
@@ -38,6 +40,8 @@ struct AppTabs: View {
             }
         }
         .sheet(isPresented: $adding) { AddScoreSheet() }
+        .onAppear { feed.startPolling() }
+        .onDisappear { feed.signedOut() }
         #if DEBUG
         .onAppear {
             // -dailiesTab feed|friends|you: open on that tab (scripted Simulator runs)

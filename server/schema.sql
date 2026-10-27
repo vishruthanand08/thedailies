@@ -88,3 +88,23 @@ CREATE TABLE IF NOT EXISTS game_scoring (
 
 -- 'open', or 'added' once the game is on the board
 ALTER TABLE game_suggestions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';
+
+-- Feed: one kudos per friend per player-day ("alex gave maya kudos for her Oct 27"). seen turns
+-- true once the owner opens the feed (it drives the badge on the Feed tab).
+CREATE TABLE IF NOT EXISTS day_kudos (
+  owner_id INTEGER NOT NULL REFERENCES users(id),
+  puzzle_date DATE NOT NULL,
+  giver_id INTEGER NOT NULL REFERENCES users(id),
+  seen BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, puzzle_date, giver_id)
+);
+CREATE INDEX IF NOT EXISTS idx_day_kudos_unseen ON day_kudos (owner_id) WHERE NOT seen;
+
+-- A player's chosen highlight for a day. Without a row, the highlight is their top-points game.
+CREATE TABLE IF NOT EXISTS day_highlights (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  puzzle_date DATE NOT NULL,
+  submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, puzzle_date)
+);

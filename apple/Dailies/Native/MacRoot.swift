@@ -44,7 +44,7 @@ final class MacCommands {
 }
 
 /// The signed-in Mac window: a sidebar of sections, the standard Mac layout (Mail, Notes, Music),
-/// in place of the iPhone's tab bar. Feed, Friends and You still show the website until they're native.
+/// in place of the iPhone's tab bar. Friends and You still show the website until they're native.
 struct MacRootView: View {
     enum Section: String, CaseIterable, Identifiable {
         case today = "Today", feed = "Feed", friends = "Friends", you = "You"
@@ -60,11 +60,14 @@ struct MacRootView: View {
     }
 
     @State private var commands = MacCommands.shared
+    @State private var feed = FeedModel.shared
 
     var body: some View {
         NavigationSplitView {
             List(Section.allCases, selection: $commands.section) { section in
-                Label(section.rawValue, systemImage: section.symbol).tag(section)
+                Label(section.rawValue, systemImage: section.symbol)
+                    .badge(section == .feed ? feed.unseen : 0) // kudos not seen yet
+                    .tag(section)
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
             .safeAreaInset(edge: .bottom) {
@@ -84,7 +87,9 @@ struct MacRootView: View {
             switch commands.section ?? .today {
             case .today:
                 TodayView()
-            case .feed, .friends, .you:
+            case .feed:
+                FeedView()
+            case .friends, .you:
                 MainWebView()
                     .background(Color.canvas)
                     .navigationTitle((commands.section ?? .today).rawValue)
@@ -92,12 +97,14 @@ struct MacRootView: View {
         }
         .tint(Color.ink)
         .onChange(of: commands.section, initial: true) { _, section in
-            if let section, section != .today { WebController.shared.showTab(section.rawValue) }
+            if let section, section == .friends || section == .you { WebController.shared.showTab(section.rawValue) }
         }
         // Today's own sheet covers Add Score while it's showing; other sections present it here
         .sheet(isPresented: Binding(
             get: { commands.addingScore && commands.section != .today },
             set: { commands.addingScore = $0 })) { AddScoreSheet() }
+        .onAppear { feed.startPolling() }
+        .onDisappear { feed.signedOut() }
     }
 }
 

@@ -27,6 +27,16 @@ export default function App() {
     if (me && pendingAdd) setTab('friends')
   }, [me, pendingAdd])
 
+  // kudos I haven't seen yet: a count on the Feed tab, checked on each tab change and every minute
+  const [unseen, setUnseen] = useState(0)
+  useEffect(() => {
+    if (!me) return
+    const check = () => api.get('/feed/unseen').then((d) => setUnseen(d.count), () => {})
+    check()
+    const timer = setInterval(check, 60000)
+    return () => clearInterval(timer)
+  }, [me, tab])
+
   // keep the native shell's view of who is signed in current (login, signup, logout)
   useEffect(() => {
     if (me !== undefined) tellNative({ type: 'session', user: me ? { id: me.id, username: me.username } : null })
@@ -67,12 +77,15 @@ export default function App() {
             onClick={() => setTab(id)}
           >
             {label}
+            {id === 'feed' && unseen > 0 && (
+              <span className="tabbadge" aria-label={`${unseen} new kudos`}>{unseen}</span>
+            )}
           </button>
         ))}
       </nav>
 
       {tab === 'today' && <Today me={me} />}
-      {tab === 'feed' && <Feed me={me} />}
+      {tab === 'feed' && <Feed me={me} onSeen={() => setUnseen(0)} />}
       {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
       {tab === 'you' && <Profile me={me} onLogout={logout} />}
       {tab === 'admin' && me.admin && <Admin />}

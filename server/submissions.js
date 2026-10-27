@@ -129,38 +129,6 @@ submissionsRouter.get('/board', async (req, res) => {
   res.json({ date, today: todayISO(), boards, crown, categoryCrowns, circleSize: ids.length })
 })
 
-submissionsRouter.get('/feed', async (req, res) => {
-  const ids = await circleIds(req.user.id)
-  const { rows } = await q(
-    `SELECT s.id, s.user_id, s.game_id, s.puzzle_date, s.display, s.raw_text, s.verified, s.created_at, u.username
-       FROM submissions s
-       JOIN users u ON u.id = s.user_id
-      WHERE s.user_id = ANY($2)
-      ORDER BY s.created_at DESC
-      LIMIT $1`,
-    [60, ids]
-  )
-  res.json({
-    feed: rows.map((r) => {
-      const game = gameById[r.game_id]
-      return {
-        id: r.id,
-        userId: r.user_id,
-        username: r.username,
-        gameId: r.game_id,
-        gameName: game?.name ?? r.game_id,
-        emoji: game?.emoji ?? '🎮',
-        color: game?.color ?? '#eee',
-        display: r.display,
-        rawText: r.raw_text,
-        verified: r.verified,
-        puzzleDate: typeof r.puzzle_date === 'string' ? r.puzzle_date : new Date(r.puzzle_date).toISOString().slice(0, 10),
-        createdAt: r.created_at,
-      }
-    }),
-  })
-})
-
 // An average or best metric; the unit (metricLabel) goes in the column header, except for times.
 function formatMetric(game, v) {
   if (game.metricLabel === 'time') return secondsToClock(Math.round(v))

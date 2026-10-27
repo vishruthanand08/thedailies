@@ -10,6 +10,7 @@ import { submissionsRouter } from './submissions.js'
 import { prefsRouter } from './prefs.js'
 import { suggestionsRouter } from './suggestions.js'
 import { adminRouter } from './admin.js'
+import { feedRouter } from './feed.js'
 import { loadRules, backfillPoints } from './points.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -28,6 +29,7 @@ app.use('/api/submissions', submissionsRouter)
 app.use('/api/prefs', prefsRouter)
 app.use('/api/suggestions', suggestionsRouter)
 app.use('/api/admin', adminRouter)
+app.use('/api/feed', feedRouter)
 
 app.use((err, req, res, next) => {
   console.error(err)

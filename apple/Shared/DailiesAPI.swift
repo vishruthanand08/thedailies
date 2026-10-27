@@ -119,6 +119,66 @@ struct Prefs: Codable, Equatable {
     }
 }
 
+/// The feed: one card per player per day (server/feed.js).
+struct Feed: Decodable {
+    struct Kudos: Decodable, Hashable {
+        struct Giver: Decodable, Hashable { let userId: Int; let username: String }
+        var count: Int
+        var givers: [Giver]
+        var mine: Bool
+    }
+    struct Played: Decodable, Identifiable, Hashable {
+        let submissionId: Int
+        let gameId: String
+        let gameName: String
+        let emoji: String
+        let color: String
+        let display: String
+        let points: Int
+        let verified: Bool
+        let pb: Bool
+        let createdAt: String
+        /// The pasted share text (nil for typed-in scores).
+        let rawText: String?
+        var id: Int { submissionId }
+    }
+    struct Card: Decodable, Identifiable, Hashable {
+        let userId: Int
+        let username: String
+        let date: String
+        let points: Int
+        let streak: Int
+        let lastActivity: String
+        /// The player chose their highlight (otherwise it's their top-points game).
+        let picked: Bool
+        let highlightId: Int
+        /// The highlight first, then the rest by points.
+        let games: [Played]
+        var kudos: Kudos
+        var id: String { "\(userId)-\(date)" }
+    }
+    struct Highlight: Decodable, Identifiable, Hashable {
+        let userId: Int
+        let username: String
+        let date: String
+        let gameName: String
+        let emoji: String
+        let display: String
+        let pb: Bool
+        var id: Int { userId }
+        var cardId: String { "\(userId)-\(date)" }
+    }
+    struct Notice: Decodable, Hashable {
+        let date: String
+        let usernames: [String]
+    }
+    let today: String
+    var cards: [Card]
+    let highlights: [Highlight]
+    let notices: [Notice]
+    var nextBefore: String?
+}
+
 enum DailiesError: Error, Equatable {
     case notSignedIn(String)
     case duplicate(String)
@@ -193,6 +253,32 @@ actor DailiesAPI {
     func submitManual(gameId: String, value: Double) async throws -> SubmissionResult {
         let data = try await send("/api/submissions", method: "POST", json: ["gameId": gameId, "value": value])
         return try decode(SubmissionBody.self, data).submission
+    }
+
+    func feed(before: String? = nil) async throws -> Feed {
+        try decode(Feed.self, try await send("/api/feed" + (before.map { "?before=\($0)" } ?? "")))
+    }
+
+    func unseenKudos() async throws -> Int {
+        struct Body: Decodable { let count: Int }
+        return try decode(Body.self, try await send("/api/feed/unseen")).count
+    }
+
+    func markKudosSeen() async throws {
+        _ = try await send("/api/feed/seen", method: "POST")
+    }
+
+    func kudos(userId: Int, date: String, give: Bool) async throws {
+        _ = try await send("/api/feed/kudos", method: give ? "POST" : "DELETE", json: ["userId": userId, "date": date])
+    }
+
+    /// One of today's scores as my highlight, or nil to go back to my top-points game.
+    func setHighlight(submissionId: Int?) async throws {
+        if let submissionId {
+            _ = try await send("/api/feed/highlight", method: "PUT", json: ["submissionId": submissionId])
+        } else {
+            _ = try await send("/api/feed/highlight", method: "DELETE")
+        }
     }
 
     func deleteSubmission(id: Int) async throws {

@@ -191,6 +191,85 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
   font-size: 13px; white-space: pre-wrap; word-break: break-word; margin: 8px 0 0;
 }
 
+/* day cards: the highlight leads in yellow, the rest of the day's games are lilac rows */
+.feedwho { display: flex; flex-direction: column; min-width: 0; }
+.daymeta { color: var(--muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.daypoints { margin-left: auto; font-weight: 800; font-size: 24px; line-height: 1; white-space: nowrap; }
+.daypoints span { font-size: 12px; font-weight: 700; color: var(--muted); margin-left: 3px; }
+.daygames { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.daygames li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  background: var(--lilac); border: 2px solid var(--ink); border-radius: 12px; padding: 4px 6px 4px 4px;
+}
+.daygames li.highlight { background: var(--yellow); box-shadow: var(--shadow-sm); padding: 8px 8px 8px 6px; }
+.daygames li pre { flex-basis: 100%; margin: 4px 2px 2px; background: #fff; }
+.gamerow {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer;
+}
+.gemoji {
+  width: 28px; height: 28px; border-radius: 8px; border: 2px solid var(--ink); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.highlight .gemoji { width: 34px; height: 34px; font-size: 18px; }
+.gname { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.highlight .gname { font-weight: 800; font-size: 15.5px; }
+.gdisplay { margin-left: auto; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.highlight .gdisplay { font-size: 16px; font-weight: 800; }
+.gpoints {
+  min-width: 34px; text-align: center; font-weight: 800; font-size: 12px; white-space: nowrap;
+  background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: 1px 6px;
+}
+.pbtag {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap;
+  background: var(--ink); color: var(--yellow); border-radius: 6px; padding: 1px 5px;
+}
+.starbtn {
+  width: 30px; height: 30px; flex-shrink: 0; font-size: 17px; line-height: 1; cursor: pointer;
+  background: #fff; border: 2px solid var(--ink); border-radius: 50%; padding: 0; color: var(--ink);
+}
+.starbtn.on { background: var(--ink); color: var(--yellow); }
+.starbtn:disabled { cursor: default; opacity: 1; }
+.daymore { margin-top: 8px; font-size: 13px; }
+.dayfoot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.kudosbtn {
+  font: inherit; font-weight: 700; font-size: 13.5px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: 5px 12px; box-shadow: 2px 2px 0 var(--ink);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+.kudosbtn.on { background: var(--yellow); }
+.kudosbtn:hover, .kudosbtn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+.kcount { background: var(--ink); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 12px; }
+.kudoscount { font-weight: 800; font-size: 14px; white-space: nowrap; }
+.kudosnames { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.feedmore { align-self: center; }
+
+/* today's friends' highlights, in a row above the cards */
+.feedrowtitle { margin: 0 0 8px; }
+.highlightrow { display: flex; gap: 10px; overflow-x: auto; padding: 2px 6px 8px 2px; scroll-snap-type: x proximity; }
+.highlightchip {
+  flex: 0 0 auto; scroll-snap-align: start; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px;
+  align-items: center; min-width: 150px; max-width: 200px; color: var(--ink); text-decoration: none;
+  background: var(--yellow); border: var(--border); border-radius: 14px; padding: 8px 12px 10px 8px; box-shadow: var(--shadow-sm);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+.highlightchip:hover, .highlightchip:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+.highlightchip .avatar { grid-row: span 3; }
+.hlwho { font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hlgame { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hlscore { font-weight: 800; font-size: 16px; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.kudosnotice {
+  background: var(--yellow); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 10px 14px; font-size: 14.5px; font-weight: 600;
+}
+.tabbadge {
+  display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: 999px;
+  background: var(--coral); color: var(--ink); border: 2px solid var(--ink); font-size: 11.5px; font-weight: 800; line-height: 16px;
+}
+.daycard:target { outline: 3px solid var(--yellow); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .kudosbtn, .highlightchip { transition: none; } }
+
 /* ---------- friends ---------- */
 .friends { display: flex; flex-direction: column; gap: 18px; max-width: 640px; }
 .friendrow {
@@ -226,9 +305,11 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 
 @media (max-width: 560px) {
   .tilegrid { grid-template-columns: 1fr; }
-  /* four tabs on one row */
-  .tabs { gap: 7px; flex-wrap: nowrap; }
-  .tab { padding: 7px 13px; font-size: 14px; }
+  /* all the tabs on one row (five for admins, plus the Feed badge) */
+  .tabs { gap: 6px; flex-wrap: nowrap; }
+  .tab { padding: 7px 11px; font-size: 13.5px; white-space: nowrap; }
+  .tabs:has(.tab:nth-child(5)) .tab { padding: 6px 8px; font-size: 13px; }
+  .tabbadge { margin-left: 3px; min-width: 18px; padding: 0 4px; font-size: 10.5px; }
   .hero { margin-top: 28px; }
 
   /* paste bar pinned to the bottom, in thumb reach; --kb lifts it above the iOS keyboard */
