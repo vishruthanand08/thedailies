@@ -5,6 +5,7 @@ import Auth from './Auth.jsx'
 import Today from './Today.jsx'
 import Feed from './Feed.jsx'
 import Friends from './Friends.jsx'
+import Profile from './Profile.jsx'
 
 export default function App() {
   const [me, setMe] = useState(undefined) // undefined = loading, null = signed out
@@ -50,14 +51,14 @@ export default function App() {
           <span className="pill">The</span>
           <span className="rest">Dailies</span>
         </div>
-        <div className="userchip">
+        <button className="userchip" onClick={() => setTab('you')} aria-label="Your profile">
+          <span className="avatar small">{me.username[0]}</span>
           <span>@{me.username}</span>
-          <button className="btn ghost small" onClick={logout}>Log out</button>
-        </div>
+        </button>
       </header>
 
       <nav className="tabs">
-        {[['today', 'Today'], ['feed', 'Feed'], ['friends', 'Friends']].map(([id, label]) => (
+        {[['today', 'Today'], ['feed', 'Feed'], ['friends', 'Friends'], ['you', 'You']].map(([id, label]) => (
           <button
             key={id}
             className={`tab${tab === id ? ' active' : ''}`}
@@ -72,6 +73,7 @@ export default function App() {
       {tab === 'today' && <Today me={me} />}
       {tab === 'feed' && <Feed me={me} />}
       {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
+      {tab === 'you' && <Profile me={me} onLogout={logout} />}
     </div>
   )
 }

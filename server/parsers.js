@@ -7,6 +7,8 @@ import { clockToSeconds, secondsToClock, dateForPuzzle } from './util.js'
 // `manual`: game also accepts a typed-in score (stored as unverified).
 // `embed`: the site can be played in an iframe on thedailies.lol (checked 2026-10-26; NYT, LinkedIn,
 // Krillion, EthnoGuessr and GeoGuessr refuse framing, and Worldle/Travle ask not to be framed).
+// `paid`: { what, deals: [{ label, url|null }] } for games behind a subscription; the tile shows a $
+// badge that opens these. Free-with-an-account games (GeoGuessr's daily) don't get one.
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
@@ -103,6 +105,14 @@ export const GAMES = [
     id: 'mini', name: 'The Mini', emoji: '✏️', color: '#BBD8F7',
     url: 'https://www.nytimes.com/crosswords/game/mini', metricLabel: 'time', better: 'lower',
     epoch: null, dateTolerance: 1, manual: false,
+    paid: {
+      what: 'Needs an NYT Games subscription (since Aug 2025).',
+      deals: [
+        { label: 'Free if your school or workplace has an NYT pass (sign in with that email)', url: 'https://www.nytimes.com/passes' },
+        { label: 'Many public libraries give out free NYT access codes. Ask yours.', url: null },
+        { label: 'Intro offers, or split an All Access Family plan with up to 3 friends', url: 'https://www.nytimes.com/subscription/games' },
+      ],
+    },
     parse(text) {
       const url = text.match(/mini\.html\?d=(\d{4}-\d{2}-\d{2})&(?:amp;)?t=(\d+)/i)
       if (url) {

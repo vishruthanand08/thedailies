@@ -44,3 +44,27 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   last_used_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens (user_id);
+
+-- Home page layout per user: game ids as JSON arrays (unknown ids are ignored on read).
+CREATE TABLE IF NOT EXISTS user_prefs (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id),
+  game_order TEXT NOT NULL DEFAULT '[]',
+  favorites TEXT NOT NULL DEFAULT '[]',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS game_suggestions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  url TEXT,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_game_suggestions_user ON game_suggestions (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS game_suggestion_votes (
+  suggestion_id INTEGER NOT NULL REFERENCES game_suggestions(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  PRIMARY KEY (suggestion_id, user_id)
+);

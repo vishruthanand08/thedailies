@@ -38,7 +38,12 @@ body {
   transform: rotate(-3deg); display: inline-block;
 }
 .logo .rest { padding-left: 6px; }
-.userchip { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; }
+.userchip {
+  display: flex; align-items: center; gap: 8px; font: inherit; font-weight: 700; font-size: 14px; color: var(--ink);
+  background: #fff; border: var(--border); border-radius: 999px; padding: 3px 14px 3px 4px; cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.userchip:focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
 
 /* ---------- buttons & inputs ---------- */
 .btn {
@@ -130,7 +135,7 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
   display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px;
   font-weight: 600; font-size: 15px;
 }
-.crownrow.first { background: #fff; border: var(--border); box-shadow: var(--shadow-sm); font-weight: 800; }
+.crownrow.me { background: #fff; border: var(--border); box-shadow: var(--shadow-sm); font-weight: 800; }
 .crownrow .pts { margin-left: auto; font-weight: 800; }
 .crownrow .sub { color: var(--muted); font-size: 12px; font-weight: 500; }
 
@@ -186,7 +191,7 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 }
 
 /* ---------- friends ---------- */
-.friends { display: flex; flex-direction: column; gap: 18px; max-width: 560px; }
+.friends { display: flex; flex-direction: column; gap: 18px; max-width: 640px; }
 .friendrow {
   display: flex; align-items: center; gap: 12px; padding: 10px 4px; font-weight: 600;
   border-bottom: 2px dashed #d5cfeb;
@@ -220,6 +225,9 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 
 @media (max-width: 560px) {
   .tilegrid { grid-template-columns: 1fr; }
+  /* four tabs on one row */
+  .tabs { gap: 7px; flex-wrap: nowrap; }
+  .tab { padding: 7px 13px; font-size: 14px; }
   .hero { margin-top: 28px; }
 
   /* paste bar pinned to the bottom, in thumb reach; --kb lifts it above the iOS keyboard */
@@ -243,4 +251,115 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
   .gamepanel { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
   .gamepanel-head { padding-top: calc(10px + env(safe-area-inset-top)); }
   .gamepanel-foot { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+
+/* ---------- favorites & layout ---------- */
+.gamegroup + .gamegroup { margin-top: 26px; }
+.grouptitle { margin: 0 0 12px; font-size: 16px; font-weight: 800; }
+.gridflash { margin-bottom: 14px; }
+.layouthint { text-align: center; margin: 18px 0 0; }
+.tilehead .titles { flex: 1; min-width: 0; }
+.tilehead .right { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
+.tilehead .name { overflow-wrap: break-word; }
+.tilehead .addscore { margin-left: 10px; font-size: 12.5px; color: var(--ink); text-decoration-style: dotted; }
+.iconbtn {
+  background: none; border: 2px solid transparent; border-radius: 10px; cursor: pointer;
+  width: 32px; height: 32px; font-size: 19px; line-height: 1; color: var(--ink); padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.iconbtn:hover { border-color: var(--ink); background: var(--bg); }
+.iconbtn:focus-visible { outline: 3px solid var(--coral); outline-offset: 1px; }
+.iconbtn.star { color: var(--muted); }
+.iconbtn.star.on { color: #e0a800; }
+.iconbtn.handle {
+  cursor: grab; touch-action: none; color: var(--muted); font-size: 20px;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.tile.dragging {
+  outline: 3px dashed var(--coral); outline-offset: 3px; opacity: 0.85;
+  transform: rotate(-1deg); box-shadow: 8px 8px 0 var(--ink);
+}
+body:has(.tile.dragging) { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+
+/* ---------- paid games ---------- */
+.paidbadge {
+  margin-left: 6px; vertical-align: 2px; cursor: pointer; font-family: inherit;
+  font-size: 11px; font-weight: 800; line-height: 1; color: var(--ink);
+  background: var(--yellow); border: 2px solid var(--ink); border-radius: 999px; padding: 2px 6px;
+}
+.paidbadge:hover, .paidbadge.open { background: var(--coral); }
+.paidbadge:focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
+.paidinfo {
+  background: #fff8dc; border: 2px solid var(--ink); border-radius: 12px; padding: 10px 12px;
+  font-size: 13px; font-weight: 500;
+}
+.paidinfo .what { font-weight: 700; margin-bottom: 4px; }
+.paidinfo ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.paidinfo a { color: var(--ink); font-weight: 600; }
+
+/* ---------- suggestions ---------- */
+.suggestions { margin-top: 28px; display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.suggesthead { display: flex; align-items: center; gap: 12px; }
+.suggesthead .sectiontitle { margin: 0; flex: 1; }
+.suggestform { display: flex; flex-direction: column; gap: 8px; }
+.suggestform .row { display: flex; gap: 8px; }
+.suggestlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.suggestlist li { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+.suggestlist .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.suggestlist a { color: var(--ink); }
+.suggestlist .sub { color: var(--muted); font-size: 12.5px; font-weight: 500; }
+.suggestlist .del { background: none; border: none; cursor: pointer; font-size: 13px; opacity: 0.6; }
+.votebtn {
+  font-family: inherit; font-weight: 800; font-size: 13px; cursor: pointer; min-width: 52px;
+  background: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 5px 8px;
+}
+.votebtn.on { background: var(--yellow); }
+
+/* ---------- stats ---------- */
+.profile { display: flex; flex-direction: column; gap: 18px; max-width: 640px; }
+.cardhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.cardhead .sectiontitle { margin: 0; flex: 1; white-space: nowrap; }
+.leaderboards .gamepick { margin-top: 22px; }
+.avatar.small { width: 26px; height: 26px; font-size: 12px; border-width: 2px; }
+.avatar.big { width: 56px; height: 56px; font-size: 24px; background: var(--yellow); }
+.profilehead { display: flex; align-items: center; gap: 14px; }
+.profilehead .who { flex: 1; min-width: 0; }
+.profilehead .name { font-weight: 800; font-size: 20px; overflow-wrap: anywhere; }
+.stattiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.stattile {
+  background: var(--bg); border: 2px solid var(--ink); border-radius: 12px; padding: 10px 12px;
+}
+.stattile .value { font-weight: 800; font-size: 22px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.stattile .label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.stattable td .unit { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.rangerow { display: flex; gap: 8px; flex-wrap: wrap; }
+.tab.small { font-size: 13px; padding: 5px 14px; }
+.tablewrap { overflow-x: auto; margin: 0 -6px; }
+.stattable { width: 100%; border-collapse: separate; border-spacing: 0 3px; font-size: 14px; }
+.stattable th {
+  text-align: left; font-size: 12px; font-weight: 700; color: var(--muted); padding: 4px 8px;
+}
+.stattable td { padding: 7px 8px; font-weight: 600; }
+.stattable .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stattable .rank { width: 34px; text-align: center; }
+.stattable .who { white-space: nowrap; }
+.stattable th .unit { display: block; font-size: 10.5px; font-weight: 600; }
+.stattable tr.me td { background: var(--lilac); }
+.stattable tr.me td:first-child { border-radius: 8px 0 0 8px; }
+.stattable tr.me td:last-child { border-radius: 0 8px 8px 0; }
+.sortbtn {
+  background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted;
+}
+.sortbtn.active { color: var(--ink); text-decoration: none; }
+.sortbtn:focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
+.hint.small { font-size: 12.5px; margin: 10px 0 0; }
+.gamepick { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.gamepick select.input { width: auto; flex: 1; max-width: 320px; padding: 8px 12px; font-weight: 700; }
+
+@media (max-width: 560px) {
+  .stattable { font-size: 13px; }
+  .stattiles { grid-template-columns: repeat(2, 1fr); }
+  .stattable td .unit { display: block; margin: 0; font-size: 10.5px; }
+  .stattable .who { white-space: normal; }
+  .stattable td, .stattable th { padding-left: 5px; padding-right: 5px; }
 }

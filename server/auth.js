@@ -99,6 +99,25 @@ authRouter.get('/me', requireAuth, (req, res) => {
   res.json({ user: { id: req.user.id, username: req.user.username } })
 })
 
+authRouter.get('/profile', requireAuth, async (req, res) => {
+  const { rows } = await q('SELECT username, created_at FROM users WHERE id = $1', [req.user.id])
+  if (!rows.length) return res.status(404).json({ error: 'No such user' })
+  res.json({ username: rows[0].username, createdAt: rows[0].created_at })
+})
+
+// Existing sessions and device tokens stay signed in; only the password changes.
+authRouter.post('/password', requireAuth, async (req, res) => {
+  const current = String(req.body.current || '')
+  const next = String(req.body.next || '')
+  if (next.length < 6) return res.status(400).json({ error: 'New password needs 6+ characters' })
+  const { rows } = await q('SELECT password_hash FROM users WHERE id = $1', [req.user.id])
+  if (!rows.length || !(await bcrypt.compare(current, rows[0].password_hash))) {
+    return res.status(400).json({ error: 'Your current password is wrong' })
+  }
+  await q('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user.id, await bcrypt.hash(next, 10)])
+  res.json({ ok: true })
+})
+
 // ---------- device tokens ----------
 // Plaintext is "dly_" + 32 random bytes (base64url), returned exactly once.
 

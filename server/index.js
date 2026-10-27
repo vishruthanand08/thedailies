@@ -7,6 +7,8 @@ import { initDb } from './db.js'
 import { authRouter } from './auth.js'
 import { friendsRouter } from './friends.js'
 import { submissionsRouter } from './submissions.js'
+import { prefsRouter } from './prefs.js'
+import { suggestionsRouter } from './suggestions.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -19,6 +21,8 @@ app.use(cookieParser())
 app.use('/api/auth', authRouter)
 app.use('/api/friends', friendsRouter)
 app.use('/api/submissions', submissionsRouter)
+app.use('/api/prefs', prefsRouter)
+app.use('/api/suggestions', suggestionsRouter)
 
 app.use((err, req, res, next) => {
   console.error(err)

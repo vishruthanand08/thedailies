@@ -4,15 +4,15 @@ import { requireAuth } from './auth.js'
 import { circleIds } from './friends.js'
 import { GAMES, gameById, detect, expectedDate } from './parsers.js'
 import { buildBoards } from './scoring.js'
-import { todayISO, daysApart, isValidISODate } from './util.js'
+import { todayISO, daysApart, isValidISODate, secondsToClock } from './util.js'
 
 export const submissionsRouter = Router()
 submissionsRouter.use(requireAuth)
 
 submissionsRouter.get('/games', (req, res) => {
   res.json({
-    games: GAMES.map(({ id, name, emoji, color, url, metricLabel, better, manual, note, embed }) => ({
-      id, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed,
+    games: GAMES.map(({ id, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
+      id, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed, paid: paid ?? null,
     })),
   })
 })
@@ -133,4 +133,125 @@ submissionsRouter.get('/feed', async (req, res) => {
       }
     }),
   })
+})
+
+// An average or best metric; the unit (metricLabel) goes in the column header, except for times.
+function formatMetric(game, v) {
+  if (game.metricLabel === 'time') return secondsToClock(Math.round(v))
+  if (game.id === 'fermi') return `${+v.toFixed(2)}×`
+  const n = Number.isInteger(v) ? v : +v.toFixed(1)
+  return n.toLocaleString('en-US')
+}
+
+const iso = (d) => (typeof d === 'string' ? d : new Date(d).toISOString().slice(0, 10))
+
+// All-time (or last N days) standings for my circle. A day's crown or a game's win only
+// counts when at least two people played, so playing alone never wins anything.
+submissionsRouter.get('/stats', async (req, res) => {
+  const days = ['7', '30'].includes(req.query.days) ? Number(req.query.days) : null
+  const today = todayISO()
+  const since = days ? new Date(Date.parse(today + 'T12:00:00Z') - (days - 1) * 86400000).toISOString().slice(0, 10) : null
+  const ids = await circleIds(req.user.id)
+  const { rows } = await q(
+    `SELECT s.id, s.user_id, s.game_id, s.puzzle_date, s.metric, s.display, s.verified, u.username
+       FROM submissions s
+       JOIN users u ON u.id = s.user_id
+      WHERE s.user_id = ANY($1)`,
+    [ids]
+  )
+  for (const r of rows) r.puzzle_date = iso(r.puzzle_date)
+
+  const players = new Map() // user_id -> overall row
+  const player = (id, username) => {
+    if (!players.has(id)) {
+      players.set(id, { userId: id, username, points: 0, crowns: 0, wins: 0, played: 0, days: new Set(), allDays: new Set() })
+    }
+    return players.get(id)
+  }
+  const perGame = new Map() // game_id -> user_id -> { played, wins, sum, best }
+
+  const byDate = new Map()
+  for (const r of rows) {
+    player(r.user_id, r.username).allDays.add(r.puzzle_date)
+    if (since && r.puzzle_date < since) continue
+    if (!byDate.has(r.puzzle_date)) byDate.set(r.puzzle_date, [])
+    byDate.get(r.puzzle_date).push(r)
+  }
+
+  for (const dayRows of byDate.values()) {
+    const { boards, crown } = buildBoards(dayRows)
+    if (crown.length >= 2) {
+      for (const c of crown) if (c.points === crown[0].points) player(c.userId, c.username).crowns += 1
+    }
+    for (const c of crown) player(c.userId, c.username).points += c.points
+    for (const b of boards) {
+      const game = gameById[b.gameId]
+      if (!perGame.has(b.gameId)) perGame.set(b.gameId, new Map())
+      const g = perGame.get(b.gameId)
+      for (const e of b.entries) {
+        const p = player(e.userId, e.username)
+        p.played += 1
+        p.days.add(dayRows[0].puzzle_date)
+        const won = e.rank === 1 && b.entries.length >= 2
+        if (won) p.wins += 1
+        const s = g.get(e.userId) || { userId: e.userId, username: e.username, played: 0, wins: 0, sum: 0, best: null }
+        s.played += 1
+        if (won) s.wins += 1
+        s.sum += e.metric
+        const better = game.better === 'higher' ? e.metric > s.best : e.metric < s.best
+        if (s.best === null || better) s.best = e.metric
+        g.set(e.userId, s)
+      }
+    }
+  }
+
+  // consecutive days played, counting back from today (or yesterday, if today isn't in yet)
+  const streak = (daysSet) => {
+    let d = daysSet.has(today) ? today : new Date(Date.parse(today + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10)
+    let n = 0
+    while (daysSet.has(d)) {
+      n += 1
+      d = new Date(Date.parse(d + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10)
+    }
+    return n
+  }
+
+  // longest run of consecutive days ever played
+  const bestStreak = (daysSet) => {
+    let best = 0
+    for (const d of daysSet) {
+      const prev = new Date(Date.parse(d + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10)
+      if (daysSet.has(prev)) continue // not the start of a run
+      let n = 0
+      let cur = d
+      while (daysSet.has(cur)) {
+        n += 1
+        cur = new Date(Date.parse(cur + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10)
+      }
+      best = Math.max(best, n)
+    }
+    return best
+  }
+
+  const overall = [...players.values()]
+    .filter((p) => p.played > 0)
+    .map((p) => ({
+      userId: p.userId, username: p.username, points: p.points, crowns: p.crowns, wins: p.wins,
+      played: p.played, daysPlayed: p.days.size, streak: streak(p.allDays), bestStreak: bestStreak(p.allDays),
+    }))
+    .sort((a, b) => b.points - a.points || b.crowns - a.crowns || a.username.localeCompare(b.username))
+
+  const games = GAMES.filter((game) => perGame.has(game.id)).map((game) => {
+    const dir = game.better === 'higher' ? -1 : 1
+    const entries = [...perGame.get(game.id).values()]
+      .map((s) => ({
+        userId: s.userId, username: s.username, played: s.played, wins: s.wins,
+        avg: s.sum / s.played, best: s.best,
+        avgDisplay: formatMetric(game, s.sum / s.played), bestDisplay: formatMetric(game, s.best),
+      }))
+      .sort((a, b) => b.wins - a.wins || dir * (a.avg - b.avg) || b.played - a.played)
+    return { gameId: game.id, better: game.better, entries }
+  })
+
+  res.json({ days, since, today, overall, games })
 })

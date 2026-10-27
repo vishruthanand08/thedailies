@@ -2,11 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { inApp, nativeCapture, tellNative } from './native.js'
 import GamePanel from './GamePanel.jsx'
+import Suggestions from './Suggestions.jsx'
 
 function shiftDate(iso, days) {
   const d = new Date(iso + 'T12:00:00Z')
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
+}
+
+// Games in the player's saved order; games added since they last arranged go at the end.
+function arrange(games, order) {
+  const at = new Map(order.map((id, i) => [id, i]))
+  return games
+    .map((g, i) => [g, at.has(g.id) ? at.get(g.id) : order.length + i])
+    .sort((a, b) => a[1] - b[1])
+    .map(([g]) => g)
 }
 
 function prettyDate(iso, today) {
@@ -96,6 +106,108 @@ export default function Today({ me }) {
   useEffect(() => {
     api.get('/submissions/games').then((d) => setGames(d.games))
   }, [])
+
+  // favorites pin games to the top; drag (or arrow keys on the handle) to rearrange
+  const [prefs, setPrefs] = useState({ order: [], favorites: [] })
+  const [prefsError, setPrefsError] = useState(null)
+  useEffect(() => {
+    api.get('/prefs').then(setPrefs).catch(() => {})
+  }, [])
+  const savePrefs = (patch) => {
+    setPrefsError(null)
+    api.put('/prefs', patch).catch(() => setPrefsError("Couldn't save your layout. Check your connection."))
+  }
+  const ordered = useMemo(() => arrange(games, prefs.order), [games, prefs.order])
+  const favSet = useMemo(() => new Set(prefs.favorites), [prefs.favorites])
+  const favGames = ordered.filter((g) => favSet.has(g.id))
+  const otherGames = ordered.filter((g) => !favSet.has(g.id))
+  // the latest order, updated as soon as a game moves (a drop can land before React re-renders)
+  const orderIdsRef = useRef([])
+  orderIdsRef.current = ordered.map((g) => g.id)
+  const favSetRef = useRef(favSet)
+  favSetRef.current = favSet
+
+  const toggleFavorite = (game) => {
+    const favorites = favSet.has(game.id) ? prefs.favorites.filter((id) => id !== game.id) : [...prefs.favorites, game.id]
+    setPrefs((p) => ({ ...p, favorites }))
+    savePrefs({ favorites })
+  }
+
+  // put `id` where `targetId` is; returns the new full order
+  const moveGame = (id, targetId) => {
+    const ids = [...orderIdsRef.current]
+    const from = ids.indexOf(id)
+    const to = ids.indexOf(targetId)
+    if (from === -1 || to === -1 || from === to) return null
+    ids.splice(from, 1)
+    ids.splice(to, 0, id)
+    orderIdsRef.current = ids
+    setPrefs((p) => ({ ...p, order: ids }))
+    return ids
+  }
+
+  const [draggingId, setDraggingId] = useState(null)
+  const startDrag = (e, game) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const drag = { id: game.id, fav: favSetRef.current.has(game.id), last: null, x: e.clientX, y: e.clientY, moved: false }
+    setDraggingId(game.id)
+
+    const retarget = () => {
+      // look through the fixed paste bar on phones to the tile underneath
+      const target = document
+        .elementsFromPoint(drag.x, drag.y)
+        .map((el) => el.closest('[data-gameid]'))
+        .find(Boolean)?.dataset.gameid
+      if (!target || target === drag.id) {
+        drag.last = null
+        return
+      }
+      // ignore the tile we just swapped with until the pointer leaves it, so they don't flicker back and forth
+      if (target === drag.last || favSetRef.current.has(target) !== drag.fav) return
+      drag.last = target
+      if (moveGame(drag.id, target)) drag.moved = true
+    }
+    // scroll while holding a tile near the top or bottom of the screen
+    let raf
+    const edge = 90
+    const scroll = () => {
+      const dy = drag.y < edge ? -12 : drag.y > window.innerHeight - edge ? 12 : 0
+      if (dy) {
+        window.scrollBy(0, dy)
+        retarget()
+      }
+      raf = requestAnimationFrame(scroll)
+    }
+    raf = requestAnimationFrame(scroll)
+
+    const move = (ev) => {
+      drag.x = ev.clientX
+      drag.y = ev.clientY
+      retarget()
+    }
+    const end = () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      setDraggingId(null)
+      if (drag.moved) savePrefs({ order: orderIdsRef.current })
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+
+  // arrow keys on the handle move a game one place within its group
+  const nudge = (game, step) => {
+    const fav = favSetRef.current
+    const group = orderIdsRef.current.filter((id) => fav.has(id) === fav.has(game.id))
+    const target = group[group.indexOf(game.id) + step]
+    if (!target) return
+    const ids = moveGame(game.id, target)
+    if (ids) savePrefs({ order: ids })
+  }
 
   const load = (d) => {
     api.get(`/submissions/board${d ? `?date=${d}` : ''}`).then((resp) => {
@@ -248,11 +360,10 @@ export default function Today({ me }) {
         <div className="card crowncard">
           <h3>👑 Daily crown</h3>
           {board.crown.map((c, i) => (
-            <div key={c.userId} className={`crownrow${i === 0 ? ' first' : ''}`}>
+            <div key={c.userId} className={`crownrow${c.userId === me.id ? ' me' : ''}`}>
               <span>{['🥇', '🥈', '🥉'][i] ?? `${i + 1}.`}</span>
               <span>
-                {c.username}
-                {c.userId === me.id ? ' (you)' : ''}{' '}
+                {c.username}{' '}
                 <span className="sub">· {c.games} game{c.games === 1 ? '' : 's'}</span>
               </span>
               <span className="pts">{c.points} pts</span>
@@ -261,38 +372,77 @@ export default function Today({ me }) {
         </div>
       )}
 
-      <div className="tilegrid">
-        {games.map((g) => (
-          <GameTile
-            key={g.id}
-            game={g}
-            entries={boardsByGame[g.id] ?? []}
-            me={me}
-            isToday={isToday}
-            onRemove={remove}
-            onManual={submitManual}
-            onPlay={setPlaying}
-            onLeave={leftForGame}
-          />
-        ))}
-      </div>
+      {prefsError && <div className="flash err gridflash" role="status">{prefsError}</div>}
+
+      {[
+        ['fav', '★ Favorites', favGames],
+        ['all', favGames.length ? 'All games' : null, otherGames],
+      ].map(([key, title, list]) =>
+        list.length === 0 ? null : (
+          <section key={key} className="gamegroup" aria-label={title ?? 'Games'}>
+            {title && <h3 className="grouptitle">{title}</h3>}
+            <div className="tilegrid">
+              {list.map((g) => (
+                <GameTile
+                  key={g.id}
+                  game={g}
+                  entries={boardsByGame[g.id] ?? []}
+                  me={me}
+                  isToday={isToday}
+                  favorite={favSet.has(g.id)}
+                  dragging={draggingId === g.id}
+                  onFavorite={toggleFavorite}
+                  onDragStart={startDrag}
+                  onNudge={nudge}
+                  onRemove={remove}
+                  onManual={submitManual}
+                  onPlay={setPlaying}
+                  onLeave={leftForGame}
+                />
+              ))}
+            </div>
+          </section>
+        )
+      )}
+      {games.length > 0 && favGames.length === 0 && (
+        <p className="hint layouthint">Tap ☆ to pin a game to the top. Drag ⠿ to move games around.</p>
+      )}
+
+      <Suggestions />
 
       {playing && <GamePanel game={playing} onClose={closePanel} onSaved={() => load(dateRef.current)} />}
     </div>
   )
 }
 
-function GameTile({ game, entries, me, isToday, onRemove, onManual, onPlay, onLeave }) {
+function GameTile({
+  game, entries, me, isToday, favorite, dragging,
+  onFavorite, onDragStart, onNudge, onRemove, onManual, onPlay, onLeave,
+}) {
   const [manualOpen, setManualOpen] = useState(false)
   const [manualVal, setManualVal] = useState('')
+  const [paidOpen, setPaidOpen] = useState(false)
   const mine = entries.find((e) => e.userId === me.id)
 
   return (
-    <div className="card tile">
+    <div className={`card tile${dragging ? ' dragging' : ''}`} data-gameid={game.id}>
       <div className="tilehead">
         <div className="gameicon" style={{ background: game.color }}>{game.emoji}</div>
-        <div>
-          <div className="name">{game.name}</div>
+        <div className="titles">
+          <div className="name">
+            {game.name}
+            {game.paid && (
+              <button
+                className={`paidbadge${paidOpen ? ' open' : ''}`}
+                title="Needs a subscription. Tap for ways to get it cheaper."
+                aria-label={`${game.name} needs a subscription. Show ways to get it cheaper`}
+                aria-expanded={paidOpen}
+                onClick={() => setPaidOpen((v) => !v)}
+              >
+                $
+              </button>
+            )}
+          </div>
           <a
             className="playlink"
             href={game.url}
@@ -317,15 +467,62 @@ function GameTile({ game, entries, me, isToday, onRemove, onManual, onPlay, onLe
           >
             Play ↗
           </a>
-        </div>
-        {isToday && game.manual && !mine && (
-          <div className="right">
-            <button className="btn ghost small" onClick={() => setManualOpen((v) => !v)}>
+          {isToday && game.manual && !mine && (
+            <button
+              className="linklike addscore"
+              aria-expanded={manualOpen}
+              onClick={() => setManualOpen((v) => !v)}
+            >
               + score
             </button>
-          </div>
-        )}
+          )}
+        </div>
+        <div className="right">
+          <button
+            className={`iconbtn star${favorite ? ' on' : ''}`}
+            aria-pressed={favorite}
+            aria-label={favorite ? `Unpin ${game.name} from favorites` : `Pin ${game.name} to favorites`}
+            title={favorite ? 'Unfavorite' : 'Favorite'}
+            onClick={() => onFavorite(game)}
+          >
+            {favorite ? '★' : '☆'}
+          </button>
+          <button
+            className="iconbtn handle"
+            aria-label={`Move ${game.name}. Drag, or use the arrow keys`}
+            title="Drag to move"
+            onPointerDown={(e) => onDragStart(e, game)}
+            onKeyDown={(e) => {
+              const step = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key]
+              if (!step) return
+              e.preventDefault()
+              const el = e.currentTarget
+              onNudge(game, step)
+              // reordering moves the tile's DOM node, which can drop focus
+              requestAnimationFrame(() => el.focus())
+            }}
+          >
+            ⠿
+          </button>
+        </div>
       </div>
+
+      {paidOpen && game.paid && (
+        <div className="paidinfo">
+          <div className="what">{game.paid.what}</div>
+          <ul>
+            {game.paid.deals.map((d) => (
+              <li key={d.label}>
+                {d.url ? (
+                  <a href={d.url} target="_blank" rel="noreferrer">{d.label} ↗</a>
+                ) : (
+                  d.label
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {manualOpen && !mine && (
         <div className="manualrow">

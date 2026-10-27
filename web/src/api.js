@@ -17,6 +17,7 @@ async function call(path, opts = {}) {
 export const api = {
   get: (p) => call(p),
   post: (p, body) => call(p, { method: 'POST', body }),
+  put: (p, body) => call(p, { method: 'PUT', body }),
   del: (p) => call(p, { method: 'DELETE' }),
 }
 

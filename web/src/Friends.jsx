@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
-import Devices, { showDevices } from './Devices.jsx'
+import Leaderboards from './Leaderboards.jsx'
 
 // survives StrictMode's double-mount so an invite only fires one request
 let inviteHandledFor = null
@@ -75,6 +75,31 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
 
   return (
     <div className="friends">
+      {data.incoming.length > 0 && (
+        <div className="card">
+          <h3 className="sectiontitle">Requests</h3>
+          {data.incoming.map((u) => (
+            <div key={u.id} className="friendrow">
+              <div className="avatar">{u.username[0]}</div>
+              <span>{u.username}</span>
+              <div className="actions">
+                <button className="btn small" onClick={() => respond(u.id, true)}>Accept</button>
+                <button className="btn ghost small" onClick={() => respond(u.id, false)}>Decline</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data.friends.length > 0 ? (
+        <Leaderboards me={me} />
+      ) : (
+        <div className="card">
+          <h3 className="sectiontitle">🏆 Leaderboard</h3>
+          <p className="hint" style={{ margin: 0 }}>Add a friend to see who's winning, all time and by game.</p>
+        </div>
+      )}
+
       <form className="card" onSubmit={add}>
         <h3 className="sectiontitle">Add a friend</h3>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -111,22 +136,6 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         </p>
       </div>
 
-      {data.incoming.length > 0 && (
-        <div className="card">
-          <h3 className="sectiontitle">Requests</h3>
-          {data.incoming.map((u) => (
-            <div key={u.id} className="friendrow">
-              <div className="avatar">{u.username[0]}</div>
-              <span>{u.username}</span>
-              <div className="actions">
-                <button className="btn small" onClick={() => respond(u.id, true)}>Accept</button>
-                <button className="btn ghost small" onClick={() => respond(u.id, false)}>Decline</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="card">
         <h3 className="sectiontitle">Friends ({data.friends.length})</h3>
         {data.friends.length === 0 && <p className="hint">No friends yet — add them by username above.</p>}
@@ -153,7 +162,6 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         )}
       </div>
 
-      {showDevices && <Devices />}
     </div>
   )
 }
