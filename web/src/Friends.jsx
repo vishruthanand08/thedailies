@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
-import Devices from './Devices.jsx'
+import Devices, { showDevices } from './Devices.jsx'
 
 // survives StrictMode's double-mount so an invite only fires one request
 let inviteHandledFor = null
@@ -153,7 +153,7 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         )}
       </div>
 
-      <Devices />
+      {showDevices && <Devices />}
     </div>
   )
 }

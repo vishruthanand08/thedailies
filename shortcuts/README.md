@@ -6,11 +6,11 @@ from an iCloud link and paste in their own device token once.
 
 Shortcuts can't be generated as files from code, so build it once by hand in the Shortcuts
 app, then share it with **Share > Copy iCloud Link** and paste that link into the Devices
-card in the web app (`web/src/Friends.jsx`, `SHORTCUT_URL`).
+card in the web app (`SHORTCUT_URL` in `web/src/Devices.jsx`, which also makes the card visible).
 
 ## 1. Get a device token
 
-On thedailies.lol open **Friends > Devices**, tap **New device token**, name it (e.g.
+On thedailies.lol open **Friends > Devices** (the card is hidden until the Shortcut link is published; open `https://www.thedailies.lol/?devices` to see it), tap **New device token**, name it (e.g.
 "Shortcut on my iPhone") and copy the token. It starts with `dly_` and is only shown once.
 Remove it from the same card to revoke it.
 

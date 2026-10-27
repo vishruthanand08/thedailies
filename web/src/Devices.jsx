@@ -4,6 +4,10 @@ import { api, timeAgo } from './api.js'
 // iCloud link to the "Save to The Dailies" Shortcut (see shortcuts/README.md); empty until published
 const SHORTCUT_URL = ''
 
+// Hidden on the site until the Shortcut is published; /?devices shows it for setting one up early.
+// The app doesn't need it: it gets its device token automatically when you sign in.
+export const showDevices = Boolean(SHORTCUT_URL) || new URLSearchParams(window.location.search).has('devices')
+
 // Device tokens let the iOS Shortcut, the app and its share extension save scores without pasting.
 export default function Devices() {
   const [tokens, setTokens] = useState(null)
