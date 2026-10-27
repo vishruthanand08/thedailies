@@ -52,9 +52,10 @@ struct RootView: View {
             #endif
         }
         #if os(iOS)
-        .sheet(item: $game) { launch in
+        // full screen, not a sheet: games like Zip and Strands are played by dragging, and a
+        // downward drag would pull a sheet closed. Done is the only way out.
+        .fullScreenCover(item: $game) { launch in
             GameBrowserView(launch: launch)
-                .presentationDetents([.large])
         }
         #endif
         .onChange(of: scenePhase) { _, phase in

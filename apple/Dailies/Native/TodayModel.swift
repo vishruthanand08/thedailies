@@ -94,7 +94,10 @@ final class TodayModel {
         loading = true
         defer { loading = false }
         do {
-            if games.isEmpty { (games, categories) = try await DailiesAPI.shared.games() }
+            if games.isEmpty {
+                (games, categories) = try await DailiesAPI.shared.games()
+                GameHosts.learn(games)
+            }
             async let b = DailiesAPI.shared.board(date: date)
             async let p = DailiesAPI.shared.prefs()
             let (newBoard, newPrefs) = try await (b, p)

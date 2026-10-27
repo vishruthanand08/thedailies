@@ -12,6 +12,16 @@ enum GameHosts {
         "timeguessr.com", "worldguessr.com",
     ]
 
+    /// Hosts of the server's games (GET /api/submissions/games), so a game added to the server
+    /// later opens in the game browser without an app update.
+    @MainActor private static var fromServer: Set<String> = []
+
+    @MainActor static func learn(_ games: [Game]) {
+        fromServer = Set(games.compactMap { $0.playURL?.host?.lowercased() }.map {
+            $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0
+        })
+    }
+
     /// Title for the game browser when a link arrives without the web app's game name
     /// (e.g. the live site's plain Play links).
     static func name(for url: URL) -> String {
@@ -35,9 +45,9 @@ enum GameHosts {
     }
 
     /// Exact host or a subdomain of a game's host (e.g. a game's login page).
-    static func isGame(_ host: String?) -> Bool {
-        guard let host, !host.isEmpty else { return false }
-        return all.contains { host == $0 || host.hasSuffix("." + $0) }
+    @MainActor static func isGame(_ host: String?) -> Bool {
+        guard let host = host?.lowercased(), !host.isEmpty else { return false }
+        return all.union(fromServer).contains { host == $0 || host.hasSuffix("." + $0) }
     }
 
     /// Cookies for game sites live apart from the Dailies session, in one persistent store,
