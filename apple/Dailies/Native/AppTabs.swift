@@ -9,6 +9,7 @@ struct AppTabs: View {
     @State private var shown: Tab = .today // the screen behind the + (which only opens a sheet)
     @State private var adding = false
     @State private var feed = FeedModel.shared
+    @State private var push = Push.shared
 
     var body: some View {
         TabView(selection: $selection) {
@@ -41,6 +42,13 @@ struct AppTabs: View {
         }
         .sheet(isPresented: $adding) { AddScoreSheet() }
         .onAppear { feed.startPolling() }
+        .task { await push.registerIfAllowed() }
+        // a tapped notification opens its tab
+        .onChange(of: push.openTab, initial: true) { _, tab in
+            guard let tab, let t = Tab(rawValue: tab), t != .add else { return }
+            selection = t
+            push.openTab = nil
+        }
         .onDisappear { feed.signedOut() }
         #if DEBUG
         .onAppear {

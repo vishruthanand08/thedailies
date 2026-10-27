@@ -283,6 +283,16 @@ actor DailiesAPI {
         }
     }
 
+    func registerPush(token: String, platform: String, env: String) async throws {
+        _ = try await send("/api/push/devices", method: "POST", json: ["token": token, "platform": platform, "env": env])
+    }
+
+    /// With the token being signed out, since the keychain is about to be cleared.
+    func unregisterPush(token: String, using stored: StoredToken) async {
+        guard let server = Server(rawValue: stored.server) else { return }
+        _ = try? await send("/api/push/devices", method: "DELETE", json: ["token": token], token: stored.token, server: server)
+    }
+
     func deleteSubmission(id: Int) async throws {
         _ = try await send("/api/submissions/\(id)", method: "DELETE")
     }

@@ -5,6 +5,7 @@ import { circleIds } from './friends.js'
 import { gameById } from './parsers.js'
 import { pointsFor } from './points.js'
 import { todayISO, isValidISODate } from './util.js'
+import { notifyKudos } from './push.js'
 
 // The feed is one card per player per day (like a Strava activity): their points total, every
 // game they played, and their highlight, which is the game they picked or else their top-points
@@ -197,6 +198,7 @@ feedRouter.post('/kudos', async (req, res) => {
     [t.owner, t.date, req.user.id]
   )
   res.json({ ok: true })
+  notifyKudos(t.owner, t.date).catch((err) => console.warn('push:', err.message))
 })
 
 feedRouter.delete('/kudos', async (req, res) => {

@@ -3,6 +3,11 @@ import SwiftUI
 @main
 struct DailiesApp: App {
     #if os(iOS)
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
+    #else
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
+    #endif
+    #if os(iOS)
     init() { Appearance.configure() }
     #endif
 

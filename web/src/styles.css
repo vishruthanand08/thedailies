@@ -27,6 +27,10 @@ body {
 
 #root { min-height: 100vh; }
 
+/* rows that scroll sideways (highlights, tables, chips) and text boxes swipe without a visible bar */
+body * { scrollbar-width: none; }
+body *::-webkit-scrollbar { display: none; }
+
 .container { max-width: 1080px; margin: 0 auto; padding: 0 16px 80px; }
 
 /* ---------- header ---------- */
@@ -115,8 +119,11 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 .navbtn:disabled { opacity: 0.35; cursor: default; }
 
 .pastebox { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
-.pastebox .row { display: flex; gap: 10px; align-items: flex-start; }
+.pastebox .row { display: flex; gap: 10px; align-items: stretch; }
 .pastebox .btn { white-space: nowrap; }
+/* the box is one line, the same height as the Paste button beside it; longer text scrolls inside */
+.pastebox textarea.input { min-height: 0; height: 46px; resize: none; padding: 11px 14px; line-height: 1.45; }
+.pastebox .row .btn { min-height: 46px; padding-top: 0; padding-bottom: 0; }
 .backprompt {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   background: var(--yellow); border: var(--border); border-radius: 12px; padding: 10px 12px;
@@ -172,7 +179,7 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 .manualrow input { width: 110px; padding: 6px 10px; font-size: 14px; }
 
 /* ---------- feed ---------- */
-.feed { display: flex; flex-direction: column; gap: 14px; max-width: 640px; }
+.feed { display: flex; flex-direction: column; gap: 14px; }
 .feeditem { padding: 14px 16px; }
 .feedhead { display: flex; align-items: center; gap: 10px; }
 .avatar {
@@ -275,7 +282,7 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 @media (prefers-reduced-motion: reduce) { .kudosbtn, .highlightchip { transition: none; } }
 
 /* ---------- friends ---------- */
-.friends { display: flex; flex-direction: column; gap: 18px; max-width: 640px; }
+.friends { display: flex; flex-direction: column; gap: 18px; }
 .friendrow {
   display: flex; align-items: center; gap: 12px; padding: 10px 4px; font-weight: 600;
   border-bottom: 2px dashed #d5cfeb;
@@ -326,8 +333,7 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
   .pastebox .flash { order: -1; }
   .pastebox .backprompt { order: -2; }
   /* 16px keeps iOS from zooming in on focus */
-  .pastebox textarea.input { min-height: 46px; max-height: 30vh; height: 46px; resize: none; font-size: 16px; padding: 11px 12px; }
-  .pastebox textarea.input:focus { height: 96px; }
+  .pastebox textarea.input { font-size: 16px; padding: 11px 12px; }
   .pastebox .btn { min-height: 46px; padding: 0 16px; }
   .container:has(.pastebox) { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
   .container:has(.backprompt) { padding-bottom: calc(230px + env(safe-area-inset-bottom)); }
@@ -384,7 +390,7 @@ body:has(.tile.dragging) { cursor: grabbing; user-select: none; -webkit-user-sel
 .paidinfo a { color: var(--ink); font-weight: 600; }
 
 /* ---------- suggestions ---------- */
-.suggestions { margin-top: 28px; display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.suggestions { margin-top: 28px; display: flex; flex-direction: column; gap: 12px; }
 .suggesthead { display: flex; align-items: center; gap: 12px; }
 .suggesthead .sectiontitle { margin: 0; flex: 1; }
 .suggestform { display: flex; flex-direction: column; gap: 8px; }
@@ -402,7 +408,7 @@ body:has(.tile.dragging) { cursor: grabbing; user-select: none; -webkit-user-sel
 .votebtn.on { background: var(--yellow); }
 
 /* ---------- stats ---------- */
-.profile { display: flex; flex-direction: column; gap: 18px; max-width: 640px; }
+.profile { display: flex; flex-direction: column; gap: 18px; }
 .cardhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .cardhead .sectiontitle { margin: 0; flex: 1; white-space: nowrap; }
 .leaderboards .gamepick { margin-top: 22px; }

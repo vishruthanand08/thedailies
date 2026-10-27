@@ -50,6 +50,8 @@ final class WebController {
             refresh?.endRefreshing()
         }, for: .valueChanged)
         webView.scrollView.refreshControl = refresh
+        webView.scrollView.showsVerticalScrollIndicator = false // swipe, no scroll bar
+        webView.scrollView.showsHorizontalScrollIndicator = false
         #endif
 
         bridge.owner = self

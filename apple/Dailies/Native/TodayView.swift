@@ -17,6 +17,7 @@ struct TodayView: View {
         NavigationStack(path: $path) {
             dayPage
             .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden) // swipe, no scroll bar
             .offset(x: pageOffset)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
             .background(Color.canvas.ignoresSafeArea())

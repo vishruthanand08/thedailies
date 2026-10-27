@@ -61,6 +61,7 @@ struct MacRootView: View {
 
     @State private var commands = MacCommands.shared
     @State private var feed = FeedModel.shared
+    @State private var push = Push.shared
 
     var body: some View {
         NavigationSplitView {
@@ -104,6 +105,13 @@ struct MacRootView: View {
             get: { commands.addingScore && commands.section != .today },
             set: { commands.addingScore = $0 })) { AddScoreSheet() }
         .onAppear { feed.startPolling() }
+        .task { await push.registerIfAllowed() }
+        // a clicked notification opens its section
+        .onChange(of: push.openTab, initial: true) { _, tab in
+            guard let tab, let s = Section.allCases.first(where: { $0.rawValue.lowercased() == tab }) else { return }
+            commands.section = s
+            push.openTab = nil
+        }
         .onDisappear { feed.signedOut() }
     }
 }

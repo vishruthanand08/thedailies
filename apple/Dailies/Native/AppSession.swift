@@ -67,7 +67,10 @@ final class AppSession {
     func signOut() {
         if let old = Keychain.load() {
             Keychain.clear()
-            Task { await DailiesAPI.shared.revoke(old) }
+            Task {
+                await Push.shared.signOut(using: old) // while the old token still works
+                await DailiesAPI.shared.revoke(old)
+            }
         }
         state = .signedOut
         Task {

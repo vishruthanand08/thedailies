@@ -1,5 +1,6 @@
 # XcodeGen spec. Generate with: cd apple && xcodegen generate
 # Signing: export DAILIES_TEAM=<your team id> before generating (never commit a team id).
+# Push notifications: also export DAILIES_PUSH=-Push (needs a paid developer team).
 # With no team, simulator builds are signed to run locally.
 name: Dailies
 options:
@@ -42,8 +43,10 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        CODE_SIGN_ENTITLEMENTS[sdk=iphone*]: Dailies/Dailies-iOS.entitlements
-        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Dailies/Dailies-macOS.entitlements
+        # export DAILIES_PUSH=-Push before generating to sign with push notifications, which
+        # need a paid Apple Developer Program team (a personal team can't sign them)
+        CODE_SIGN_ENTITLEMENTS[sdk=iphone*]: Dailies/Dailies-iOS${DAILIES_PUSH}.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Dailies/Dailies-macOS${DAILIES_PUSH}.entitlements
         ENABLE_HARDENED_RUNTIME[sdk=macosx*]: YES
       configs:
         # Debug-only ATS exception for the local dev server (NSAllowsLocalNetworking)

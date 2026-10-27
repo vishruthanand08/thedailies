@@ -11,6 +11,7 @@ import { prefsRouter } from './prefs.js'
 import { suggestionsRouter } from './suggestions.js'
 import { adminRouter } from './admin.js'
 import { feedRouter } from './feed.js'
+import { pushRouter, startReminders } from './push.js'
 import { loadRules, backfillPoints } from './points.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -18,6 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 await initDb()
 await loadRules()
 await backfillPoints()
+startReminders() // the evening push, once APNs is configured
 
 const app = express()
 app.use(express.json({ limit: '32kb' }))
@@ -30,6 +32,7 @@ app.use('/api/prefs', prefsRouter)
 app.use('/api/suggestions', suggestionsRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/feed', feedRouter)
+app.use('/api/push', pushRouter)
 
 app.use((err, req, res, next) => {
   console.error(err)

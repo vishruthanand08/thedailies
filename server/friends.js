@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
+import { notify } from './push.js'
 
 export const friendsRouter = Router()
 friendsRouter.use(requireAuth)
@@ -50,13 +51,20 @@ friendsRouter.post('/request', async (req, res) => {
     if (f.requested_by === me) return res.status(409).json({ error: 'Request already sent' })
     // They asked me first — mutual intent, auto-accept.
     await q('UPDATE friendships SET status = $3 WHERE user_a = $1 AND user_b = $2', [a, b, 'accepted'])
-    return res.json({ ok: true, accepted: true, user: target })
+    res.json({ ok: true, accepted: true, user: target })
+    return friendAccepted(target.id, req.user.username)
   }
   await q(
     'INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES ($1, $2, $3, $4)',
     [a, b, 'pending', me]
   )
   res.json({ ok: true, accepted: false, user: target })
+  notify(target.id, {
+    title: 'Friend request',
+    body: `${req.user.username} wants to be friends on The Dailies`,
+    tab: 'friends',
+    collapseId: `friend-${me}`,
+  })
 })
 
 friendsRouter.post('/respond', async (req, res) => {
@@ -77,6 +85,7 @@ friendsRouter.post('/respond', async (req, res) => {
     await q('DELETE FROM friendships WHERE user_a = $1 AND user_b = $2', [a, b])
   }
   res.json({ ok: true })
+  if (accept) friendAccepted(otherId, req.user.username)
 })
 
 friendsRouter.delete('/:userId', async (req, res) => {
@@ -84,6 +93,16 @@ friendsRouter.delete('/:userId', async (req, res) => {
   await q('DELETE FROM friendships WHERE user_a = $1 AND user_b = $2', [a, b])
   res.json({ ok: true })
 })
+
+// Tells whoever sent the request that it was accepted.
+function friendAccepted(requesterId, username) {
+  return notify(requesterId, {
+    title: 'New friend',
+    body: `${username} accepted your friend request`,
+    tab: 'friends',
+    collapseId: `friend-${username}`,
+  })
+}
 
 // Helper other routes use: ids of me + accepted friends.
 export async function circleIds(userId) {

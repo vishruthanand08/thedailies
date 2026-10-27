@@ -108,3 +108,20 @@ CREATE TABLE IF NOT EXISTS day_highlights (
   submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, puzzle_date)
 );
+
+-- Devices that get push notifications (iPhone and Mac apps). env is the APNs environment:
+-- 'sandbox' for Xcode builds, 'production' for App Store and TestFlight ones.
+CREATE TABLE IF NOT EXISTS push_devices (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  platform TEXT NOT NULL,
+  env TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_push_devices_user ON push_devices (user_id);
+
+-- Days the evening reminder went out, so a restart doesn't send it twice.
+CREATE TABLE IF NOT EXISTS push_reminders (
+  puzzle_date DATE PRIMARY KEY,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

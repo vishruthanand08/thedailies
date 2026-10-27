@@ -15,9 +15,8 @@ struct FeedView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 24)
-                    .frame(maxWidth: 640) // a readable column on the Mac and iPad
-                    .frame(maxWidth: .infinity)
                 }
+                .scrollIndicators(.hidden) // swipe, no scroll bar
             }
             .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Feed")

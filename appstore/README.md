@@ -109,11 +109,16 @@ Expect a 13+ rating.
 3. Demo account on the live site with two friends and scores for the day you submit.
 4. App Store Connect › Apps › + › New App: iOS + macOS, name The Dailies, bundle ID lol.thedailies.app,
    SKU thedailies-1.
-5. `cd apple && DAILIES_TEAM=<team id> xcodegen generate`, open in Xcode, pick the team (automatic signing).
+5. `cd apple && DAILIES_TEAM=<team id> DAILIES_PUSH=-Push xcodegen generate`, open in Xcode, pick the team
+   (automatic signing turns on the Push Notifications capability for the app ID).
    Any iOS Device › Product › Archive › Distribute App › App Store Connect; then the same with My Mac.
    Bump `CURRENT_PROJECT_VERSION` in `project.yml` for every later upload.
-6. TestFlight on your own phone: sign in, Play, Paste, the share sheet.
-7. Fill in the listing from this file, attach the screenshots, then Submit for Review.
+6. Push key (once): developer.apple.com › Keys › + › Apple Push Notifications service (APNs), Sandbox &
+   Production. Download the .p8 (it can only be downloaded once) and note its Key ID. On Railway's app
+   service set `APNS_KEY` (the .p8 file's contents), `APNS_KEY_ID` and `APNS_TEAM_ID`, then redeploy.
+7. TestFlight on your own phone: sign in, allow notifications, Play, Paste, the share sheet, and have a
+   friend give you kudos.
+8. Fill in the listing from this file, attach the screenshots, then Submit for Review.
 
 Already set: no non-exempt encryption (`ITSAppUsesNonExemptEncryption = NO`, so no export question),
 Mac app category (Games), Mac sandbox with network access, iPhone-only (no iPad screenshots needed),

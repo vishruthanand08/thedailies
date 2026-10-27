@@ -24,6 +24,7 @@ final class FeedModel {
             let fresh = try await DailiesAPI.shared.feed()
             feed = fresh
             error = nil
+            Push.shared.clearBadge() // the icon's kudos count
             if !fresh.notices.isEmpty {
                 try? await DailiesAPI.shared.markKudosSeen()
                 unseen = 0

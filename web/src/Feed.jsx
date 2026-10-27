@@ -98,7 +98,7 @@ export default function Feed({ me, onSeen }) {
 
   if (!data.cards.length) {
     return (
-      <div className="card" style={{ maxWidth: 560 }}>
+      <div className="card">
         <p className="hint">
           Nothing here yet. Scores you and your friends add show up in this feed — add some friends and
           start pasting 📋
