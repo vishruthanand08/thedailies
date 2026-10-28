@@ -87,6 +87,43 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
 
   return (
     <div className="friends">
+      {/* finding friends first: by name, by link, then requests and suggestions */}
+      <form className="card" onSubmit={add}>
+        <h3 className="sectiontitle">Add a friend</h3>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            className="input"
+            placeholder="their username"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button className="btn coral" disabled={!name.trim()}>Add</button>
+        </div>
+        {flash && <div className={`flash ${flash.kind}`} style={{ marginTop: 10 }}>{flash.msg}</div>}
+        <p className="hint" style={{ marginBottom: 0 }}>
+          Your leaderboard is you + your friends. Everyone sees their own circle.
+        </p>
+      </form>
+
+      <div className="card">
+        <h3 className="sectiontitle">Your invite link</h3>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            className="input"
+            readOnly
+            value={inviteLink}
+            aria-label="Your invite link"
+            onFocus={(e) => e.target.select()}
+          />
+          <button className="btn" type="button" onClick={copyInvite}>
+            {copied ? 'Copied ✓' : 'Copy'}
+          </button>
+        </div>
+        <p className="hint" style={{ marginBottom: 0 }}>
+          Send it to a friend — when they open it and sign in, it friend-requests you automatically.
+        </p>
+      </div>
+
       {data.incoming.length > 0 && (
         <div className="card">
           <h3 className="sectiontitle">Requests</h3>
@@ -113,6 +150,8 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         />
       )}
 
+      {!justAdded && <PeopleYouMayKnow key="all" version={version} onChanged={load} />}
+
       {/* keyed by the friend count, so it reloads when a friend is added or removed */}
       {data.friends.length > 0 ? (
         <Leaderboards key={data.friends.length} me={me} />
@@ -123,47 +162,9 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         </div>
       )}
 
-      <form className="card" onSubmit={add}>
-        <h3 className="sectiontitle">Add a friend</h3>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input
-            className="input"
-            placeholder="their username"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <button className="btn coral" disabled={!name.trim()}>Add</button>
-        </div>
-        {flash && <div className={`flash ${flash.kind}`} style={{ marginTop: 10 }}>{flash.msg}</div>}
-        <p className="hint" style={{ marginBottom: 0 }}>
-          Your leaderboard is you + your friends. Everyone sees their own circle.
-        </p>
-      </form>
-
-      {!justAdded && <PeopleYouMayKnow key="all" version={version} onChanged={load} />}
-
-      <div className="card">
-        <h3 className="sectiontitle">Your invite link</h3>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input
-            className="input"
-            readOnly
-            value={inviteLink}
-            aria-label="Your invite link"
-            onFocus={(e) => e.target.select()}
-          />
-          <button className="btn" type="button" onClick={copyInvite}>
-            {copied ? 'Copied ✓' : 'Copy'}
-          </button>
-        </div>
-        <p className="hint" style={{ marginBottom: 0 }}>
-          Send it to a friend — when they open it and sign in, it friend-requests you automatically.
-        </p>
-      </div>
-
       <div className="card">
         <h3 className="sectiontitle">Friends ({data.friends.length})</h3>
-        {data.friends.length === 0 && <p className="hint">No friends yet — add them by username above.</p>}
+        {data.friends.length === 0 && <p className="hint">No friends yet — add them by username at the top.</p>}
         {data.friends.map((u) => (
           <div key={u.id} className="friendrow">
             <div className="avatar">{u.username[0]}</div>
@@ -192,7 +193,9 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
 }
 
 // "People you may know": friends of your friends, most friends in common first (server/friends.js).
-// With `via`, just that friend's friends, shown right after adding them.
+// With `via`, just that friend's friends, shown right after adding them. Three at a time: hiding
+// one brings up the next.
+const SHOWN = 3
 function PeopleYouMayKnow({ via, version, onChanged, onShowAll }) {
   const [list, setList] = useState(null)
   const [state, setState] = useState({}) // id -> 'sent' | 'friends' | error message
@@ -243,7 +246,7 @@ function PeopleYouMayKnow({ via, version, onChanged, onShowAll }) {
         <h3 className="sectiontitle">{via ? `Friends of ${via.username}` : 'People you may know'}</h3>
         {via && <button className="linklike" onClick={onShowAll}>See all</button>}
       </div>
-      {list.map((u) => {
+      {list.slice(0, SHOWN).map((u) => {
         const st = state[u.id]
         return (
           <div key={u.id} className="friendrow">
