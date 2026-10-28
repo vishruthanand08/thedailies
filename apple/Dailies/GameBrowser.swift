@@ -138,6 +138,24 @@ private struct PasteBar: View {
     let onPaste: (String) -> Void
 
     var body: some View {
+        #if os(macOS)
+        // the website's game panel footer, as in GamePanel, since the Mac app looks like the site.
+        // It reads the clipboard directly: the Mac's PasteButton only re-checks it when the
+        // window gains focus, so after the game's own Copy it often stays greyed out.
+        HStack(spacing: 10) {
+            Text("Finished? Tap Share or Copy in the game, then")
+                .font(Site.font(13.5, .medium))
+                .foregroundStyle(Site.muted)
+                .oneLine()
+            Spacer(minLength: 0)
+            SitePasteButton(title: "Paste result", action: pasteFromClipboard)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Site.lavender)
+        .overlay(alignment: .top) { Site.ink.frame(height: Site.border) }
+        .environment(\.colorScheme, .light)
+        #else
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Finished?").font(.system(.subheadline, design: .rounded, weight: .heavy))
@@ -146,18 +164,6 @@ private struct PasteBar: View {
             .lineLimit(1)
             .foregroundStyle(Color("OnAccent"))
             .frame(maxWidth: .infinity, alignment: .leading)
-            #if os(macOS)
-            // The Mac's PasteButton only re-checks the clipboard when the window gains focus, so
-            // after the game's own Copy it often stays greyed out. The Mac doesn't put the
-            // clipboard behind a prompt, so this reads it directly (as Edit › Paste Result does).
-            Button(action: pasteFromClipboard) {
-                Label("Paste", systemImage: "doc.on.clipboard")
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .tint(Color("OnAccent"))
-            .help("Paste the result you copied (⌘⇧V)")
-            #else
             PasteButton(payloadType: String.self) { strings in
                 guard let text = strings.first else { return }
                 Task { @MainActor in onPaste(text) }
@@ -165,20 +171,16 @@ private struct PasteBar: View {
             .labelStyle(.titleAndIcon)
             .buttonBorderShape(.capsule)
             .tint(Color("OnAccent"))
-            #endif
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color("Sun")) // same yellow bar as the Today tab
+        #endif
     }
 
     #if os(macOS)
     private func pasteFromClipboard() {
-        let board = NSPasteboard.general
-        // plain text, or the text of a rich copy (some games copy only HTML)
-        let text = board.string(forType: .string)
-            ?? (board.readObjects(forClasses: [NSAttributedString.self]) as? [NSAttributedString])?.first?.string
-        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let text = MacClipboard.text(), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             SubmissionQueue.shared.show(.err, "The clipboard is empty. Tap Share or Copy in \(gameName) first.")
             return
         }
@@ -194,7 +196,7 @@ private struct GameWebView: UIViewRepresentable {
     func updateUIView(_ view: WKWebView, context: Context) {}
 }
 #else
-private struct GameWebView: NSViewRepresentable {
+struct GameWebView: NSViewRepresentable {
     let webView: WKWebView
     func makeNSView(context: Context) -> WKWebView { webView }
     func updateNSView(_ view: WKWebView, context: Context) {}

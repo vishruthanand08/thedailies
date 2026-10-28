@@ -1,3 +1,4 @@
+#if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
 
 /// One game's full board for the day, with Play, manual entry and subscription info.
@@ -84,9 +85,7 @@ struct GameDetailView: View {
                 Section {
                     HStack(spacing: 10) {
                         TextField(game.metricLabel.capitalized, text: $manualValue)
-                            #if os(iOS)
                             .keyboardType(.decimalPad)
-                            #endif
                             .focused($manualFocused)
                             .frame(minHeight: 44)
                         Button("Add") { Task { await addManual() } }
@@ -129,18 +128,12 @@ struct GameDetailView: View {
                 .listRowBackground(Color.surface)
             }
         }
-        #if os(iOS)
         .listStyle(.insetGrouped)
-        #else
-        .listStyle(.inset)
-        #endif
         .scrollContentBackground(.hidden)
         .background(Color.canvas.ignoresSafeArea())
         .navigationTitle(game.name)
-        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 let favorite = model.prefs.favorites.contains(game.id)
@@ -165,3 +158,4 @@ struct GameDetailView: View {
         }
     }
 }
+#endif

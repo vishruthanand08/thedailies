@@ -1,3 +1,4 @@
+#if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
 
 struct TodayView: View {
@@ -8,9 +9,6 @@ struct TodayView: View {
     @State private var pageOffset: CGFloat = 0
     @State private var paging = false
     @State private var pageWidth: CGFloat = 400
-    #if os(macOS)
-    @State private var commands = MacCommands.shared
-    #endif
     var goToFriends: () -> Void = {}
 
     var body: some View {
@@ -21,21 +19,10 @@ struct TodayView: View {
             .offset(x: pageOffset)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
             .background(Color.canvas.ignoresSafeArea())
-            #if os(iOS)
             // content scrolls under an opaque canvas strip behind the status bar
             .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 0).background(Color.canvas) }
             .toolbar(.hidden, for: .navigationBar)
             .navigationTitle(model.title) // still used for the back button on a game's screen
-            #else
-            // the Mac shows the day as the window title, with toolbar and menu commands to move between days
-            .navigationTitle(model.title)
-            .toolbar { macToolbar }
-            .onChange(of: commands.pageRequest) { _, request in
-                guard let request else { return }
-                if request.days == 0 { Task { await model.load() } } else { page(request.days) }
-            }
-            .sheet(isPresented: $commands.addingScore) { AddScoreSheet() }
-            #endif
             .navigationDestination(for: String.self) { id in
                 if let game = model.games.first(where: { $0.id == id }) {
                     GameDetailView(game: game)
@@ -64,7 +51,6 @@ struct TodayView: View {
         }
     }
 
-    #if os(iOS)
     private var dayPage: some View {
         List {
             if let error = model.error, model.board == nil {
@@ -80,7 +66,6 @@ struct TodayView: View {
 
             // the date title is part of the page, so it slides with the day instead of
             // staying put in the navigation bar while the content moves under it
-            #if os(iOS)
             Text(model.title)
                 .font(.brand(.largeTitle, .heavy))
                 .foregroundStyle(Color.ink)
@@ -90,7 +75,6 @@ struct TodayView: View {
                 .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 0, trailing: 0))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-            #endif
 
             if let board = model.board {
                 CrownCard(board: board, model: model, goToFriends: goToFriends,
@@ -118,92 +102,6 @@ struct TodayView: View {
         }
         .listStyle(.insetGrouped)
     }
-    #else
-    /// The Mac follows the website: the crown card on top, then each group's games as a grid
-    /// of cards with their scores right on them.
-    private var dayPage: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if let error = model.error, model.board == nil {
-                    ContentUnavailableView {
-                        Label("Couldn't load", systemImage: "wifi.exclamationmark")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Try again") { Task { await model.reload() } }
-                    }
-                }
-                if let board = model.board {
-                    CrownCard(board: board, model: model, goToFriends: goToFriends,
-                              onDrag: dragChanged, onDragEnd: dragEnded, onPage: page)
-                }
-                ForEach(model.groups) { group in
-                    VStack(alignment: .leading, spacing: 12) {
-                        groupHeader(group)
-                        if !model.isCollapsed(group) {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 18, alignment: .top)], alignment: .leading, spacing: 18) {
-                                ForEach(group.games) { tile($0, in: group) }
-                            }
-                        }
-                    }
-                }
-                if !model.games.isEmpty && model.favorites.isEmpty {
-                    Text("Click a game to play it. ☆ adds it to Favorites, and you can drag games to rearrange them.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .oneLine()
-                }
-            }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 20)
-            .frame(maxWidth: 1100, alignment: .leading)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private func tile(_ game: Game, in group: TodayModel.Group) -> some View {
-        let mine = model.myEntry(for: game)
-        let favorite = model.prefs.favorites.contains(game.id)
-        return MacGameTile(
-            game: game, entries: model.entries(for: game), me: model.me, isToday: model.isToday, favorite: favorite,
-            onPlay: { model.play(game) },
-            onInfo: { path.append(game.id) },
-            onFavorite: { withAnimation(.snappy) { model.toggleFavorite(game) } },
-            onDelete: { entry in Task { await model.delete(entry) } }
-        )
-        // drag a card onto another in the same group to put it there
-        .draggable(game.id) { GameAvatar(game: game, size: 42) }
-        .dropDestination(for: String.self) { ids, _ in
-            guard let id = ids.first, group.games.contains(where: { $0.id == id }) else { return false }
-            withAnimation(.snappy) { model.move(in: group.id, id: id, onto: game.id) }
-            return true
-        }
-        .contextMenu {
-            if model.isToday { Button("Play \(game.name)") { model.play(game) } }
-            Button("Show Scores") { path.append(game.id) }
-            Button(favorite ? "Remove from Favorites" : "Add to Favorites") { model.toggleFavorite(game) }
-            if model.isToday, let mine {
-                Divider()
-                Button("Delete My Score", role: .destructive) { Task { await model.delete(mine) } }
-            }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var macToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Button { page(-1) } label: { Label("Previous Day", systemImage: "chevron.backward") }
-                .help("Previous day (⌘[)")
-            Button { page(1) } label: { Label("Next Day", systemImage: "chevron.forward") }
-                .help("Next day (⌘])")
-                .disabled(model.isToday)
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Button { commands.addingScore = true } label: { Label("Add Score", systemImage: "plus") }
-                .help("Add a score (⌘N)")
-        }
-    }
-    #endif
 
     // MARK: swiping between days
 
@@ -259,11 +157,7 @@ struct TodayView: View {
                         .rotationEffect(.degrees(open ? 90 : 0))
                     Image(systemName: group.symbol)
                         .foregroundStyle(group.id == "favorites" ? Color.sun : Color.ink)
-                    #if os(macOS)
-                    Text(group.title).lineLimit(1)
-                    #else
                     Text(group.title).oneLine()
-                    #endif
                     Text("\(group.games.count)")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
@@ -275,9 +169,6 @@ struct TodayView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain) // headers stay still; only games and buttons press in
-            #if os(macOS)
-            .fixedSize()
-            #endif
             .accessibilityLabel("\(group.title), \(group.games.count) games")
             .accessibilityValue(open ? "Expanded" : "Collapsed")
             .accessibilityHint(open ? "Collapses the group" : "Expands the group")
@@ -286,17 +177,10 @@ struct TodayView: View {
                 DragDots()
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
-                    #if os(macOS)
-                    .help("Drag to move this group")
-                    #endif
                     .accessibilityHidden(true)
             }
         }
-        #if os(macOS)
-        .font(.brand(.title3, .heavy)) // the site's big group titles
-        #else
         .font(.brand(.subheadline, .heavy))
-        #endif
         .foregroundStyle(Color.ink)
         .textCase(nil)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -306,7 +190,6 @@ struct TodayView: View {
 
     // MARK: game rows
 
-    #if os(iOS)
     private func row(_ game: Game) -> some View {
         let entries = model.entries(for: game)
         let mine = model.myEntry(for: game)
@@ -347,7 +230,6 @@ struct TodayView: View {
             }
         }
     }
-    #endif
 }
 
 /// The day's standings. Swipe it right for the day before, left to come forward again.
@@ -374,9 +256,6 @@ private struct CrownCard: View {
                 }
                 .buttonStyle(.pressIn)
                 .accessibilityLabel("How scoring works")
-                #if os(macOS)
-                .help("How scoring works")
-                #endif
                 if !model.isToday {
                     Image(systemName: "clock.arrow.circlepath").font(.subheadline.weight(.bold)).accessibilityHidden(true)
                 }
@@ -430,11 +309,7 @@ private struct CrownCard: View {
                 .buttonStyle(.pressIn(.white))
             }
 
-            #if os(iOS)
             let hint = model.isToday ? "Swipe right for earlier days" : "Swipe left to come back to today"
-            #else
-            let hint = model.isToday ? "Drag right or press ⌘[ for earlier days" : "Drag left or press ⌘] to come forward"
-            #endif
             Label(hint,
                   systemImage: model.isToday ? "chevron.left.2" : "chevron.right.2")
                 .font(.caption.weight(.semibold))
@@ -542,135 +417,6 @@ struct GameRow: View {
     }
 }
 
-#if os(macOS)
-/// One game as a card, like the website's tiles: the game, then the day's scores. Clicking the
-/// card plays the game; hovering sinks it into its shadow, the same press-in as the buttons.
-private struct MacGameTile: View {
-    let game: Game
-    let entries: [BoardEntry]
-    let me: String?
-    let isToday: Bool
-    let favorite: Bool
-    let onPlay: () -> Void
-    let onInfo: () -> Void
-    let onFavorite: () -> Void
-    let onDelete: (BoardEntry) -> Void
-    @State private var hovering = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private let shadow: CGFloat = 5
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        let down = hovering && isToday
-        VStack(alignment: .leading, spacing: 10) {
-            header
-            if entries.isEmpty {
-                Text(isToday ? "No scores yet. Be first." : "Nobody played.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .oneLine()
-                    .padding(.horizontal, 2)
-            } else {
-                VStack(spacing: 2) {
-                    ForEach(entries) { scoreRow($0) }
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(shape.fill(Color.surface))
-        .overlay(shape.strokeBorder(Color.onAccent, lineWidth: 2.5))
-        .offset(x: down ? shadow : 0, y: down ? shadow : 0)
-        .background(shape.fill(Color.onAccent).offset(x: shadow, y: shadow).opacity(down ? 0 : 1))
-        .padding(.trailing, shadow)
-        .padding(.bottom, shadow)
-        .contentShape(shape)
-        .onHover { hovering = $0 }
-        .onTapGesture { if isToday { onPlay() } }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: down)
-        .accessibilityElement(children: .contain)
-        .accessibilityAction(named: "Play \(game.name)") { onPlay() }
-    }
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            GameAvatar(game: game, size: 42)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(game.name).font(.brand(.headline, .heavy)).foregroundStyle(Color.ink)
-                    if game.paid != nil {
-                        Image(systemName: "dollarsign.circle.fill")
-                            .imageScale(.small)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("Needs a subscription")
-                    }
-                }
-                .oneLine()
-                if isToday {
-                    Label("Play", systemImage: "arrow.up.right")
-                        .labelStyle(.titleAndIcon)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.ink.opacity(0.75))
-                        .oneLine()
-                }
-            }
-            Button(action: onFavorite) {
-                Image(systemName: favorite ? "star.fill" : "star")
-                    .font(.title3)
-                    .foregroundStyle(favorite ? Color.sun : Color.ink.opacity(0.6))
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.pressIn)
-            .help(favorite ? "Remove from Favorites" : "Add to Favorites")
-            .accessibilityLabel(favorite ? "Remove \(game.name) from favorites" : "Add \(game.name) to favorites")
-            Button(action: onInfo) {
-                Image(systemName: "info.circle")
-                    .font(.title3)
-                    .foregroundStyle(Color.ink.opacity(0.6))
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.pressIn)
-            .help("Show scores")
-            .accessibilityLabel("\(game.name) scores")
-        }
-    }
-
-    private func scoreRow(_ e: BoardEntry) -> some View {
-        let mine = e.username == me
-        return HStack(spacing: 8) {
-            Text(["🥇", "🥈", "🥉"].indices.contains(e.rank - 1) ? ["🥇", "🥈", "🥉"][e.rank - 1] : "\(e.rank).")
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            HStack(spacing: 4) {
-                Text(e.username)
-                if !e.verified {
-                    Text("manual").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                }
-            }
-            .oneLine()
-            Text(e.display).font(.brand(.subheadline, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
-            if mine && isToday {
-                Button { onDelete(e) } label: {
-                    Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.secondary)
-                }
-                .buttonStyle(.pressIn)
-                .help("Delete my score")
-                .accessibilityLabel("Delete my \(game.name) score")
-            }
-        }
-        .font(.brand(.subheadline, .semibold))
-        .foregroundStyle(Color.ink)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(mine ? Color.highlight : Color.clear))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(ordinal(e.rank)), \(mine ? "you" : e.username), \(e.display)")
-    }
-}
-#endif
 
 /// Hold a category's header and drag it onto another category's header to put it there.
 /// VoiceOver gets Move Up / Move Down actions instead.
@@ -715,3 +461,4 @@ private struct DragDots: View {
         .foregroundStyle(Color.ink.opacity(0.6))
     }
 }
+#endif

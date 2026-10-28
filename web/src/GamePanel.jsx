@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
+import { ClipboardIcon } from './PasteDock.jsx'
 
 // Plays an `embed` game in an iframe on the site. A page can't see inside another site's iframe,
 // so the score comes from the clipboard: the game's Share/Copy puts it there, one tap saves it.
@@ -10,6 +11,8 @@ export default function GamePanel({ game, onClose, onSaved }) {
   const [text, setText] = useState('')
   const closeRef = useRef(null)
   const boxRef = useRef(null)
+  const closeTimer = useRef(null)
+  useEffect(() => () => clearTimeout(closeTimer.current), [])
   const canReadClipboard = Boolean(navigator.clipboard?.readText)
 
   useEffect(() => {
@@ -38,6 +41,7 @@ export default function GamePanel({ game, onClose, onSaved }) {
       setText('')
       setManual(false)
       onSaved()
+      closeTimer.current = setTimeout(onClose, 1500) // back to the board after a moment to read it
     } catch (err) {
       setFlash({ kind: 'err', msg: err.message })
     } finally {
@@ -93,14 +97,17 @@ export default function GamePanel({ game, onClose, onSaved }) {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />
-              <button className="btn coral" onClick={() => submit(text)} disabled={busy || !text.trim()}>
-                Add ↑
+              <button className="btn" onClick={() => submit(text)} disabled={busy || !text.trim()}>
+                Add score
               </button>
             </div>
           ) : (
             <div className="row">
               <span className="hint">Finished? Tap Share or Copy in the game, then</span>
-              <button className="btn coral" onClick={paste} disabled={busy}>📋 Paste result</button>
+              <button className="pastefab inpanel" onClick={paste} disabled={busy}>
+                <ClipboardIcon size={18} />
+                <span>{busy ? 'Saving…' : 'Paste result'}</span>
+              </button>
             </div>
           )}
         </div>

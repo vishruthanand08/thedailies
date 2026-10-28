@@ -6,8 +6,6 @@ struct RootView: View {
     @State private var session = AppSession.shared
     #if os(iOS)
     @State private var game: GameLaunch?
-    #else
-    @Environment(\.openWindow) private var openWindow
     #endif
     #if DEBUG
     @State private var showDebug = false
@@ -16,15 +14,14 @@ struct RootView: View {
     var body: some View {
         ZStack {
             // native screens; the web view only backs the sections that aren't native yet
+            #if os(iOS)
             switch session.state {
-            case .signedIn:
-                #if os(iOS)
-                AppTabs()
-                #else
-                MacRootView()
-                #endif
+            case .signedIn: AppTabs()
             case .signedOut: SignInView()
             }
+            #else
+            MacRootView() // the website, its own sign-in page included
+            #endif
             BannerOverlay(banner: queue.banner) { queue.dismiss($0) }
             #if DEBUG
             // -dailiesScreenshots YES hides it for App Store screenshots
@@ -32,7 +29,7 @@ struct RootView: View {
             #endif
         }
         #if os(macOS)
-        .frame(minWidth: 820, minHeight: 560) // room for the sidebar and the day
+        .frame(minWidth: 420, minHeight: 560) // narrow enough to sit beside a game; the site lays itself out
         #endif
         .onAppear {
             queue.onSaved = {
@@ -44,7 +41,7 @@ struct RootView: View {
                 #if os(iOS)
                 game = launch
                 #else
-                openWindow(id: "game", value: launch)
+                MacCommands.shared.playing = launch // the game panel over the page
                 #endif
             }
             #if DEBUG

@@ -1,3 +1,4 @@
+import Network
 import Observation
 import WebKit
 #if os(iOS)
@@ -14,6 +15,9 @@ final class WebController {
 
     let webView: WKWebView
     private(set) var username: String?
+    /// Set when the site itself didn't load (offline, server down); the Mac shows a retry card.
+    private(set) var loadError: String?
+    @ObservationIgnored private let network = NWPathMonitor()
     /// Play taps from the web app: the in-app game browser for game sites, else the system browser.
     @ObservationIgnored var presentGame: ((GameLaunch) -> Void)?
 
@@ -28,7 +32,8 @@ final class WebController {
         config.websiteDataStore = .default() // login cookie persists across launches
 
         config.userContentController.add(bridge, contentWorld: .page, name: "dailies")
-        // the native tab bar (iPhone) or sidebar (Mac) replaces the site's header and tabs
+        #if os(iOS)
+        // the native tab bar replaces the site's header and tabs
         config.userContentController.addUserScript(WKUserScript(
             source: """
             const s = document.createElement('style');
@@ -36,6 +41,14 @@ final class WebController {
             document.documentElement.appendChild(s);
             """,
             injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .page))
+        #else
+        // the Mac window is the whole site; its Paste button reads the clipboard through the app
+        // (web/src/native.js), which skips WebKit's paste prompt
+        config.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "dailiesClipboard")
+        config.userContentController.addUserScript(WKUserScript(
+            source: "window.__dailiesNative = { platform: 'mac', clipboard: true }",
+            injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        #endif
 
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = bridge
@@ -55,13 +68,32 @@ final class WebController {
         #endif
 
         bridge.owner = self
+        // back online after a failed load: try again by itself
+        network.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in
+                if self?.loadError != nil { self?.load() }
+            }
+        }
+        network.start(queue: .main)
         load()
     }
 
+    fileprivate func loaded() {
+        loadError = nil
+    }
+
+    fileprivate func failedToLoad(_ error: Error) {
+        let code = (error as NSError).code
+        guard code != NSURLErrorCancelled else { return } // replaced by another load, not a failure
+        loadError = error.localizedDescription
+        log.error("site failed to load: \(error.localizedDescription, privacy: .public)")
+    }
+
     /// Routes a Play tap: game sites open in the in-app game browser, anything else in Safari.
-    func open(_ url: URL, name: String) {
+    func open(_ url: URL, name: String, emoji: String? = nil, color: String? = nil) {
         if GameHosts.isGame(url.host), let presentGame {
-            presentGame(GameLaunch(url: url, name: name))
+            presentGame(GameLaunch(url: url, name: name, emoji: emoji, color: color))
         } else {
             openExternally(url)
         }
@@ -85,11 +117,41 @@ final class WebController {
         guard let webTab else { return }
         webView.callAsyncJavaScript("""
             for (let i = 0; i < 40; i++) {
-                const t = [...document.querySelectorAll('.tabs .tab')].find((b) => b.textContent === label)
+                // the label is the first text: Feed may carry a kudos count after it
+                const t = [...document.querySelectorAll('.tabs .tab')].find((b) => b.firstChild?.textContent.trim() === label)
                 if (t) { t.click(); return }
                 await new Promise((r) => setTimeout(r, 100))
             }
             """, arguments: ["label": webTab], in: nil, in: .page) { _ in }
+    }
+
+    /// Go menu: a day back or forward on the site's Today tab, or 0 for today
+    /// (`dailies:day` in web/src/Today.jsx).
+    func showDay(_ days: Int) {
+        showTab("Today")
+        dispatch("dailies:day", detail: days)
+    }
+
+    /// Edit › Paste Result: the site's Paste button (`dailies:paste` in web/src/PasteDock.jsx).
+    func pasteInPage() {
+        showTab("Today")
+        dispatch("dailies:paste", detail: 0)
+    }
+
+    /// File › Add Score…: the site's paste box (`dailies:pastebox` in web/src/PasteDock.jsx).
+    func openPasteBox() {
+        showTab("Today")
+        dispatch("dailies:pastebox", detail: 0)
+    }
+
+    /// Fires an event once the Today tab is on screen (it may be mid-switch).
+    private func dispatch(_ event: String, detail: Int) {
+        webView.callAsyncJavaScript("""
+            for (let i = 0; i < 20 && !document.querySelector('.daterow'); i++) {
+                await new Promise((r) => setTimeout(r, 50))
+            }
+            window.dispatchEvent(new CustomEvent(name, { detail }))
+            """, arguments: ["name": event, "detail": detail], in: nil, in: .page) { _ in }
     }
 
     /// Asks the Today view to reload the board (see `dailies:refresh` in web/src/Today.jsx).
@@ -108,7 +170,8 @@ final class WebController {
             handleToken(msg)
         case "open":
             guard let s = msg["url"] as? String, let url = URL(string: s) else { return }
-            open(url, name: msg["name"] as? String ?? url.host ?? "Game")
+            open(url, name: msg["name"] as? String ?? url.host ?? "Game",
+                 emoji: msg["emoji"] as? String, color: msg["color"] as? String)
         default:
             log.debug("unknown message type \(type)")
         }
@@ -174,6 +237,7 @@ final class WebController {
         let stored = StoredToken(token: token, tokenId: msg["id"] as? Int, username: username, server: Server.current.rawValue)
         if Keychain.save(stored) {
             log.info("device token saved to keychain for \(username, privacy: .public)")
+            AppSession.shared.webSignedIn(username)
             Task { await SubmissionQueue.shared.flush() }
         }
     }
@@ -204,8 +268,22 @@ final class WebController {
 
 /// WebKit delegates and the script message handler; forwards to the controller.
 @MainActor
-private final class Bridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
+private final class Bridge: NSObject, WKScriptMessageHandler, WKScriptMessageHandlerWithReply,
+    WKNavigationDelegate, WKUIDelegate {
     weak var owner: WebController?
+
+    /// The Mac clipboard for the site's Paste button: plain text, or the text of a rich copy.
+    func userContentController(
+        _ controller: WKUserContentController, didReceive message: WKScriptMessage
+    ) async -> (Any?, String?) {
+        guard message.frameInfo.isMainFrame,
+              message.frameInfo.securityOrigin.host == Server.current.baseURL.host else { return (nil, "not allowed") }
+        #if os(macOS)
+        return (MacClipboard.text() ?? "", nil)
+        #else
+        return (nil, "not available")
+        #endif
+    }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         // only our own site's main frame may drive the bridge
@@ -225,7 +303,21 @@ private final class Bridge: NSObject, WKScriptMessageHandler, WKNavigationDelega
         return .allow
     }
 
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        owner?.failedToLoad(error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        owner?.failedToLoad(error)
+    }
+
+    // the page's process went away (memory pressure, a crash): bring the site back
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        webView.reload()
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        owner?.loaded()
         owner?.applyWebTab()
         #if DEBUG
         DebugHooks.pageLoaded(webView)

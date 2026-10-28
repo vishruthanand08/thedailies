@@ -8,6 +8,13 @@ export const native = window.webkit?.messageHandlers?.dailies
 // pasting (share extension on iOS, in-app game browser); the paste bar hides then.
 export const nativeCapture = inApp && Boolean(window.__dailiesNative?.capture)
 
+// The Mac app reads the clipboard for the Paste button (no WebKit paste prompt); resolves to
+// the copied text.
+export const nativeClipboard = inApp && Boolean(window.__dailiesNative?.clipboard)
+export function readNativeClipboard() {
+  return window.webkit.messageHandlers.dailiesClipboard.postMessage(null)
+}
+
 export function tellNative(msg) {
   try {
     native?.postMessage(msg)

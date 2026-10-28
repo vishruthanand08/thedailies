@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { inApp, nativeCapture, tellNative } from './native.js'
 import GamePanel from './GamePanel.jsx'
+import PasteDock from './PasteDock.jsx'
 import ScoringInfo from './ScoringInfo.jsx'
 import Suggestions from './Suggestions.jsx'
 
@@ -32,15 +33,12 @@ export default function Today({ me }) {
   const [games, setGames] = useState([])
   const [board, setBoard] = useState(null)
   const [date, setDate] = useState(null) // null until first load
-  const [text, setText] = useState('')
   const [flash, setFlash] = useState(null) // {kind, msg}
+  const dismissFlash = useCallback(() => setFlash(null), [])
   const [busy, setBusy] = useState(false)
-  const textRef = useRef(null)
   const [playing, setPlaying] = useState(null) // game open in the embedded panel
   const closePanel = useCallback(() => setPlaying(null), [])
-  const canReadClipboard = Boolean(navigator.clipboard?.readText)
   const [backFrom, setBackFrom] = useState(null) // gameId to offer a paste for after a new-tab game
-  const promptRef = useRef(null)
 
   // A game opened in a new tab: when the player comes back, offer to paste its result.
   // Kept in sessionStorage so it survives mobile browsers unloading this tab meanwhile.
@@ -99,10 +97,6 @@ export default function Today({ me }) {
       window.removeEventListener('focus', back)
     }
   }, [])
-
-  useEffect(() => {
-    if (backFrom) requestAnimationFrame(() => promptRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
-  }, [backFrom])
 
   useEffect(() => {
     api.get('/submissions/games').then((d) => {
@@ -182,7 +176,7 @@ export default function Today({ me }) {
     setDraggingKey(`${group}:${game.id}`)
 
     const retarget = () => {
-      // look through the fixed paste bar on phones to the tile underneath
+      // look through the floating Paste button to the tile underneath
       const target = document
         .elementsFromPoint(drag.x, drag.y)
         .map((el) => el.closest(`[data-group="${drag.group}"] [data-gameid]`))
@@ -315,7 +309,23 @@ export default function Today({ me }) {
     return () => window.removeEventListener('dailies:refresh', refresh)
   }, [])
 
-  // On mobile the paste bar is fixed to the bottom; lift it above the iOS
+  // the Mac app's Go menu: a day back or forward, or 0 for today (never past today)
+  const todayRef = useRef(null)
+  todayRef.current = board?.today
+  useEffect(() => {
+    const onDay = (e) => {
+      const days = Number(e.detail) || 0
+      const current = dateRef.current
+      if (!days || !current) return load(null)
+      const next = shiftDate(current, days)
+      if (todayRef.current && next > todayRef.current) return
+      load(next)
+    }
+    window.addEventListener('dailies:day', onDay)
+    return () => window.removeEventListener('dailies:day', onDay)
+  }, [])
+
+  // The paste button floats at the bottom; lift it (and its box) above the iOS
   // keyboard, which covers the layout viewport instead of resizing it.
   useEffect(() => {
     const vv = window.visualViewport
@@ -341,39 +351,23 @@ export default function Today({ me }) {
     return m
   }, [board])
 
-  const submit = async (value = text) => {
-    if (!value.trim()) return
+  // true when it saved, so the paste box can clear itself
+  const submit = async (value) => {
+    if (!value.trim()) return false
     setBusy(true)
     setFlash(null)
     try {
       const d = await api.post('/submissions', { text: value })
       setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added ✓` })
-      setText('')
       clearAway()
-      load(date)
+      load(dateRef.current)
+      return true
     } catch (err) {
       setFlash({ kind: 'err', msg: err.message })
+      return false
     } finally {
       setBusy(false)
     }
-  }
-
-  // One tap: read the share text the game just copied and submit it.
-  const pasteFromClipboard = async () => {
-    setFlash(null)
-    let clip
-    try {
-      clip = await navigator.clipboard.readText()
-    } catch {
-      textRef.current?.focus()
-      setFlash({ kind: 'err', msg: "Couldn't read your clipboard — paste it into the box instead." })
-      return
-    }
-    if (!clip.trim()) {
-      setFlash({ kind: 'err', msg: 'Clipboard is empty — tap Share in the game first.' })
-      return
-    }
-    submit(clip)
   }
 
   const submitManual = async (gameId, value) => {
@@ -408,75 +402,51 @@ export default function Today({ me }) {
       </div>
 
       {isToday && !nativeCapture && (
-        <div className="pastebox">
-          {showBackPrompt && (
-            <div className="backprompt" ref={promptRef} role="status">
-              <span>
-                Back from {backGame.emoji} {backGame.name}? Tap Share or Copy in the game, then paste your result.
-              </span>
-              {canReadClipboard && (
-                <button className="btn coral small" onClick={pasteFromClipboard} disabled={busy}>
-                  📋 Paste result
-                </button>
-              )}
-              <button className="btn ghost small" onClick={clearAway} aria-label="Dismiss">✕</button>
-            </div>
-          )}
-          <div className="row">
-            <textarea
-              ref={textRef}
-              className="input"
-              placeholder="Paste a result, or tap 📋"
-              aria-label="Paste your game result"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-            {canReadClipboard && !text.trim() ? (
-              <button className="btn coral" onClick={pasteFromClipboard} disabled={busy}>
-                📋 Paste
-              </button>
-            ) : (
-              <button className="btn coral" onClick={() => submit()} disabled={busy || !text.trim()}>
-                Add ↑
-              </button>
-            )}
-          </div>
-          {flash && <div className={`flash ${flash.kind}`} role="status">{flash.msg}</div>}
-        </div>
+        <PasteDock
+          busy={busy}
+          flash={flash}
+          onDismissFlash={dismissFlash}
+          onSubmit={submit}
+          backGame={showBackPrompt ? backGame : null}
+          onDismissBack={clearAway}
+        />
       )}
 
-      {board.crown.length > 0 && (
-        <div className="card crowncard">
-          <div className="crownhead">
-            <h3>👑 Daily crown <ScoringInfo /></h3>
-            <div className="scopechips" role="group" aria-label="Standings for">
-              {[{ id: 'all', name: 'Overall' }, ...orderedCategories].map((c) => (
-                <button
-                  key={c.id}
-                  className={`scopechip${crownScope === c.id ? ' active' : ''}`}
-                  aria-pressed={crownScope === c.id}
-                  onClick={() => setCrownScope(c.id)}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          {(crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).length === 0 && (
-            <p className="hint crownempty">Nobody has played these games {isToday ? 'yet today' : 'this day'}.</p>
-          )}
-          {(crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).map((c, i) => (
-            <div key={c.userId} className={`crownrow${c.userId === me.id ? ' me' : ''}`}>
-              <span>{['🥇', '🥈', '🥉'][(c.rank ?? i + 1) - 1] ?? `${c.rank ?? i + 1}.`}</span>
-              <span>
-                {c.username}{' '}
-                <span className="sub">· {c.games} game{c.games === 1 ? '' : 's'}</span>
-              </span>
-              <span className="pts">{c.points} pts</span>
-            </div>
-          ))}
+      {/* always at the top, even before anyone has played */}
+      <div className="card crowncard">
+        <div className="crownhead">
+          <h3>👑 Daily crown <ScoringInfo /></h3>
+          {board.crown.length > 0 && <div className="scopechips" role="group" aria-label="Standings for">
+            {[{ id: 'all', name: 'Overall' }, ...orderedCategories].map((c) => (
+              <button
+                key={c.id}
+                className={`scopechip${crownScope === c.id ? ' active' : ''}`}
+                aria-pressed={crownScope === c.id}
+                onClick={() => setCrownScope(c.id)}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>}
         </div>
-      )}
+        {board.crown.length === 0 ? (
+          <p className="hint crownempty">
+            {isToday ? 'No scores yet today. Play a game to take the lead.' : 'Nobody played this day.'}
+          </p>
+        ) : (crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).length === 0 && (
+          <p className="hint crownempty">Nobody has played these games {isToday ? 'yet today' : 'this day'}.</p>
+        )}
+        {(crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).map((c, i) => (
+          <div key={c.userId} className={`crownrow${c.userId === me.id ? ' me' : ''}`}>
+            <span>{['🥇', '🥈', '🥉'][(c.rank ?? i + 1) - 1] ?? `${c.rank ?? i + 1}.`}</span>
+            <span>
+              {c.username}{' '}
+              <span className="sub">· {c.games} game{c.games === 1 ? '' : 's'}</span>
+            </span>
+            <span className="pts">{c.points} pts</span>
+          </div>
+        ))}
+      </div>
 
       {prefsError && <div className="flash err gridflash" role="status">{prefsError}</div>}
 
@@ -569,7 +539,7 @@ function GameTile({
   const play = (e, viaLink) => {
     if (inApp) {
       e.preventDefault()
-      tellNative({ type: 'open', url: game.url, gameId: game.id, name: game.name })
+      tellNative({ type: 'open', url: game.url, gameId: game.id, name: game.name, emoji: game.emoji, color: game.color })
       return
     }
     const newTab = e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0

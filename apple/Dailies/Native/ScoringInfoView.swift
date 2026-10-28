@@ -1,3 +1,4 @@
+#if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
 
 /// The ⓘ on the crown card: how points are worked out, with every game's results worth 100, 50 and 0.
@@ -45,16 +46,11 @@ struct ScoringInfoView: View {
             }
             .overlay { if table == nil && error == nil { ProgressView() } }
             .navigationTitle("How scoring works")
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 520, minHeight: 560)
-        #endif
         .task {
             do { table = try await DailiesAPI.shared.scoring() } catch { self.error = "Couldn't load the scoring table." }
         }
@@ -78,3 +74,4 @@ struct ScoringInfoView: View {
         .accessibilityLabel("\(r.name): 100 points for \(r.perfect), 50 for \(r.par), 0 for \(r.zero)")
     }
 }
+#endif

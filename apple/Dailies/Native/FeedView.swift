@@ -1,3 +1,4 @@
+#if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
 
 /// The Feed, like Strava: a card per player per day with their highlight in yellow, kudos, and
@@ -24,12 +25,6 @@ struct FeedView: View {
             .overlay {
                 if model.feed == nil && model.error == nil { ProgressView() }
             }
-            #if os(macOS)
-            .toolbar {
-                Button { Task { await model.load() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                    .help("Refresh the feed")
-            }
-            #endif
         }
         .tint(Color.ink)
         // each time the Feed is opened: fresh cards, and any new kudos count as seen
@@ -309,9 +304,6 @@ private struct DayCard: View {
         .padding(.vertical, -7)
         .disabled(isHighlight && !card.picked)
         .accessibilityLabel(isHighlight ? (card.picked ? "Stop highlighting \(g.gameName)" : "\(g.gameName) is your highlight") : "Highlight \(g.gameName)")
-        #if os(macOS)
-        .help(isHighlight ? (card.picked ? "Go back to your top-points game" : "Your highlight (top points)") : "Make this your highlight")
-        #endif
     }
 
     private var footer: some View {
@@ -396,3 +388,4 @@ private extension String {
     /// "Today" -> "today" inside a sentence; dates stay as they are.
     var lowercasedDay: String { self == "Today" || self == "Yesterday" ? lowercased() : self }
 }
+#endif

@@ -118,18 +118,54 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 }
 .navbtn:disabled { opacity: 0.35; cursor: default; }
 
-.pastebox { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
-.pastebox .row { display: flex; gap: 10px; align-items: stretch; }
-.pastebox .btn { white-space: nowrap; }
-/* the box is one line, the same height as the Paste button beside it; longer text scrolls inside */
-.pastebox textarea.input { min-height: 0; height: 46px; resize: none; padding: 11px 14px; line-height: 1.45; }
-.pastebox .row .btn { min-height: 46px; padding-top: 0; padding-bottom: 0; }
+/* ---------- the floating Paste button (Today), and what stacks above it ---------- */
+.pastedock {
+  position: fixed; z-index: 20; right: 24px; bottom: calc(24px + env(safe-area-inset-bottom) + var(--kb, 0px));
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+  width: min(380px, calc(100vw - 32px)); pointer-events: none;
+}
+.pastedock > * { pointer-events: auto; }
+.pastefab {
+  display: inline-flex; align-items: center; gap: 8px; height: 58px; padding: 0 24px 0 20px;
+  font: inherit; font-weight: 800; font-size: 17px; color: var(--ink); cursor: pointer;
+  background: var(--yellow); border: var(--border); border-radius: 999px; box-shadow: var(--shadow);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.pastefab:not(:disabled):hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--ink); }
+.pastefab:not(:disabled):active { transform: translate(5px, 5px); box-shadow: 0 0 0 var(--ink); }
+.pastefab:disabled { cursor: progress; opacity: 0.8; }
+.pastefab:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+/* the same button in the game panel's footer, a size down */
+.pastefab.inpanel { height: 46px; padding: 0 20px 0 16px; gap: 7px; font-size: 15px; box-shadow: 4px 4px 0 var(--ink); white-space: nowrap; }
+.pastefab.inpanel:not(:disabled):hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.pastefab.inpanel:not(:disabled):active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink); }
+.pastetoast { display: flex; align-items: flex-start; gap: 8px; max-width: 100%; }
+.pastetip {
+  display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 8px 10px 8px 14px;
+  background: var(--lilac); border: 2px solid var(--ink); border-radius: 12px; box-shadow: var(--shadow-sm);
+  font-size: 13.5px; font-weight: 600;
+}
+.pastetip span { flex: 1; min-width: 0; }
+.pastetip kbd {
+  font: inherit; font-weight: 800; padding: 1px 6px; background: #fff; border: 2px solid var(--ink); border-radius: 6px;
+}
+.pastetip .iconbtn { flex: none; width: 26px; height: 26px; font-size: 12px; box-shadow: none; }
+.pastetoast span, .backprompt span { flex: 1; min-width: 0; }
+.pastetoast .iconbtn, .backprompt .iconbtn { flex: none; width: 26px; height: 26px; font-size: 12px; box-shadow: none; }
 .backprompt {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  background: var(--yellow); border: var(--border); border-radius: 12px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px; max-width: 100%;
+  background: #fff; border: var(--border); border-radius: 12px; padding: 10px 12px;
   box-shadow: var(--shadow-sm); font-weight: 600; font-size: 14px;
 }
-.backprompt span { flex: 1; min-width: 180px; }
+.pastebox { width: 100%; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--bg); }
+.pastebox-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pastebox-head h3 { margin: 0; font-size: 16px; font-weight: 800; }
+.pastebox .hint { margin: 0; }
+.pastebox textarea.input { min-height: 92px; resize: none; font-size: 15px; }
+/* the last game cards scroll clear of the button */
+.container:has(.pastedock) { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) { .pastefab { transition: none; } }
+
 .flash {
   border: var(--border); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 14px;
   box-shadow: var(--shadow-sm);
@@ -323,20 +359,10 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
   .tabbadge { margin-left: 3px; min-width: 18px; padding: 0 4px; font-size: 10.5px; }
   .hero { margin-top: 28px; }
 
-  /* paste bar pinned to the bottom, in thumb reach; --kb lifts it above the iOS keyboard */
-  .pastebox {
-    position: fixed; left: 0; right: 0; bottom: var(--kb, 0); z-index: 10; margin: 0;
-    background: var(--bg); border-top: var(--border);
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  }
-  .pastebox .row { align-items: stretch; }
-  .pastebox .flash { order: -1; }
-  .pastebox .backprompt { order: -2; }
-  /* 16px keeps iOS from zooming in on focus */
-  .pastebox textarea.input { font-size: 16px; padding: 11px 12px; }
-  .pastebox .btn { min-height: 46px; padding: 0 16px; }
-  .container:has(.pastebox) { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
-  .container:has(.backprompt) { padding-bottom: calc(230px + env(safe-area-inset-bottom)); }
+  /* the Paste button sits in thumb reach; 16px text keeps iOS from zooming in on focus */
+  .pastedock { right: 16px; bottom: calc(16px + env(safe-area-inset-bottom) + var(--kb, 0px)); }
+  .pastefab { height: 56px; }
+  .pastebox textarea.input { font-size: 16px; }
 
   /* the game gets the whole screen on phones */
   .gamepanel-backdrop { padding: 0; }

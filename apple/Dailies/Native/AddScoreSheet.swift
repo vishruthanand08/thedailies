@@ -1,3 +1,4 @@
+#if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
 
 /// Opened from the + in the tab bar: paste the result a game just copied (system PasteButton,
@@ -83,11 +84,8 @@ struct AddScoreSheet: View {
         }
         .tint(Color.onAccent)
         .presentationBackground(Color.sun)
-        #if os(iOS)
         .presentationDetents(typing ? [.large] : [.height(340), .large])
-        #else
-        .frame(width: 440, height: typing ? 460 : 330)
-        #endif
         .presentationDragIndicator(.visible)
     }
 }
+#endif

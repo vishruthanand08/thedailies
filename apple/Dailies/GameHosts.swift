@@ -67,5 +67,8 @@ enum GameHosts {
 struct GameLaunch: Codable, Hashable, Identifiable {
     var url: URL
     var name: String
+    /// The game's tile, for the Mac game panel's header (sent by the site with Play).
+    var emoji: String? = nil
+    var color: String? = nil
     var id: URL { url }
 }

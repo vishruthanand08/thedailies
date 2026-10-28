@@ -82,6 +82,12 @@ final class AppSession {
         }
     }
 
+    /// Signed in on the website's own page (the Mac app shows it); WebController has just saved
+    /// the device token it minted.
+    func webSignedIn(_ username: String) {
+        state = .signedIn(username)
+    }
+
     /// The web tabs signed out (Log out or Delete account on the web You tab).
     func webSignedOut() {
         guard username != nil else { return }

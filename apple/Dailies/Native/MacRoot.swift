@@ -2,124 +2,152 @@
 import AppKit
 import SwiftUI
 
-/// Lets the menu bar reach the Today screen (menus live outside the view hierarchy).
+/// Lets the menu bar reach the main window (menus live outside the view hierarchy).
 @MainActor
 @Observable
 final class MacCommands {
     static let shared = MacCommands()
 
-    struct PageRequest: Equatable {
-        let days: Int // -1 back, 1 forward, 0 back to today
-        let id = UUID()
-    }
+    /// The game open in the panel over the page (GamePanel).
+    var playing: GameLaunch?
 
-    var section: MacRootView.Section? = .today
-    var addingScore = false
-
-    init() {
-        #if DEBUG
-        // -dailiesTab feed|friends|you and -dailiesAddSheet YES, as on iPhone (screenshots)
-        let args = UserDefaults.standard
-        if let tab = args.string(forKey: "dailiesTab"),
-           let s = MacRootView.Section.allCases.first(where: { $0.rawValue.lowercased() == tab }) { section = s }
-        addingScore = args.bool(forKey: "dailiesAddSheet")
-        #endif
-    }
-    var pageRequest: PageRequest?
-
+    /// Go › Previous Day / Next Day / Today, on the site's Today tab.
     func page(_ days: Int) {
-        section = .today
-        pageRequest = PageRequest(days: days)
+        WebController.shared.showDay(days)
     }
 
-    /// Edit › Paste Result: the Mac doesn't gate the clipboard behind a prompt, so read it directly.
+    /// Edit › Paste Result: the same as the site's Paste button.
     func pasteResult() {
-        guard let text = NSPasteboard.general.string(forType: .string),
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            SubmissionQueue.shared.show(.err, "The clipboard is empty. Tap Share or Copy in the game first.")
-            return
-        }
-        SubmissionQueue.shared.enqueue(text)
+        WebController.shared.pasteInPage()
+    }
+
+    /// File › Add Score…: the site's paste box, to paste or type a result into.
+    func addScore() {
+        WebController.shared.openPasteBox()
     }
 }
 
-/// The signed-in Mac window: a sidebar of sections, the standard Mac layout (Mail, Notes, Music),
-/// in place of the iPhone's tab bar. Friends and You still show the website until they're native.
+/// The Mac window is the website itself, sign-in and header and tabs included, so the app looks
+/// just like it; the site's floating Paste button reads the clipboard through the app (no paste
+/// prompt). Native around it: menus and shortcuts, notifications, the game panel, updates.
 struct MacRootView: View {
-    enum Section: String, CaseIterable, Identifiable {
-        case today = "Today", feed = "Feed", friends = "Friends", you = "You"
-        var id: String { rawValue }
-        var symbol: String {
-            switch self {
-            case .today: "sun.max"
-            case .feed: "list.bullet.rectangle.portrait"
-            case .friends: "person.2"
-            case .you: "person.crop.circle"
-            }
-        }
-    }
+    /// The site's tabs, for the Go menu (⌘1–4) and notifications that name one.
+    static let tabs = ["Today", "Feed", "Friends", "You"]
 
     @State private var commands = MacCommands.shared
-    @State private var feed = FeedModel.shared
     @State private var push = Push.shared
     @State private var updates = MacUpdates.shared
+    @State private var session = AppSession.shared
+    @State private var web = WebController.shared
 
     var body: some View {
-        NavigationSplitView {
-            List(Section.allCases, selection: $commands.section) { section in
-                Label(section.rawValue, systemImage: section.symbol)
-                    .badge(section == .feed ? feed.unseen : 0) // kudos not seen yet
-                    .tag(section)
-            }
-            .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0) {
+        MainWebView()
+            .background(Site.lavender)
+            .overlay(alignment: .bottomLeading) {
                 if let release = updates.available { UpdateCard(release: release) }
-                Button { commands.addingScore = true } label: {
-                    Label("Add Score", systemImage: "plus.circle.fill")
-                        .font(.brand(.body, .bold))
-                        .foregroundStyle(Color.onAccent)
-                        .frame(maxWidth: .infinity, minHeight: 32)
-                        .background(Capsule().fill(Color.sun))
-                        .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
-                }
-                .buttonStyle(.plain)
-                .padding(12)
-                .help("Add a score (⌘N)")
+            }
+            .overlay {
+                if let error = web.loadError { CantReach(detail: error) }
+            }
+            .overlay {
+                if let game = commands.playing {
+                    GamePanel(launch: game) { commands.playing = nil }
+                        .id(game) // a different game gets a fresh web view
+                        .transition(.opacity)
                 }
             }
-        } detail: {
-            switch commands.section ?? .today {
-            case .today:
-                TodayView()
-            case .feed:
-                FeedView()
-            case .friends, .you:
-                MainWebView()
-                    .background(Color.canvas)
-                    .navigationTitle((commands.section ?? .today).rawValue)
+            .animation(.easeOut(duration: 0.15), value: commands.playing)
+            .background(SiteColoredTitleBar())
+            .onAppear {
+                var tab = "Today"
+                #if DEBUG
+                // -dailiesTab feed|friends|you, as on iPhone (screenshots)
+                if let arg = UserDefaults.standard.string(forKey: "dailiesTab"),
+                   let match = Self.tabs.first(where: { $0.lowercased() == arg }) { tab = match }
+                #endif
+                WebController.shared.showTab(tab)
+                updates.start()
             }
+            // once signed in (on the site's own sign-in page, or again after signing out)
+            .task(id: session.username) {
+                if session.username != nil { await push.registerIfAllowed() }
+            }
+            // the kudos count on the Dock icon: the site's Feed tab shows it once you're here
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                push.clearBadge()
+            }
+            // a clicked notification opens its tab
+            .onChange(of: push.openTab, initial: true) { _, tab in
+                guard let tab, let label = Self.tabs.first(where: { $0.lowercased() == tab }) else { return }
+                WebController.shared.showTab(label)
+                push.openTab = nil
+            }
+    }
+}
+
+/// The title bar takes the site's lavender and drops the title, so the window reads as one page;
+/// it stays a real title bar, so the window still drags from the top.
+private struct SiteColoredTitleBar: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { style(view.window) }
+        return view
+    }
+    // SwiftUI puts the title back when it updates the window, so hide it again each time
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { style(view.window) }
+    }
+
+    private func style(_ window: NSWindow?) {
+        guard let window else { return }
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = NSColor(srgbRed: 0xE9 / 255, green: 0xE4 / 255, blue: 0xF7 / 255, alpha: 1) // the site's lavender
+    }
+}
+
+/// The site didn't load: says so in the site's style, and tries again by itself once the Mac is
+/// back online (WebController).
+private struct CantReach: View {
+    let detail: String
+
+    var body: some View {
+        ZStack {
+            Site.lavender.ignoresSafeArea()
+            VStack(spacing: 14) {
+                Text("📡").font(.system(size: 40))
+                Text("Can’t reach The Dailies")
+                    .font(Site.font(22, .heavy))
+                Text("Check your internet connection. This page reloads by itself when you’re back online.")
+                    .font(Site.font(14, .medium))
+                    .foregroundStyle(Site.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .font(Site.font(12, .medium))
+                    .foregroundStyle(Site.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { WebController.shared.load() } label: {
+                    Text("Try again")
+                        .font(Site.font(15, .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(SitePill(fill: Site.ink, shadow: 3))
+                .keyboardShortcut(.defaultAction)
+                .padding(.top, 4)
+            }
+            .foregroundStyle(Site.ink)
+            .padding(28)
+            .frame(maxWidth: 400)
+            .background(RoundedRectangle(cornerRadius: Site.radius).fill(.white))
+            .overlay(RoundedRectangle(cornerRadius: Site.radius).strokeBorder(Site.ink, lineWidth: Site.border))
+            .background(RoundedRectangle(cornerRadius: Site.radius).fill(Site.ink).offset(x: 5, y: 5))
+            .padding(24)
         }
-        .tint(Color.ink)
-        .onChange(of: commands.section, initial: true) { _, section in
-            if let section, section == .friends || section == .you { WebController.shared.showTab(section.rawValue) }
-        }
-        // Today's own sheet covers Add Score while it's showing; other sections present it here
-        .sheet(isPresented: Binding(
-            get: { commands.addingScore && commands.section != .today },
-            set: { commands.addingScore = $0 })) { AddScoreSheet() }
-        .onAppear {
-            feed.startPolling()
-            updates.start()
-        }
-        .task { await push.registerIfAllowed() }
-        // a clicked notification opens its section
-        .onChange(of: push.openTab, initial: true) { _, tab in
-            guard let tab, let s = Section.allCases.first(where: { $0.rawValue.lowercased() == tab }) else { return }
-            commands.section = s
-            push.openTab = nil
-        }
-        .onDisappear { feed.signedOut() }
+        .environment(\.colorScheme, .light)
     }
 }
 
@@ -148,7 +176,9 @@ private struct UpdateCard: View {
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.highlight))
         }
         .buttonStyle(.plain)
-        .padding([.horizontal, .top], 12)
+        .frame(width: 230)
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+        .padding(16)
         .help(release.notes ?? "Download The Dailies \(release.version)")
     }
 }
@@ -162,7 +192,7 @@ struct DailiesCommands: Commands {
             }
         }
         CommandGroup(replacing: .newItem) {
-            Button("Add Score…") { MacCommands.shared.addingScore = true }
+            Button("Add Score…") { MacCommands.shared.addScore() }
                 .keyboardShortcut("n")
         }
         CommandGroup(after: .pasteboard) {
@@ -177,9 +207,9 @@ struct DailiesCommands: Commands {
             Button("Today") { MacCommands.shared.page(0) }
                 .keyboardShortcut("t")
             Divider()
-            ForEach(MacRootView.Section.allCases) { section in
-                Button(section.rawValue) { MacCommands.shared.section = section }
-                    .keyboardShortcut(KeyEquivalent(Character(String(MacRootView.Section.allCases.firstIndex(of: section)! + 1))))
+            ForEach(Array(MacRootView.tabs.enumerated()), id: \.offset) { i, tab in
+                Button(tab) { WebController.shared.showTab(tab) }
+                    .keyboardShortcut(KeyEquivalent(Character(String(i + 1))))
             }
         }
     }

@@ -1,3 +1,4 @@
+#if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
 
 struct SignInView: View {
@@ -41,9 +42,7 @@ struct SignInView: View {
                         Text("Username").font(.brand(.subheadline, .semibold)).oneLine()
                         TextField("your_name", text: $username)
                             .textContentType(.username)
-                            #if os(iOS)
                             .textInputAutocapitalization(.never)
-                            #endif
                             .autocorrectionDisabled()
                             .submitLabel(.next)
                             .focused($focus, equals: .username)
@@ -56,11 +55,7 @@ struct SignInView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Password").font(.brand(.subheadline, .semibold)).oneLine()
                         SecureField(register ? "6 or more characters" : "Password", text: $password)
-                            #if os(iOS)
                             .textContentType(register ? .newPassword : .password)
-                            #else
-                            .textContentType(.password)
-                            #endif
                             .submitLabel(.go)
                             .focused($focus, equals: .password)
                             .onSubmit(submit)
@@ -157,9 +152,6 @@ struct SignInView: View {
 private extension View {
     func fieldStyle() -> some View {
         self
-            #if os(macOS)
-            .textFieldStyle(.plain)
-            #endif
             .font(.body)
             .padding(.horizontal, 14)
             .frame(minHeight: 50)
@@ -167,3 +159,4 @@ private extension View {
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.ink.opacity(0.25), lineWidth: 1.5))
     }
 }
+#endif
