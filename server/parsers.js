@@ -71,7 +71,38 @@ export const CATEGORIES = [
   { id: 'linkedin', name: 'LinkedIn', symbol: 'briefcase.fill', emoji: '💼' },
   { id: 'geography', name: 'Geography', symbol: 'globe.americas.fill', emoji: '🌍' },
   { id: 'words', name: 'Words & Trivia', symbol: 'textformat', emoji: '🔤' },
+  { id: 'sports', name: 'Sports', symbol: 'sportscourt.fill', emoji: '🏅' },
 ]
+
+// Immaculate Grid (sports-reference.com), one grid per sport (named "MLB Grid" etc. to fit a tile),
+// each numbered from its own launch.
+// Verified from sports-reference's code and a real baseball share (2026-10-28):
+// "⚾️ Immaculate Grid 1305 0/9:\nRarity: 900\n⬜️⬜️⬜️…\nPlay at:\nhttps://…/immaculate-grid/play".
+// Football is the same with 🏈 (and /play/football), men's basketball "🏀 Immaculate Grid (Men's)".
+// Rarity adds each cell's pick rate, 100 for a missed cell, so 900 is nine misses and lower is
+// rarer; ranked by cells right, then rarity: metric = correct × 1000 + (900 − rarity).
+function immaculateGrid({ id, name, emoji, color, url, mens, epoch }) {
+  return {
+    id, category: 'sports', name, emoji, color, url, metricLabel: 'grid points', better: 'higher',
+    epoch: { date: epoch, first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/(⚾|🏈|🏀)\uFE0F?\s*Immaculate Grid\s*(\((?:Men|Women)['’]?s\))?\s*#?(\d+)\s+(\d)\s*\/\s*9/i)
+      if (!m) return null
+      // the emoji says which sport (baseball and football titles are otherwise the same)
+      if (m[1] !== emoji) return null
+      const label = m[2] ?? ''
+      if (/women/i.test(label) || mens !== /men/i.test(label)) return null
+      const correct = num(m[4])
+      const r = text.match(/Rarity:\s*([\d,]+)/i)
+      const rarity = r ? Math.min(900, num(r[1])) : 900
+      return {
+        puzzleNumber: num(m[3]),
+        metric: correct * 1000 + (900 - rarity),
+        display: `${correct}/9 · ${rarity}`,
+      }
+    },
+  }
+}
 
 export const GAMES = [
   {
@@ -294,6 +325,40 @@ export const GAMES = [
   },
 
   {
+    id: 'perceptle', category: 'words', name: 'Perceptle', emoji: '👁️', color: '#E2D9F6',
+    url: 'https://perceptle.com', embed: true, metricLabel: 'points', better: 'higher',
+    // Verified from a real share 2026-10-28: "Perceptle #103 - F (31)\n🔢 0  🎯 1  📐 45  🥁 10  ✂️ 100\n
+    // https://perceptle.com". From perceptle.com's own code: five tests each 0-100, the score is
+    // their average (grades S 95+, A 85+, B 70+, C 55+, D 40+, F), #1 was 2026-07-18, and Fridays
+    // add 🃏 after the number.
+    epoch: { date: '2026-07-18', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/Perceptle\s+#([\d,]+)(?:\s*🃏)?\s*[-–—]\s*([SABCDF])\s*\((\d{1,3})\)/i)
+      if (!m) return null
+      const score = num(m[3])
+      return { puzzleNumber: num(m[1]), metric: score, display: `${score} · ${m[2].toUpperCase()}` }
+    },
+  },
+
+  {
+    id: 'dailytens', category: 'words', name: 'Daily Tens', emoji: '🔟', color: '#F6E3A9',
+    url: 'https://dailytens.com', embed: true, metricLabel: 'answers', better: 'higher',
+    // Verified from a real share 2026-10-28 ("DailyTens #905", then five rows of two cells,
+    // "https://dailytens.com/?ref=…") and dailytens.com's own code: name all ten entries on a top-10
+    // list before five wrong guesses; 🏆 is an entry found, ❌ one missed. Numbers run daily from
+    // #905 on 2026-10-28. Archive plays link to /archive/<date>, so they don't count for today.
+    epoch: { date: '2024-05-07', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/DailyTens\s+#([\d,]+)/i)
+      if (!m || /dailytens\.com\/archive\//i.test(text)) return null
+      const found = (text.match(/🏆/g) ?? []).length
+      const missed = (text.match(/❌/g) ?? []).length
+      if (found + missed !== 10) return null
+      return { puzzleNumber: num(m[1]), metric: found, display: `${found}/10` }
+    },
+  },
+
+  {
     id: 'costcodle', category: 'words', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
     url: 'https://costcodle.com', embed: true, metricLabel: 'guesses', better: 'lower',
     epoch: null, dateTolerance: null, manual: false,
@@ -387,6 +452,33 @@ export const GAMES = [
       return { date: md ? yearlessDate(md[1], md[2]) : null, metric: pts, display: `${pts.toLocaleString()} pts` }
     },
   },
+  immaculateGrid({
+    id: 'gridmlb', name: 'MLB Grid', emoji: '⚾', color: '#D6E4F5',
+    url: 'https://www.sports-reference.com/immaculate-grid/play', mens: false, epoch: '2023-04-03', // #1305 on 2026-10-28
+  }),
+  immaculateGrid({
+    id: 'gridnfl', name: 'NFL Grid', emoji: '🏈', color: '#DCEBD2',
+    url: 'https://www.sports-reference.com/immaculate-grid/play/football', mens: false, epoch: '2023-07-20', // #1197 on 2026-10-28
+  }),
+  immaculateGrid({
+    id: 'gridnba', name: 'NBA Grid', emoji: '🏀', color: '#F7D9C2',
+    url: 'https://www.sports-reference.com/immaculate-grid/play/basketball/mens', mens: true, epoch: '2023-07-25', // #1192 on 2026-10-28
+  }),
+
+  {
+    id: 'poeltl', category: 'sports', name: 'Poeltl', emoji: '⛹️', color: '#F3E1B5',
+    url: 'https://poeltl.nbpa.com', metricLabel: 'guesses', better: 'lower',
+    // Verified from a real share 2026-10-28: "Poeltl #1707 | X/8 | 00:00:38" and a grid of rows.
+    // Guess the NBA player in 8; X is a miss (→ 9). Puzzle numbers run daily: #1707 on 2026-10-28.
+    epoch: { date: '2022-02-25', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/Poeltl\s+#([\d,]+)\s*\|\s*([1-8X])\s*\/\s*8/i)
+      if (!m) return null
+      const miss = m[2].toUpperCase() === 'X'
+      return { puzzleNumber: num(m[1]), metric: miss ? 9 : num(m[2]), display: `${m[2].toUpperCase()}/8` }
+    },
+  },
+
   {
     id: 'ethnoguessr', category: 'geography', name: 'EthnoGuessr', emoji: '🧬', color: '#D8D3F2',
     url: 'https://hbd.gg/play/', metricLabel: 'avg points', better: 'higher',
@@ -420,6 +512,16 @@ const SCORING = {
   costcodle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
   // five rounds of up to 1,000; 3,560 beat 59% of players on #70, so a typical day is ~3,300
   chainle: { perfect: 5000, par: 3300, zero: 1000 },
+  // entries found out of 10
+  dailytens: { perfect: 10, par: 6, zero: 0 },
+  // the average of five 0-100 tests; S is 95+, C (55) a middling day
+  perceptle: { perfect: 95, par: 55, zero: 10 },
+  // guesses out of 8, a miss is 9
+  poeltl: { perfect: 1, par: 5, zero: 9, failAt: 9 },
+  // cells right × 1000 + (900 − rarity): 9/9 at rarity 100 is 9,800; 5/9 at 500 is 5,400; 0/9 is 0
+  gridmlb: { perfect: 9800, par: 5400, zero: 0 },
+  gridnfl: { perfect: 9800, par: 5400, zero: 0 },
+  gridnba: { perfect: 9800, par: 5400, zero: 0 },
   pinpoint: { perfect: 1, par: 3, zero: 6, failAt: 6 },
   connections: { perfect: 0, par: 1.5, zero: 4, failAt: 4 },
   strands: { perfect: 0, par: 1, zero: 6 },
