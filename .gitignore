@@ -8,3 +8,6 @@ apple/*.xcodeproj
 apple/build/
 apple/DerivedData/
 appstore/screenshots/
+
+# Apple push keys (private, never commit)
+*.p8
