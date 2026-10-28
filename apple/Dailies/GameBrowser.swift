@@ -146,6 +146,18 @@ private struct PasteBar: View {
             .lineLimit(1)
             .foregroundStyle(Color("OnAccent"))
             .frame(maxWidth: .infinity, alignment: .leading)
+            #if os(macOS)
+            // The Mac's PasteButton only re-checks the clipboard when the window gains focus, so
+            // after the game's own Copy it often stays greyed out. The Mac doesn't put the
+            // clipboard behind a prompt, so this reads it directly (as Edit › Paste Result does).
+            Button(action: pasteFromClipboard) {
+                Label("Paste", systemImage: "doc.on.clipboard")
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .tint(Color("OnAccent"))
+            .help("Paste the result you copied (⌘⇧V)")
+            #else
             PasteButton(payloadType: String.self) { strings in
                 guard let text = strings.first else { return }
                 Task { @MainActor in onPaste(text) }
@@ -153,11 +165,26 @@ private struct PasteBar: View {
             .labelStyle(.titleAndIcon)
             .buttonBorderShape(.capsule)
             .tint(Color("OnAccent"))
+            #endif
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color("Sun")) // same yellow bar as the Today tab
     }
+
+    #if os(macOS)
+    private func pasteFromClipboard() {
+        let board = NSPasteboard.general
+        // plain text, or the text of a rich copy (some games copy only HTML)
+        let text = board.string(forType: .string)
+            ?? (board.readObjects(forClasses: [NSAttributedString.self]) as? [NSAttributedString])?.first?.string
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            SubmissionQueue.shared.show(.err, "The clipboard is empty. Tap Share or Copy in \(gameName) first.")
+            return
+        }
+        onPaste(text)
+    }
+    #endif
 }
 
 #if os(iOS)

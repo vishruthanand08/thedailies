@@ -62,6 +62,7 @@ struct MacRootView: View {
     @State private var commands = MacCommands.shared
     @State private var feed = FeedModel.shared
     @State private var push = Push.shared
+    @State private var updates = MacUpdates.shared
 
     var body: some View {
         NavigationSplitView {
@@ -72,6 +73,8 @@ struct MacRootView: View {
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
             .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                if let release = updates.available { UpdateCard(release: release) }
                 Button { commands.addingScore = true } label: {
                     Label("Add Score", systemImage: "plus.circle.fill")
                         .font(.brand(.body, .bold))
@@ -83,6 +86,7 @@ struct MacRootView: View {
                 .buttonStyle(.plain)
                 .padding(12)
                 .help("Add a score (⌘N)")
+                }
             }
         } detail: {
             switch commands.section ?? .today {
@@ -104,7 +108,10 @@ struct MacRootView: View {
         .sheet(isPresented: Binding(
             get: { commands.addingScore && commands.section != .today },
             set: { commands.addingScore = $0 })) { AddScoreSheet() }
-        .onAppear { feed.startPolling() }
+        .onAppear {
+            feed.startPolling()
+            updates.start()
+        }
         .task { await push.registerIfAllowed() }
         // a clicked notification opens its section
         .onChange(of: push.openTab, initial: true) { _, tab in
@@ -116,9 +123,44 @@ struct MacRootView: View {
     }
 }
 
+/// A newer version on the website (copies downloaded from there don't update through the App Store).
+private struct UpdateCard: View {
+    let release: MacUpdates.Release
+
+    var body: some View {
+        Button { MacUpdates.shared.download() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Update available")
+                        .font(.brand(.subheadline, .bold))
+                        .oneLine()
+                    Text("Download the new version")
+                        .font(.brand(.caption))
+                        .foregroundStyle(Color.ink.opacity(0.7))
+                        .oneLine()
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Color.ink)
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.highlight))
+        }
+        .buttonStyle(.plain)
+        .padding([.horizontal, .top], 12)
+        .help(release.notes ?? "Download The Dailies \(release.version)")
+    }
+}
+
 /// Menu bar commands for the Mac app.
 struct DailiesCommands: Commands {
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            if !MacUpdates.shared.fromAppStore {
+                Button("Check for Updates…") { MacUpdates.shared.checkNow() }
+            }
+        }
         CommandGroup(replacing: .newItem) {
             Button("Add Score…") { MacCommands.shared.addingScore = true }
                 .keyboardShortcut("n")

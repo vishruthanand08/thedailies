@@ -7,6 +7,7 @@ import Feed from './Feed.jsx'
 import Friends from './Friends.jsx'
 import Profile from './Profile.jsx'
 import Admin from './Admin.jsx'
+import { MacAppPrompt } from './MacApp.jsx'
 
 export default function App() {
   const [me, setMe] = useState(undefined) // undefined = loading, null = signed out
@@ -89,6 +90,7 @@ export default function App() {
       {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
       {tab === 'you' && <Profile me={me} onLogout={logout} />}
       {tab === 'admin' && me.admin && <Admin />}
+      <MacAppPrompt />
     </div>
   )
 }

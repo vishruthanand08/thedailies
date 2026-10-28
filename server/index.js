@@ -12,6 +12,7 @@ import { suggestionsRouter } from './suggestions.js'
 import { adminRouter } from './admin.js'
 import { feedRouter } from './feed.js'
 import { pushRouter, startReminders } from './push.js'
+import { releaseRouter, macDownload } from './release.js'
 import { loadRules, backfillPoints } from './points.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -33,6 +34,8 @@ app.use('/api/suggestions', suggestionsRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/feed', feedRouter)
 app.use('/api/push', pushRouter)
+app.use('/api/app', releaseRouter)
+app.get('/download/mac', macDownload)
 
 app.use((err, req, res, next) => {
   console.error(err)

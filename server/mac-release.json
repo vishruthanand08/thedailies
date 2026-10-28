@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "build": 2,
+  "url": "https://github.com/vishruthanand08/thedailies/releases/download/mac-1.0-2/TheDailies.dmg",
+  "notes": "The Paste button in a game is always ready, and pastes rich-text results too.",
+  "minimumSystem": "14.0"
+}
