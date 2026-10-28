@@ -1,7 +1,10 @@
 {
-  "version": "1.0",
-  "build": 4,
-  "url": "https://github.com/vishruthanand08/thedailies/releases/download/mac-1.0-4/TheDailies.dmg",
-  "notes": "The Mac app now looks just like the website: its header and tabs, the floating Paste button, and games open in a panel over the page (every game, new ones like Chainle included). Sign in on the site's page, a countdown to each game's next puzzle, ⌘N opens the paste box, a Can't reach The Dailies screen when offline, and a narrower window.",
-  "minimumSystem": "14.0"
+  "version": "1.5",
+  "build": 5,
+  "url": "https://github.com/vishruthanand08/thedailies/releases/download/mac-1.5-5/TheDailies.dmg",
+  "notes": "Version 1.5: The Dailies for Mac now updates itself. New versions download in the background and install when you quit, so this is the last one you install by hand.",
+  "minimumSystem": "14.0",
+  "edSignature": "LGMzxPJHR1YSTyybG1pI//y6IaRnt0MNz/+++y9QRsRnZJYf2HomZIjJ63ZBxW//s4PBLHaoP59FuNhqUomlCQ==",
+  "length": 1663845,
+  "published": "2026-10-28T19:58:51.650Z"
 }

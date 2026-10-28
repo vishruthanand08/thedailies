@@ -22,6 +22,6 @@ const previewTags = {
 export default defineConfig({
   plugins: [react(), previewTags],
   server: {
-    proxy: { '/api': 'http://localhost:3001', '/download': 'http://localhost:3001' },
+    proxy: { '/api': 'http://localhost:3001', '/download': 'http://localhost:3001', '/appcast.xml': 'http://localhost:3001' },
   },
 })

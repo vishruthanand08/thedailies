@@ -1,10 +1,19 @@
 #if os(macOS)
 import AppKit
 import Observation
+#if DIRECT_DOWNLOAD
+import Sparkle
+#endif
 
-/// The Mac app downloaded from the website can't update through the App Store, so it asks the
-/// server for the newest build (server/release.js) at launch and every few hours, and the sidebar
-/// offers the download. App Store and TestFlight copies carry a receipt and leave updates to Apple.
+/// Updates for the Mac app.
+/// - Downloaded from the website (the DailiesDirect target, DIRECT_DOWNLOAD): Sparkle reads
+///   thedailies.lol/appcast.xml (server/release.js) every few hours, downloads a new version in
+///   the background and installs it when the app quits. Check for Updates… asks right away.
+/// - App Store and TestFlight copies (they carry a receipt): Apple updates them, and they never
+///   offer an update of their own.
+/// - Anything else (the Dailies target run from Xcode): the older check against /api/app/mac, and
+///   a card that offers the download. Copies from before Sparkle (builds 1–4) use the same check,
+///   which is how they reach a Sparkle build once by hand.
 @MainActor
 @Observable
 final class MacUpdates {
@@ -17,9 +26,13 @@ final class MacUpdates {
         let notes: String?
     }
 
-    /// A newer build than this one, once the server reports it.
+    /// A newer build than this one, once the server reports it (not with Sparkle, which has its own).
     private(set) var available: Release?
     @ObservationIgnored private var checking: Task<Void, Never>?
+    #if DIRECT_DOWNLOAD
+    @ObservationIgnored private let sparkle = SPUStandardUpdaterController(
+        startingUpdater: false, updaterDelegate: SparkleFeed.shared, userDriverDelegate: nil)
+    #endif
 
     /// App Store and TestFlight copies; Apple updates those, and they mustn't offer their own updates.
     var fromAppStore: Bool {
@@ -36,6 +49,9 @@ final class MacUpdates {
     }
 
     func start() {
+        #if DIRECT_DOWNLOAD
+        sparkle.startUpdater()
+        #else
         guard !fromAppStore, checking == nil else { return }
         checking = Task { [weak self] in
             while !Task.isCancelled {
@@ -43,10 +59,14 @@ final class MacUpdates {
                 try? await Task.sleep(for: .seconds(6 * 60 * 60))
             }
         }
+        #endif
     }
 
     /// App menu › Check for Updates…: says so either way.
     func checkNow() {
+        #if DIRECT_DOWNLOAD
+        sparkle.checkForUpdates(nil)
+        #else
         Task {
             await check()
             let alert = NSAlert()
@@ -62,6 +82,7 @@ final class MacUpdates {
                 alert.runModal()
             }
         }
+        #endif
     }
 
     func download() {
@@ -77,4 +98,20 @@ final class MacUpdates {
         available = latest.build > build ? latest : nil
     }
 }
+
+#if DIRECT_DOWNLOAD
+/// Debug builds can read another feed, to try an update against the local server:
+/// `defaults write lol.thedailies.app dailiesFeedURL http://localhost:3001/appcast.xml`.
+final class SparkleFeed: NSObject, SPUUpdaterDelegate {
+    static let shared = SparkleFeed()
+
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: "dailiesFeedURL")
+        #else
+        nil
+        #endif
+    }
+}
+#endif
 #endif

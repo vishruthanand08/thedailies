@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sparkle, for the Mac app downloaded from the website (the DailiesDirect target; the App
+	     Store build has no updater). The feed is built by server/release.js. -->
+	<key>SUFeedURL</key>
+	<string>https://www.thedailies.lol/appcast.xml</string>
+	<!-- updates must be signed with the private key in the release Mac's keychain -->
+	<key>SUPublicEDKey</key>
+	<string>rvr9h7b3valQmPggMBHQvYkDYD+cYavXFvYflAUJvLg=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<!-- download in the background and install on quit, without asking -->
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<true/>
+	<!-- every 6 hours -->
+	<key>SUScheduledCheckInterval</key>
+	<integer>21600</integer>
+	<!-- the app is sandboxed: Sparkle installs through its XPC installer -->
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<!-- Debug builds only: the local dev server over http://localhost -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

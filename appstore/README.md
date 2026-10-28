@@ -112,6 +112,8 @@ Expect a 13+ rating.
 5. `cd apple && DAILIES_TEAM=<team id> DAILIES_PUSH=-Push xcodegen generate`, open in Xcode, pick the team
    (automatic signing turns on the Push Notifications capability for the app ID).
    Any iOS Device › Product › Archive › Distribute App › App Store Connect; then the same with My Mac.
+   Archive the **Dailies** scheme for the App Store (no updater). **DailiesDirect** is the website download
+   with Sparkle (apple/tools/release-mac.sh) and must never be uploaded to App Store Connect.
    Bump `CURRENT_PROJECT_VERSION` in `project.yml` for every later upload.
 6. Push key (once): developer.apple.com › Keys › + › Apple Push Notifications service (APNs), Sandbox &
    Production. Download the .p8 (it can only be downloaded once) and note its Key ID. On Railway's app

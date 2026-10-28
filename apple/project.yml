@@ -9,13 +9,18 @@ options:
     iOS: "17.0"
     macOS: "14.0"
   createIntermediateGroups: true
+packages:
+  # the Mac app downloaded from the website updates itself (DailiesDirect only, never the App Store build)
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.9.6"
 settings:
   base:
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "${DAILIES_TEAM}"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "4" # bump for every upload to App Store Connect
+    MARKETING_VERSION: "1.5"
+    CURRENT_PROJECT_VERSION: "5" # bump for every upload to App Store Connect
     # HTTPS only, no custom encryption: skips the export-compliance question on each upload
     INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -53,6 +58,39 @@ targets:
         Debug:
           INFOPLIST_FILE: Config/Dailies-Debug-Info.plist
 
+  # The Mac app for the website download: the same app as Dailies plus Sparkle, which updates it
+  # in the background (DIRECT_DOWNLOAD in Swift). Dailies stays the App Store and iPhone build,
+  # since the Mac App Store doesn't allow an app to update itself. apple/tools/release-mac.sh
+  # archives this one.
+  DailiesDirect:
+    type: application
+    platform: macOS
+    sources:
+      - Dailies
+      - Shared
+    dependencies:
+      - package: Sparkle
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: lol.thedailies.app
+        PRODUCT_NAME: Dailies
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Config/DailiesDirect-Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: The Dailies
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.games
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Dailies/Dailies-macOS-Direct${DAILIES_PUSH}.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) DIRECT_DOWNLOAD
+      configs:
+        Debug:
+          INFOPLIST_FILE: Config/DailiesDirect-Debug-Info.plist
+          # its own folder: both targets make Dailies.app, and the App Store one must never pick
+          # up this one's Sparkle.framework. Debug only: archives keep each scheme apart already,
+          # and a moved Release folder makes Xcode process Sparkle twice (its signature then
+          # clashes in the archive)
+          CONFIGURATION_BUILD_DIR: $(BUILD_DIR)/$(CONFIGURATION)-direct$(EFFECTIVE_PLATFORM_NAME)
+
   DailiesShare:
     type: app-extension
     platform: iOS
@@ -89,6 +127,14 @@ targets:
         TEST_TARGET_NAME: Dailies
 
 schemes:
+  DailiesDirect:
+    build:
+      targets:
+        DailiesDirect: all
+    run:
+      config: Debug
+    archive:
+      config: Release
   DailiesUITests:
     build:
       targets:

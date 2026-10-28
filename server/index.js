@@ -12,7 +12,7 @@ import { suggestionsRouter } from './suggestions.js'
 import { adminRouter } from './admin.js'
 import { feedRouter } from './feed.js'
 import { pushRouter, startReminders } from './push.js'
-import { releaseRouter, macDownload } from './release.js'
+import { releaseRouter, macDownload, appcast } from './release.js'
 import { pageWithMeta, metaFor } from './meta.js'
 import { loadRules, backfillPoints } from './points.js'
 
@@ -37,6 +37,7 @@ app.use('/api/feed', feedRouter)
 app.use('/api/push', pushRouter)
 app.use('/api/app', releaseRouter)
 app.get('/download/mac', macDownload)
+app.get('/appcast.xml', appcast)
 // development only: the Vite dev server asks for a page's link-preview tags here (web/vite.config.js),
 // so an invite link from localhost previews like the live site's
 if (process.env.NODE_ENV !== 'production') {
