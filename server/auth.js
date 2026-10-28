@@ -148,6 +148,7 @@ authRouter.delete('/account', requireAuth, async (req, res) => {
   await q('DELETE FROM day_kudos WHERE owner_id = $1 OR giver_id = $1', [id])
   await q('DELETE FROM day_highlights WHERE user_id = $1', [id])
   await q('DELETE FROM push_devices WHERE user_id = $1', [id])
+  await q('DELETE FROM friend_suggestion_dismissals WHERE user_id = $1 OR other_id = $1', [id])
   await q('DELETE FROM submissions WHERE user_id = $1', [id])
   await q('DELETE FROM friendships WHERE user_a = $1 OR user_b = $1 OR requested_by = $1', [id])
   await q('DELETE FROM users WHERE id = $1', [id])

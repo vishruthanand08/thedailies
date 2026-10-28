@@ -120,6 +120,14 @@ CREATE TABLE IF NOT EXISTS push_devices (
 );
 CREATE INDEX IF NOT EXISTS idx_push_devices_user ON push_devices (user_id);
 
+-- People someone closed in "People you may know", so they stay hidden.
+CREATE TABLE IF NOT EXISTS friend_suggestion_dismissals (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, other_id)
+);
+
 -- Days the evening reminder went out, so a restart doesn't send it twice.
 CREATE TABLE IF NOT EXISTS push_reminders (
   puzzle_date DATE PRIMARY KEY,

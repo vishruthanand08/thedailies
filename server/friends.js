@@ -94,6 +94,52 @@ friendsRouter.delete('/:userId', async (req, res) => {
   res.json({ ok: true })
 })
 
+// "People you may know": friends of my friends (accepted friendships only, so sending someone a
+// request doesn't reveal theirs), most mutual friends first, leaving out anyone I already have a
+// friendship or request with and anyone I closed. ?via=<friend id> keeps to that friend's friends,
+// for the list right after adding them.
+friendsRouter.get('/suggestions', async (req, res) => {
+  const me = req.user.id
+  const via = Number.isInteger(Number(req.query.via)) && req.query.via ? Number(req.query.via) : null
+  const { rows } = await q(
+    `WITH mine AS (
+       SELECT CASE WHEN user_a = $1 THEN user_b ELSE user_a END AS id
+         FROM friendships WHERE (user_a = $1 OR user_b = $1) AND status = 'accepted'
+     ), linked AS (
+       SELECT CASE WHEN f.user_a = m.id THEN f.user_b ELSE f.user_a END AS id, m.id AS via
+         FROM friendships f JOIN mine m ON f.user_a = m.id OR f.user_b = m.id
+        WHERE f.status = 'accepted'
+     )
+     SELECT l.id, u.username, count(*)::int AS mutual_count,
+            array_agg(mu.username ORDER BY mu.username) AS mutuals
+       FROM linked l
+       JOIN users u ON u.id = l.id
+       JOIN users mu ON mu.id = l.via
+      WHERE l.id <> $1
+        AND NOT EXISTS (SELECT 1 FROM friendships x
+                         WHERE (x.user_a = $1 AND x.user_b = l.id) OR (x.user_a = l.id AND x.user_b = $1))
+        AND NOT EXISTS (SELECT 1 FROM friend_suggestion_dismissals d WHERE d.user_id = $1 AND d.other_id = l.id)
+      GROUP BY l.id, u.username
+     HAVING $2::int IS NULL OR bool_or(l.via = $2::int)
+      ORDER BY count(*) DESC, u.username
+      LIMIT 12`,
+    [me, via]
+  )
+  res.json({
+    suggestions: rows.map((r) => ({ id: r.id, username: r.username, mutualCount: r.mutual_count, mutuals: r.mutuals.slice(0, 3) })),
+  })
+})
+
+friendsRouter.post('/suggestions/dismiss', async (req, res) => {
+  const other = Number(req.body?.userId)
+  if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Pick someone to hide' })
+  await q(
+    'INSERT INTO friend_suggestion_dismissals (user_id, other_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, other]
+  )
+  res.json({ ok: true })
+})
+
 // Tells whoever sent the request that it was accepted.
 function friendAccepted(requesterId, username) {
   return notify(requesterId, {

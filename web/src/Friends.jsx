@@ -10,8 +10,17 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
   const [name, setName] = useState('')
   const [flash, setFlash] = useState(null)
   const [copied, setCopied] = useState(false)
+  // a friend just added (accepted, or both asked): their friends come up first, to keep going
+  const [justAdded, setJustAdded] = useState(null)
+  const [version, setVersion] = useState(0) // refreshes suggestions when the friend list changes
 
-  const load = () => api.get('/friends').then(setData)
+  const load = () => api.get('/friends').then((d) => {
+    setData(d)
+    setVersion((v) => v + 1)
+  })
+  const added = (d) => {
+    if (d.accepted) setJustAdded(d.user)
+  }
   useEffect(() => {
     load()
     // arrived via an invite link (/?add=username) — send the request automatically
@@ -22,12 +31,13 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         return
       }
       api.post('/friends/request', { username: pendingAdd })
-        .then((d) =>
+        .then((d) => {
           setFlash({
             kind: 'ok',
             msg: d.accepted ? `You and ${d.user.username} are now friends 🤝` : `Friend request sent to ${d.user.username} ✓`,
           })
-        )
+          added(d)
+        })
         .catch((err) => setFlash({ kind: 'err', msg: err.message }))
         .finally(() => {
           load()
@@ -53,6 +63,7 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
     try {
       const d = await api.post('/friends/request', { username: name })
       setFlash({ kind: 'ok', msg: d.accepted ? `You and ${d.user.username} are now friends 🤝` : `Request sent to ${d.user.username}` })
+      added(d)
       setName('')
       load()
     } catch (err) {
@@ -60,8 +71,9 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
     }
   }
 
-  const respond = async (userId, accept) => {
-    await api.post('/friends/respond', { userId, accept })
+  const respond = async (user, accept) => {
+    await api.post('/friends/respond', { userId: user.id, accept })
+    if (accept) setJustAdded(user)
     load()
   }
 
@@ -83,16 +95,27 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
               <div className="avatar">{u.username[0]}</div>
               <span>{u.username}</span>
               <div className="actions">
-                <button className="btn small" onClick={() => respond(u.id, true)}>Accept</button>
-                <button className="btn ghost small" onClick={() => respond(u.id, false)}>Decline</button>
+                <button className="btn small" onClick={() => respond(u, true)}>Accept</button>
+                <button className="btn ghost small" onClick={() => respond(u, false)}>Decline</button>
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {justAdded && (
+        <PeopleYouMayKnow
+          key={`via-${justAdded.id}`}
+          via={justAdded}
+          version={version}
+          onChanged={load}
+          onShowAll={() => setJustAdded(null)}
+        />
+      )}
+
+      {/* keyed by the friend count, so it reloads when a friend is added or removed */}
       {data.friends.length > 0 ? (
-        <Leaderboards me={me} />
+        <Leaderboards key={data.friends.length} me={me} />
       ) : (
         <div className="card">
           <h3 className="sectiontitle">🏆 Leaderboard</h3>
@@ -116,6 +139,8 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
           Your leaderboard is you + your friends. Everyone sees their own circle.
         </p>
       </form>
+
+      {!justAdded && <PeopleYouMayKnow key="all" version={version} onChanged={load} />}
 
       <div className="card">
         <h3 className="sectiontitle">Your invite link</h3>
@@ -162,6 +187,85 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         )}
       </div>
 
+    </div>
+  )
+}
+
+// "People you may know": friends of your friends, most friends in common first (server/friends.js).
+// With `via`, just that friend's friends, shown right after adding them.
+function PeopleYouMayKnow({ via, version, onChanged, onShowAll }) {
+  const [list, setList] = useState(null)
+  const [state, setState] = useState({}) // id -> 'sent' | 'friends' | error message
+
+  useEffect(() => {
+    api.get(`/friends/suggestions${via ? `?via=${via.id}` : ''}`).then((d) => setList(d.suggestions), () => setList([]))
+  }, [via?.id, version])
+
+  if (!list) return null
+  if (list.length === 0) {
+    // after adding someone, say why nothing shows rather than vanishing
+    return via ? (
+      <div className="card">
+        <h3 className="sectiontitle">Friends of {via.username}</h3>
+        <p className="hint" style={{ margin: 0 }}>
+          No one new to add from {via.username}'s friends.{' '}
+          <button className="linklike" onClick={onShowAll}>See all suggestions</button>
+        </p>
+      </div>
+    ) : null
+  }
+
+  const add = async (u) => {
+    try {
+      const d = await api.post('/friends/request', { username: u.username })
+      setState((s) => ({ ...s, [u.id]: d.accepted ? 'friends' : 'sent' }))
+      if (d.accepted) onChanged()
+    } catch (err) {
+      setState((s) => ({ ...s, [u.id]: err.message }))
+    }
+  }
+
+  const hide = async (u) => {
+    setList((l) => l.filter((x) => x.id !== u.id))
+    api.post('/friends/suggestions/dismiss', { userId: u.id }).catch(() => {})
+  }
+
+  const why = (u) => {
+    const names = u.mutuals
+    if (u.mutualCount === 1) return `Friends with ${names[0]}`
+    if (u.mutualCount === 2) return `Friends with ${names[0]} and ${names[1]}`
+    return `Friends with ${names[0]} and ${u.mutualCount - 1} more`
+  }
+
+  return (
+    <div className="card suggestcard">
+      <div className="cardhead">
+        <h3 className="sectiontitle">{via ? `Friends of ${via.username}` : 'People you may know'}</h3>
+        {via && <button className="linklike" onClick={onShowAll}>See all</button>}
+      </div>
+      {list.map((u) => {
+        const st = state[u.id]
+        return (
+          <div key={u.id} className="friendrow">
+            <div className="avatar">{u.username[0]}</div>
+            <div className="who">
+              <span className="name">{u.username}</span>
+              <span className="hint" title={why(u)}>{why(u)}</span>
+            </div>
+            <div className="actions">
+              {st === 'sent' && <span className="hint">Requested ✓</span>}
+              {st === 'friends' && <span className="hint">Friends 🤝</span>}
+              {st && st !== 'sent' && st !== 'friends' && <span className="hint">{st}</span>}
+              {!st && (
+                <>
+                  <button className="btn small" onClick={() => add(u)}>Add</button>
+                  <button className="iconbtn" aria-label={`Hide ${u.username}`} title="Hide" onClick={() => hide(u)}>✕</button>
+                </>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

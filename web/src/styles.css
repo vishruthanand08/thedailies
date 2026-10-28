@@ -326,6 +326,12 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 }
 .friendrow:last-child { border-bottom: none; }
 .friendrow .actions { margin-left: auto; display: flex; gap: 8px; }
+/* People you may know: the name, and who you have in common under it */
+.friendrow .who { display: flex; flex-direction: column; min-width: 0; }
+.friendrow .who .name { font-weight: 700; }
+.friendrow .who .hint { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggestcard .friendrow .actions { align-items: center; flex: none; }
+.suggestcard .friendrow .iconbtn { width: 30px; height: 30px; font-size: 12px; }
 .sectiontitle { font-weight: 800; font-size: 16px; margin: 0 0 8px; }
 .hint { color: var(--muted); font-size: 13.5px; font-weight: 500; }
 
