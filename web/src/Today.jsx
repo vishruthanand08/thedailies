@@ -21,6 +21,12 @@ function arrange(games, order) {
     .map(([g]) => g)
 }
 
+// Most daily games put out the next puzzle at midnight where the player is.
+function untilLocalMidnight() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
+}
+
 function prettyDate(iso, today) {
   if (iso === today) return 'Today'
   if (iso === shiftDate(today, -1)) return 'Yesterday'
@@ -325,6 +331,19 @@ export default function Today({ me }) {
     return () => window.removeEventListener('dailies:day', onDay)
   }, [])
 
+  // a new day's puzzles at local midnight: bring the board up to date by itself
+  useEffect(() => {
+    let timer
+    const arm = () => {
+      timer = setTimeout(() => {
+        if (dateRef.current === todayRef.current) load(null)
+        arm()
+      }, untilLocalMidnight() + 2000)
+    }
+    arm()
+    return () => clearTimeout(timer)
+  }, [])
+
   // The paste button floats at the bottom; lift it (and its box) above the iOS
   // keyboard, which covers the layout viewport instead of resizing it.
   useEffect(() => {
@@ -525,6 +544,25 @@ export default function Today({ me }) {
   )
 }
 
+// "Next in 4h 12m", ticking; seconds in the last hour
+function NextDrop() {
+  const [left, setLeft] = useState(untilLocalMidnight)
+  useEffect(() => {
+    const timer = setInterval(() => setLeft(untilLocalMidnight()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const secs = Math.max(0, Math.floor(left / 1000))
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  const label = h > 0 ? `${h}h ${m}m` : `${m}m ${String(s).padStart(2, '0')}s`
+  return (
+    <span className="nextdrop" title="You've played today's. The next one comes out at midnight." aria-label={`Next puzzle in ${label}`}>
+      Next in {label}
+    </span>
+  )
+}
+
 function GameTile({
   game, entries, me, isToday, favorite, dragging,
   onFavorite, onDragStart, onNudge, onRemove, onManual, onPlay, onLeave,
@@ -581,15 +619,20 @@ function GameTile({
               </button>
             )}
           </div>
-          <a
-            className="playlink"
-            href={game.url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => play(e, true)}
-          >
-            Play ↗
-          </a>
+          {/* played today: the time until the next puzzle instead of Play (the card still opens it) */}
+          {isToday && mine ? (
+            <NextDrop />
+          ) : (
+            <a
+              className="playlink"
+              href={game.url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => play(e, true)}
+            >
+              Play ↗
+            </a>
+          )}
           {isToday && game.manual && !mine && (
             <button
               className="linklike addscore"

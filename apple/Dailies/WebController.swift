@@ -170,6 +170,7 @@ final class WebController {
             handleToken(msg)
         case "open":
             guard let s = msg["url"] as? String, let url = URL(string: s) else { return }
+            if msg["gameId"] != nil { GameHosts.trust(url) } // a game from the board
             open(url, name: msg["name"] as? String ?? url.host ?? "Game",
                  emoji: msg["emoji"] as? String, color: msg["color"] as? String)
         default:

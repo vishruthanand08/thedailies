@@ -278,6 +278,22 @@ export const GAMES = [
   },
 
   {
+    id: 'chainle', category: 'words', name: 'Chainle', emoji: '🔗', color: '#C9E4F2',
+    url: 'https://chainle.io', embed: true, metricLabel: 'points', better: 'higher',
+    // Verified from a real share 2026-10-28: "Chainle #70 · 3,560 🔗\nBeat 59% of players\n🟩🟥🟨🟧🟩\n
+    // https://chainle.io". From chainle.io's own code: each round (one square) is worth up to
+    // 1,000 points (🟩 90%+, 🟨 60%+, 🟧 30%+, 🟥 less) and #1 was 2026-08-20. Its "today" comes
+    // from its server, hence the day's tolerance. Unlimited and archive plays have no number.
+    epoch: { date: '2026-08-20', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/Chainle\s+#([\d,]+)\s*[·•|\-–—]\s*([\d,]+)\s*🔗/i)
+      if (!m) return null
+      const points = num(m[2])
+      return { puzzleNumber: num(m[1]), metric: points, display: points.toLocaleString('en-US') }
+    },
+  },
+
+  {
     id: 'costcodle', category: 'words', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
     url: 'https://costcodle.com', embed: true, metricLabel: 'guesses', better: 'lower',
     epoch: null, dateTolerance: null, manual: false,
@@ -402,6 +418,8 @@ const SCORING = {
   wordle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
   worldle: { perfect: 1, par: 3, zero: 7, failAt: 7 },
   costcodle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
+  // five rounds of up to 1,000; 3,560 beat 59% of players on #70, so a typical day is ~3,300
+  chainle: { perfect: 5000, par: 3300, zero: 1000 },
   pinpoint: { perfect: 1, par: 3, zero: 6, failAt: 6 },
   connections: { perfect: 0, par: 1.5, zero: 4, failAt: 4 },
   strands: { perfect: 0, par: 1, zero: 6 },

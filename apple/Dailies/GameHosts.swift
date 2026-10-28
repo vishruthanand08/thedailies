@@ -9,7 +9,7 @@ enum GameHosts {
     static let all: Set<String> = [
         "worldle.teuteuf.fr", "globle-game.com", "travle.earth", "minutecryptic.com", "costcodle.com",
         "fermi.gg", "maptap.gg", "krillion.io", "hbd.gg", "geoguessr.com", "nytimes.com", "linkedin.com",
-        "timeguessr.com", "worldguessr.com",
+        "timeguessr.com", "worldguessr.com", "chainle.io",
     ]
 
     /// Hosts of the server's games (GET /api/submissions/games), so a game added to the server
@@ -17,9 +17,19 @@ enum GameHosts {
     @MainActor private static var fromServer: Set<String> = []
 
     @MainActor static func learn(_ games: [Game]) {
-        fromServer = Set(games.compactMap { $0.playURL?.host?.lowercased() }.map {
-            $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0
-        })
+        fromServer.formUnion(games.compactMap { $0.playURL?.host.map(base) })
+    }
+
+    /// A game the site's own Play asked for (WebController's `open` message): the site only
+    /// sends games on the board, so it counts as one. The Mac shows the site's Today, not the
+    /// native one that calls `learn`.
+    @MainActor static func trust(_ url: URL) {
+        if let host = url.host { fromServer.insert(base(host)) }
+    }
+
+    private static func base(_ host: String) -> String {
+        let host = host.lowercased()
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     /// Title for the game browser when a link arrives without the web app's game name
@@ -40,6 +50,7 @@ enum GameHosts {
             "worldle.teuteuf.fr": "Worldle", "globle-game.com": "Globle", "travle.earth": "Travle",
             "minutecryptic.com": "Minute Cryptic", "timeguessr.com": "TimeGuessr", "worldguessr.com": "WorldGuessr", "costcodle.com": "Costcodle", "fermi.gg": "Fermi",
             "maptap.gg": "MapTap", "krillion.io": "Krillion", "hbd.gg": "EthnoGuessr", "geoguessr.com": "GeoGuessr",
+            "chainle.io": "Chainle",
         ]
         return byHost.first { host == $0.key || host.hasSuffix("." + $0.key) }?.value ?? host
     }

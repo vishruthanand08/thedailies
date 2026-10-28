@@ -13,6 +13,7 @@ import { adminRouter } from './admin.js'
 import { feedRouter } from './feed.js'
 import { pushRouter, startReminders } from './push.js'
 import { releaseRouter, macDownload } from './release.js'
+import { pageWithMeta, metaFor } from './meta.js'
 import { loadRules, backfillPoints } from './points.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -36,6 +37,11 @@ app.use('/api/feed', feedRouter)
 app.use('/api/push', pushRouter)
 app.use('/api/app', releaseRouter)
 app.get('/download/mac', macDownload)
+// development only: the Vite dev server asks for a page's link-preview tags here (web/vite.config.js),
+// so an invite link from localhost previews like the live site's
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/dev/meta', async (req, res) => res.json(await metaFor(String(req.query.origin || ''), req.query.add)))
+}
 
 app.use((err, req, res, next) => {
   console.error(err)
@@ -45,10 +51,12 @@ app.use((err, req, res, next) => {
 // Production: serve the built frontend from the same service.
 const dist = path.join(__dirname, '../web/dist')
 if (fs.existsSync(dist)) {
-  app.use(express.static(dist, { extensions: ['html'] })) // /privacy -> privacy.html
-  app.get('*', (req, res, next) => {
+  // index: false, so / comes to the handler below and gets its link-preview tags (meta.js)
+  app.use(express.static(dist, { extensions: ['html'], index: false })) // /privacy -> privacy.html
+  const indexHtml = fs.readFileSync(path.join(dist, 'index.html'), 'utf8')
+  app.get('*', async (req, res, next) => {
     if (req.path.startsWith('/api/')) return next()
-    res.sendFile(path.join(dist, 'index.html'))
+    res.type('html').set('Cache-Control', 'no-cache').send(await pageWithMeta(indexHtml, req))
   })
 }
 
