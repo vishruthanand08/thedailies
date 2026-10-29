@@ -95,7 +95,7 @@ struct TodayView: View {
                     groupHeader(group)
                 } footer: {
                     if group.id == model.groups.last?.id && model.favorites.isEmpty {
-                        Text("Tap a game to play it. Swipe right to favorite it.").oneLine()
+                        Text("Tap to play. Played? Tap for the leaderboard.").oneLine()
                     }
                 }
             }
@@ -190,27 +190,31 @@ struct TodayView: View {
 
     // MARK: game rows
 
+    /// Played today (or looking back at a day): the game's leaderboard. Not played yet: the game.
+    private func opensBoard(_ game: Game) -> Bool {
+        !model.isToday || model.myEntry(for: game) != nil
+    }
+
+    private func open(_ game: Game) {
+        if opensBoard(game) { path.append(game.id) } else { model.play(game) }
+    }
+
     private func row(_ game: Game) -> some View {
         let entries = model.entries(for: game)
         let mine = model.myEntry(for: game)
         let favorite = model.prefs.favorites.contains(game.id)
-        let info = Button { path.append(game.id) } label: {
-            Image(systemName: "info.circle")
-                .font(.title3)
-                .foregroundStyle(Color.ink.opacity(0.7))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+        return Button { open(game) } label: {
+            GameCard(game: game, entries: entries, mine: mine, me: model.me, isToday: model.isToday)
         }
         .buttonStyle(.pressIn)
-        .accessibilityLabel("\(game.name) scores")
-        return Button { model.play(game) } label: {
-            GameRow(game: game, entries: entries, mine: mine, isToday: model.isToday)
-                .padding(.trailing, 40) // room for the info button on top
-        }
-        .buttonStyle(.pressIn)
-        .overlay(alignment: .trailing) { info }
-        .listRowBackground(Color.surface)
-        .accessibilityHint(model.isToday ? "Opens the game" : "")
+        // each game is its own card, like the website's tiles
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 8, trailing: 4))
+        .accessibilityHint(opensBoard(game) ? "Shows the leaderboard" : "Opens the game")
+        // no long-press menu: press and hold is how a game is dragged to a new place. Swiping
+        // left offers Leaderboard (and Play or Delete score); VoiceOver gets the same as actions.
+        .accessibilityAction(named: "Leaderboard") { path.append(game.id) }
         .swipeActions(edge: .leading) {
             Button { model.toggleFavorite(game) } label: {
                 Label(favorite ? "Unfavorite" : "Favorite", systemImage: favorite ? "star.slash" : "star.fill")
@@ -228,6 +232,8 @@ struct TodayView: View {
                         .tint(Color.ink)
                 }
             }
+            Button { path.append(game.id) } label: { Label("Leaderboard", systemImage: "list.number") }
+                .tint(Color.highlight)
         }
     }
 }
@@ -363,57 +369,120 @@ private struct CrownCard: View {
     }
 }
 
-/// One game in the list: who's winning and how I did, or a Play button if I haven't played.
-struct GameRow: View {
+/// One game, drawn like the website's tile: the game's tile and name, then the day's top scores
+/// with mine in lilac. Played today: my result and the time until the next puzzle instead of
+/// Play, and tapping opens the leaderboard.
+struct GameCard: View {
     let game: Game
     let entries: [BoardEntry]
     let mine: BoardEntry?
+    let me: String?
     let isToday: Bool
 
-    private var subtitle: String {
-        if let mine { return "\(ordinal(mine.rank)) of \(entries.count)" }
-        if let leader = entries.first { return "\(leader.username) leads · \(leader.display)" }
-        return isToday ? "No scores yet" : "Nobody played"
-    }
+    /// Three is enough to see who's winning; the leaderboard has the rest.
+    private let shown = 3
 
     var body: some View {
-        HStack(spacing: 12) {
-            GameAvatar(game: game)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(game.name).font(.brand(.headline, .bold)).foregroundStyle(Color.ink)
-                    if game.paid != nil {
-                        Image(systemName: "dollarsign.circle.fill")
-                            .imageScale(.small)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("Needs a subscription")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                GameAvatar(game: game, size: 42)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(game.name).font(.brand(.headline, .heavy)).foregroundStyle(Color.ink)
+                        if game.paid != nil {
+                            Image(systemName: "dollarsign.circle.fill")
+                                .imageScale(.small)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("Needs a subscription")
+                        }
+                    }
+                    .oneLine()
+                    if isToday && mine != nil {
+                        NextPuzzle()
+                    } else if !isToday {
+                        Text("Tap for the leaderboard").font(.footnote).foregroundStyle(.secondary).oneLine()
                     }
                 }
-                .oneLine()
-                Text(subtitle).font(.subheadline).foregroundStyle(.secondary).oneLine()
+                if let mine, isToday {
+                    Text(mine.display)
+                        .font(.brand(.headline, .heavy))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .foregroundStyle(Color.ink)
+                        .layoutPriority(1)
+                } else if isToday {
+                    // a cue only: the whole card plays the game
+                    Text("Play")
+                        .font(.brand(.subheadline, .heavy))
+                        .lineLimit(1)
+                        .foregroundStyle(Color.onAccent)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 34)
+                        .background(Capsule().fill(Color.sun))
+                        .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
+                        .layoutPriority(1)
+                }
             }
-            if let mine {
-                Text(mine.display)
-                    .font(.brand(.headline, .heavy))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .foregroundStyle(Color.ink)
-                    .layoutPriority(1)
-            } else if isToday {
-                // a cue only: the whole row plays the game
-                Text("Play")
-                    .font(.brand(.subheadline, .heavy))
-                    .lineLimit(1)
-                    .foregroundStyle(Color.onAccent)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 34)
-                    .background(Capsule().fill(Color.sun))
-                    .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
-                    .layoutPriority(1)
+
+            if entries.isEmpty {
+                Text(isToday ? "No scores yet. Be the first." : "Nobody played this day.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .oneLine()
+            } else {
+                VStack(spacing: 4) {
+                    ForEach(entries.prefix(shown)) { scoreRow($0) }
+                    if entries.count > shown {
+                        Text("+\(entries.count - shown) more")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, 8)
+                            .padding(.top, 2)
+                    }
+                }
             }
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .chunkyCard(.surface)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private func scoreRow(_ e: BoardEntry) -> some View {
+        let isMe = e.username == me
+        return HStack(spacing: 10) {
+            RankBadge(rank: e.rank)
+            Text(e.username).font(.brand(.subheadline, isMe ? .heavy : .semibold)).oneLine()
+            Text(e.display).font(.brand(.subheadline, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
+        }
+        .foregroundStyle(Color.ink)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(isMe ? Color.highlight : Color.clear))
+    }
+}
+
+/// "Next in 4h 12m" to local midnight, when most games put out the next puzzle (the website's
+/// countdown); seconds in the last hour.
+struct NextPuzzle: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text("Next in \(Self.label(at: context.date))")
+                .font(.footnote.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .oneLine()
+        }
+        .accessibilityLabel("Played. Next puzzle at midnight")
+    }
+
+    static func label(at now: Date) -> String {
+        let midnight = Calendar.current.startOfDay(for: now).addingTimeInterval(24 * 60 * 60)
+        let secs = max(0, Int(midnight.timeIntervalSince(now)))
+        let h = secs / 3600, m = secs % 3600 / 60, s = secs % 60
+        return h > 0 ? "\(h)h \(m)m" : "\(m)m \(String(format: "%02d", s))s"
     }
 }
 

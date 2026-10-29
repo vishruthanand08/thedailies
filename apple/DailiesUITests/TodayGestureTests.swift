@@ -37,6 +37,16 @@ final class TodayAddAndReorderTests: XCTestCase {
         return app
     }
 
+    /// Needs a score of mine on today's Wordle and none on Connections.
+    func testPlayedGameOpensItsLeaderboard() {
+        let app = launch()
+        let wordle = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Wordle'")).firstMatch
+        XCTAssertTrue(wordle.waitForExistence(timeout: 10))
+        wordle.tap()
+        XCTAssertTrue(app.staticTexts["Today's board"].waitForExistence(timeout: 5), "a played game didn't open its leaderboard")
+        XCTAssertTrue(app.navigationBars["Wordle"].exists)
+    }
+
     func testPlusTabOpensAddScoreAndSubmits() {
         let app = launch()
         app.tabBars.buttons["Add score"].tap()
@@ -46,7 +56,7 @@ final class TodayAddAndReorderTests: XCTestCase {
         let box = app.textViews["Game result"]
         XCTAssertTrue(box.waitForExistence(timeout: 5))
         box.typeText("hello, not a game result")
-        app.buttons["Add"].tap()
+        app.buttons["Add score"].tap()
 
         // the sheet closes and the server's answer shows as a banner over Today
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'recognize'")).firstMatch.waitForExistence(timeout: 10),
@@ -61,13 +71,17 @@ final class TodayAddAndReorderTests: XCTestCase {
         XCTAssertTrue(first.waitForExistence(timeout: 10) && second.exists)
         XCTAssertLessThan(first.frame.minY, second.frame.minY)
 
-        second.press(forDuration: 1.0, thenDragTo: first)
-        sleep(1)
+        // cards are tall (they list the day's scores): drop near the top edge of the one to go above
+        let topOf = { (e: XCUIElement) in e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)) }
+        second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 1.0, thenDragTo: topOf(first))
+        sleep(2) // the list settles and saves the new order
         XCTAssertLessThan(second.frame.minY, first.frame.minY, "press-and-drag didn't move Connections above Wordle")
 
         // put it back
-        first.press(forDuration: 1.0, thenDragTo: second)
-        sleep(1)
+        first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 1.0, thenDragTo: topOf(second))
+        sleep(2)
         XCTAssertLessThan(first.frame.minY, second.frame.minY, "couldn't drag it back")
     }
 }
