@@ -19,7 +19,7 @@ gitignored. Regenerate them against the local demo data with the `-dailiesScreen
 | Privacy Policy URL | https://www.thedailies.lol/privacy |
 | Support URL | https://www.thedailies.lol/support |
 | Marketing URL | https://www.thedailies.lol |
-| Copyright | 2026 <your legal name> |
+| Copyright | 2026 Nicholas Pianfetti |
 | Version | 1.0 (build 1) |
 
 ### Promotional text (170 max, editable any time)
@@ -104,9 +104,10 @@ Expect a 13+ rating.
 ## Release checklist
 
 1. Membership approved (developer.apple.com/account › Membership details); note the Team ID.
-2. A working support email (support@thedailies.lol doesn't exist yet). It is on `/support`, `/privacy`
+2. A working support email: thedailiessupport@gmail.com for now. It is on `/support`, `/privacy`
    and the You tab's "Report a problem" link.
-3. Demo account on the live site with two friends and scores for the day you submit.
+3. Demo account on the live site: `appreview`, friends with `demo_sam` and `demo_alex` (passwords kept
+   out of the repo). Give all three fresh scores on the day you submit.
 4. App Store Connect › Apps › + › New App: iOS + macOS, name The Dailies, bundle ID lol.thedailies.app,
    SKU thedailies-1.
 5. `cd apple && DAILIES_TEAM=<team id> DAILIES_PUSH=-Push xcodegen generate`, open in Xcode, pick the team

@@ -120,7 +120,7 @@ export default function Profile({ me, onLogout }) {
       {inApp && <p className="hint profilelinks">
         <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>
         <a href="/support" target="_blank" rel="noreferrer">Help & support</a>
-        <a href="mailto:support@thedailies.lol?subject=Report%20a%20problem">Report a problem or a user</a>
+        <a href="mailto:thedailiessupport@gmail.com?subject=Report%20a%20problem">Report a problem or a user</a>
       </p>}
     </div>
   )
