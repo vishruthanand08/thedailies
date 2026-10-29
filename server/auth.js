@@ -42,11 +42,19 @@ export async function requireAuth(req, res, next) {
 
     const token = req.cookies?.[COOKIE]
     if (!token) return res.status(401).json({ error: 'Not signed in' })
+    let session
     try {
-      req.user = jwt.verify(token, JWT_SECRET)
+      session = jwt.verify(token, JWT_SECRET)
     } catch {
       return res.status(401).json({ error: 'Session expired — sign in again' })
     }
+    // the account may have been deleted since (by its owner or an admin): that signs it out
+    const { rows } = await q('SELECT id, username FROM users WHERE id = $1', [session.id])
+    if (!rows.length) {
+      res.clearCookie(COOKIE)
+      return res.status(401).json({ error: 'Not signed in' })
+    }
+    req.user = { id: rows[0].id, username: rows[0].username }
     next()
   } catch (err) {
     next(err)
@@ -140,7 +148,17 @@ authRouter.delete('/account', requireAuth, async (req, res) => {
   if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash))) {
     return res.status(400).json({ error: 'Your password is wrong' })
   }
-  const id = req.user.id
+  await deleteUser(req.user.id)
+  res.clearCookie(COOKIE)
+  res.json({ ok: true })
+})
+
+/**
+ * Removes a user and every row that references them, children first (the tables reference
+ * users(id)). Used by Delete account and by admins (server/admin.js). Any new table with a
+ * user_id belongs here.
+ */
+export async function deleteUser(id) {
   await q('DELETE FROM game_suggestion_votes WHERE user_id = $1', [id])
   await q('DELETE FROM game_suggestions WHERE user_id = $1', [id]) // their votes cascade
   await q('DELETE FROM api_tokens WHERE user_id = $1', [id])
@@ -152,9 +170,7 @@ authRouter.delete('/account', requireAuth, async (req, res) => {
   await q('DELETE FROM submissions WHERE user_id = $1', [id])
   await q('DELETE FROM friendships WHERE user_a = $1 OR user_b = $1 OR requested_by = $1', [id])
   await q('DELETE FROM users WHERE id = $1', [id])
-  res.clearCookie(COOKIE)
-  res.json({ ok: true })
-})
+}
 
 // ---------- device tokens ----------
 // Plaintext is "dly_" + 32 random bytes (base64url), returned exactly once.

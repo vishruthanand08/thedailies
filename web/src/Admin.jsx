@@ -1,12 +1,102 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
 
-// Admins only (the server checks too): each game's scoring values, and the game suggestions.
+// Admins only (the server checks too): each game's scoring values, the game suggestions, and
+// deleting a user's account.
 export default function Admin() {
   return (
     <div className="admin">
       <ScoringEditor />
       <SuggestionsAdmin />
+      <UsersAdmin />
+    </div>
+  )
+}
+
+const when = (iso) =>
+  iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'never'
+
+// Look an account up first, then type its name to delete it and everything it has (the same as
+// Delete account on its own You tab). It can't be undone, so the lookup says what goes with it.
+function UsersAdmin() {
+  const [name, setName] = useState('')
+  const [user, setUser] = useState(null)
+  const [confirm, setConfirm] = useState('')
+  const [flash, setFlash] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const lookUp = async (e) => {
+    e.preventDefault()
+    setFlash(null)
+    setUser(null)
+    setConfirm('')
+    try {
+      setUser(await api.get(`/admin/users/${encodeURIComponent(name.trim().replace(/^@/, ''))}`))
+    } catch (err) {
+      setFlash({ kind: 'err', msg: err.message })
+    }
+  }
+
+  const remove = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const d = await api.del(`/admin/users/${encodeURIComponent(user.username)}`, { confirm })
+      setFlash({ kind: 'ok', msg: `Deleted @${d.username} and everything tied to the account.` })
+      setUser(null)
+      setName('')
+      setConfirm('')
+    } catch (err) {
+      setFlash({ kind: 'err', msg: err.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3 className="sectiontitle">🧹 Delete a user</h3>
+      <p className="hint small">Look someone up by username. Deleting removes their scores, friendships, kudos, suggestions and devices for good.</p>
+      <form className="adminfind" onSubmit={lookUp}>
+        <input className="input" placeholder="username" value={name} onChange={(e) => setName(e.target.value)} aria-label="Username to look up" />
+        <button className="btn" disabled={!name.trim()}>Look up</button>
+      </form>
+      {flash && <div className={`flash ${flash.kind}`} style={{ marginTop: 10 }}>{flash.msg}</div>}
+      {user && (
+        <div className="adminuser">
+          <div className="who">
+            <div className="avatar">{user.username[0]}</div>
+            <div>
+              <b>@{user.username}</b>
+              <div className="sub">Joined {when(user.createdAt)} · last score {when(user.lastScoreAt)}</div>
+            </div>
+          </div>
+          <ul className="adminfacts">
+            <li><b>{user.scores}</b> scores</li>
+            <li><b>{user.friends.length}</b> friends{user.friends.length ? `: ${user.friends.join(', ')}` : ''}</li>
+            {user.pending.length > 0 && <li><b>{user.pending.length}</b> pending: {user.pending.join(', ')}</li>}
+            <li><b>{user.kudos}</b> kudos given or received</li>
+            <li><b>{user.suggestions}</b> game suggestions</li>
+            <li><b>{user.devices}</b> signed-in app devices</li>
+          </ul>
+          {user.admin ? (
+            <p className="hint">Admins can't be deleted here.</p>
+          ) : (
+            <form className="adminfind" onSubmit={remove}>
+              <input
+                className="input"
+                placeholder={`type ${user.username} to confirm`}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                aria-label={`Type ${user.username} to confirm`}
+              />
+              <button className="btn danger" disabled={busy || confirm.trim().toLowerCase() !== user.username}>
+                {busy ? 'Deleting…' : 'Delete for good'}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   )
 }
