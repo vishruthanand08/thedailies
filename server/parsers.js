@@ -341,6 +341,20 @@ export const GAMES = [
   },
 
   {
+    id: 'sizeitup', category: 'words', name: 'Size It Up', emoji: '📏', color: '#F4CFC9',
+    url: 'https://magnitudle.com/size-it-up', embed: true, metricLabel: 'points', better: 'higher',
+    // Verified from a real share 2026-10-30 ("Size It Up\nOverall Score 222", five rows of 🟥/⬜ with
+    // each round's 0-100, the link) and magnitudle.com's own code. The share has no number or date.
+    // Unlimited, Archive and the Pop Culture / Geography editions put their name on the first line.
+    epoch: null, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/^\s*Size It Up\s*\n\s*Overall Score\s+([\d,]+)/i)
+      if (!m) return null
+      const pts = num(m[1])
+      return { metric: pts, display: `${pts} pts` }
+    },
+  },
+  {
     id: 'poople', category: 'words', name: 'Poople', emoji: '💩', color: '#E8D3BE',
     url: 'https://poople.io', embed: true, metricLabel: 'extra guesses', better: 'lower',
     // Verified from a real share 2026-10-30: "Poople #442 15/6", one row per word (🟫 a letter
@@ -529,6 +543,8 @@ const SCORING = {
   costcodle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
   // five rounds of up to 1,000; 3,560 beat 59% of players on #70, so a typical day is ~3,300
   chainle: { perfect: 5000, par: 3300, zero: 1000 },
+  // five rounds of 0-100; a real day was 222 (rounds 31, 67, 2, 35, 87)
+  sizeitup: { perfect: 450, par: 250, zero: 50 },
   // guesses beyond the shortest path; the best is 0, a few extra is a typical day
   poople: { perfect: 0, par: 4, zero: 15 },
   // entries found out of 10
