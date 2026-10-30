@@ -164,9 +164,22 @@ private struct PasteBar: View {
             .lineLimit(1)
             .foregroundStyle(Color("OnAccent"))
             .frame(maxWidth: .infinity, alignment: .leading)
-            PasteButton(payloadType: String.self) { strings in
-                guard let text = strings.first else { return }
-                Task { @MainActor in onPaste(text) }
+            Group {
+                #if DEBUG
+                if UserDefaults.standard.bool(forKey: "dailiesScreenshots") {
+                    ScreenshotPasteButton() // see AddScoreSheet
+                } else {
+                    PasteButton(payloadType: String.self) { strings in
+                        guard let text = strings.first else { return }
+                        Task { @MainActor in onPaste(text) }
+                    }
+                }
+                #else
+                PasteButton(payloadType: String.self) { strings in
+                    guard let text = strings.first else { return }
+                    Task { @MainActor in onPaste(text) }
+                }
+                #endif
             }
             .labelStyle(.titleAndIcon)
             .buttonBorderShape(.capsule)

@@ -32,12 +32,16 @@ struct AddScoreSheet: View {
                     }
 
                     // the system button reads the clipboard without the "Allow Paste?" prompt
-                    PasteButton(payloadType: String.self) { strings in
-                        guard let text = strings.first else { return }
-                        Task { @MainActor in
-                            SubmissionQueue.shared.enqueue(text)
-                            dismiss()
+                    Group {
+                        #if DEBUG
+                        if UserDefaults.standard.bool(forKey: "dailiesScreenshots") {
+                            ScreenshotPasteButton()
+                        } else {
+                            pasteButton
                         }
+                        #else
+                        pasteButton
+                        #endif
                     }
                     .labelStyle(.titleAndIcon)
                     .buttonBorderShape(.capsule)
@@ -95,9 +99,32 @@ struct AddScoreSheet: View {
         .presentationDragIndicator(.visible)
     }
 
+    private var pasteButton: some View {
+        PasteButton(payloadType: String.self) { strings in
+            guard let text = strings.first else { return }
+            Task { @MainActor in
+                SubmissionQueue.shared.enqueue(text)
+                dismiss()
+            }
+        }
+    }
+
     private func add() {
         SubmissionQueue.shared.enqueue(text)
         dismiss()
     }
 }
+
+#if DEBUG
+/// -dailiesScreenshots YES: the system Paste button as it looks with a result copied. The
+/// Simulator's clipboard is empty (which greys the real one out), and filling it could sync to
+/// the Mac's clipboard.
+struct ScreenshotPasteButton: View {
+    var body: some View {
+        Button {} label: { Label("Paste", systemImage: "doc.on.clipboard") }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+    }
+}
+#endif // DEBUG
 #endif

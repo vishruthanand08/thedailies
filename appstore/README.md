@@ -2,8 +2,7 @@
 
 Everything to paste into App Store Connect for The Dailies (iPhone + Mac, one app record, universal purchase).
 Screenshots are in `screenshots/iphone-6.9/` (1320×2868) and `screenshots/mac/` (2880×1800), both
-gitignored. Regenerate them against the local demo data with the `-dailiesScreenshots YES` launch flag
-(iPhone Pro Max Simulator; on the Mac, capture the window and pad it onto a 2880×1800 canvas).
+gitignored; the previous set is in `screenshots/old-2026-10-27/`. How they're made is under Screenshots.
 
 ## App information
 
@@ -97,9 +96,37 @@ Expect a 13+ rating.
 
 ## Screenshots
 
-- **iPhone 6.9"** (required): use the five in `screenshots/iphone-6.9/` in order. Apple scales them for
-  smaller iPhones.
-- **Mac** (required, 1–10): use the four in `screenshots/mac/` in order (2880×1800).
+Marketing frames, not bare captures: a short benefit-led caption (4–8 words, key word on the site's yellow
+highlighter) over the real app in a frame with the site's outline and hard shadow. The first three carry
+the pitch, since App Store search results show only those. Upload in this order.
+
+**iPhone (1320×2868; App Store Connect scales them for smaller iPhones):**
+
+| # | File | Caption |
+|---|---|---|
+| 1 | `01-today.png` | Beat your friends at **every** daily game |
+| 2 | `02-paste.png` | Play, then **paste**. That's it. |
+| 3 | `03-leaderboard.png` | See who won **every** game |
+| 4 | `04-feed.png` | Cheer on your **friends** |
+| 5 | `05-games.png` | **30+** daily games in one place (a graphic of the games, no phone) |
+| 6 | `06-friends.png` | Add friends with **one link** |
+
+**Mac (2880×1800):** `01-today` Every daily game, **one window** · `02-play` Play right **in the app** ·
+`03-feed` Cheer on your **friends** · `04-friends` Add friends with **one link**.
+
+**Remaking them** (local server with demo data, so no real accounts show):
+1. Fill today with demo scores and kudos for alex/maya/jules/sam/priya (stop the dev API first; PGlite allows
+   one process). Restart it with `ADMIN_USERNAMES` not listing alex, so no Admin tab shows.
+2. iPhone: a freshly erased iPhone Pro Max Simulator (1320×2868) with `simctl status_bar … --time 9:41`,
+   launched with `-dailiesServer local -dailiesScreenshots YES` (hides the debug gear and the notification
+   prompt, and shows Paste as it looks with a result copied) plus `-dailiesTab feed|friends`,
+   `-dailiesGame wordle`, `-dailiesAddSheet YES` or `-dailiesOpenGame <url>`. Save to `shots-raw/<name>.png`.
+3. Mac: the DailiesDirect Debug app at a 1440×900 window (2880×1800 on Retina), captured by window id. Save
+   to `mac-raw/<name>.png`.
+4. `node appstore/screenshot-kit/make-iphone.mjs <scratch dir>` and `make-mac.mjs <scratch dir>` write the
+   pages; render each with headless Chrome at the exact size (`--window-size=1320,2868` or `2880,1800`,
+   `--force-device-scale-factor=1`). The scripts lay `https://thedailies.lol/?add=alex` over the local
+   invite link.
 
 ## Release checklist
 

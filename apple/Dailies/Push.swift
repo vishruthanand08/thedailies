@@ -44,6 +44,10 @@ final class Push: NSObject {
     /// Asks the first time (the system remembers the answer), and registers again on later
     /// launches, since Apple can change a device's token.
     func registerIfAllowed() async {
+        #if DEBUG
+        // -dailiesScreenshots YES: no permission prompt over the App Store screenshots
+        if UserDefaults.standard.bool(forKey: "dailiesScreenshots") { return }
+        #endif
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
