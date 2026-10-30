@@ -341,6 +341,23 @@ export const GAMES = [
   },
 
   {
+    id: 'poople', category: 'words', name: 'Poople', emoji: '💩', color: '#E8D3BE',
+    url: 'https://poople.io', embed: true, metricLabel: 'extra guesses', better: 'lower',
+    // Verified from a real share 2026-10-30: "Poople #442 15/6", one row per word (🟫 a letter
+    // matching POOP, ⬜ not), then "https://poople.io/". From poople.io's own code: change one letter
+    // at a time until the word is POOP; 15 is the guesses used and 6 the shortest path, so the metric
+    // is the extra guesses (its own stats average the same). #1 was 2025-08-15; it resets 08:00 UTC.
+    epoch: { date: '2025-08-15', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/Poople\s+#([\d,]+)\s+(\d+)\s*\/\s*(\d+)/i)
+      if (!m) return null
+      const used = num(m[2])
+      const best = num(m[3])
+      return { puzzleNumber: num(m[1]), metric: Math.max(0, used - best), display: `${used}/${best}` }
+    },
+  },
+
+  {
     id: 'dailytens', category: 'words', name: 'Daily Tens', emoji: '🔟', color: '#F6E3A9',
     url: 'https://dailytens.com', embed: true, metricLabel: 'answers', better: 'higher',
     // Verified from a real share 2026-10-28 ("DailyTens #905", then five rows of two cells,
@@ -512,6 +529,8 @@ const SCORING = {
   costcodle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
   // five rounds of up to 1,000; 3,560 beat 59% of players on #70, so a typical day is ~3,300
   chainle: { perfect: 5000, par: 3300, zero: 1000 },
+  // guesses beyond the shortest path; the best is 0, a few extra is a typical day
+  poople: { perfect: 0, par: 4, zero: 15 },
   // entries found out of 10
   dailytens: { perfect: 10, par: 6, zero: 0 },
   // the average of five 0-100 tests; S is 95+, C (55) a middling day

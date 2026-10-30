@@ -46,7 +46,8 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
     }
   }, [])
 
-  const inviteLink = `${window.location.origin}/?add=${me.username}`
+  // always the www address: the bare thedailies.lol forwards to it and drops ?add=
+  const inviteLink = `${import.meta.env.PROD ? 'https://www.thedailies.lol' : window.location.origin}/?add=${me.username}`
   const copyInvite = async () => {
     try {
       await navigator.clipboard.writeText(inviteLink)

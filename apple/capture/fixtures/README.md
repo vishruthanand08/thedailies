@@ -17,6 +17,7 @@ Only add text captured from a real share. Don't type one from memory or adapt an
 | strands, timeguessr, worldguessr | web shares, 2026-10-27 |
 | chainle | chainle.io share, 2026-10-28 |
 | perceptle, poeltl, gridmlb, dailytens | web shares, 2026-10-28 |
+| poople | web share, 2026-10-30 |
 
 ## Still needed
 

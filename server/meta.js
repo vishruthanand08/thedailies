@@ -42,7 +42,10 @@ export function withMeta(html, { title, tags }) {
   return html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`).replace('<!-- server meta -->', tags)
 }
 
+// links in previews always name the www address: the bare thedailies.lol forwards to it and drops the path
+const SITE = 'https://www.thedailies.lol'
+
 export async function pageWithMeta(html, req) {
-  const origin = `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`
+  const origin = process.env.NODE_ENV === 'production' ? SITE : `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`
   return withMeta(html, await metaFor(origin, req.query.add))
 }
