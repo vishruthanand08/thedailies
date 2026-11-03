@@ -50,6 +50,8 @@ export function buildBoards(rows) {
         points: e.points,
         verified: e.verified,
         submissionId: e.id,
+        // what they pasted, shown when you hover their score (manual entries have none)
+        shareText: e.verified ? e.raw_text : null,
       })),
     })
   }

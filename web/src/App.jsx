@@ -12,6 +12,8 @@ import { MacAppPrompt } from './MacApp.jsx'
 export default function App() {
   const [me, setMe] = useState(undefined) // undefined = loading, null = signed out
   const [tab, setTab] = useState('today')
+  // a player's day to open on the Feed, from tapping their name on Today: { userId, date, submissionId }
+  const [feedFocus, setFeedFocus] = useState(null)
   // ?add=username from an invite link — kept through login/signup, consumed in Friends
   const [pendingAdd, setPendingAdd] = useState(() => {
     const p = new URLSearchParams(window.location.search).get('add')
@@ -85,8 +87,8 @@ export default function App() {
         ))}
       </nav>
 
-      {tab === 'today' && <Today me={me} />}
-      {tab === 'feed' && <Feed me={me} onSeen={() => setUnseen(0)} />}
+      {tab === 'today' && <Today me={me} onOpenDay={(focus) => { setFeedFocus(focus); setTab('feed') }} />}
+      {tab === 'feed' && <Feed me={me} onSeen={() => setUnseen(0)} focus={feedFocus} onFocused={() => setFeedFocus(null)} />}
       {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
       {tab === 'you' && <Profile me={me} onLogout={logout} />}
       {tab === 'admin' && me.admin && <Admin />}

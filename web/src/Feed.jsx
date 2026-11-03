@@ -28,7 +28,7 @@ function byDay(cards, today, waiting = []) {
 
 // One card per player per day, like a Strava activity. Their highlight leads in yellow; friends
 // give the day kudos. Today's friends' highlights sit in a row at the top.
-export default function Feed({ me, onSeen }) {
+export default function Feed({ me, onSeen, focus, onFocused }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -45,6 +45,22 @@ export default function Feed({ me, onSeen }) {
   useEffect(() => {
     load()
   }, [])
+
+  // opened from a name on Today: page back to that player's day, then open it on that game
+  const [focused, setFocused] = useState(null) // { key, submissionId }
+  useEffect(() => {
+    if (!focus || !data || loadingMore) return
+    const key = `${focus.userId}-${focus.date}`
+    if (data.cards.some((c) => `${c.userId}-${c.date}` === key)) {
+      setFocused({ key, submissionId: focus.submissionId })
+      onFocused()
+      requestAnimationFrame(() => document.getElementById(`day-${key}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
+    } else if (data.nextBefore && focus.date < data.nextBefore) {
+      more()
+    } else {
+      onFocused()
+    }
+  }, [focus, data, loadingMore])
 
   const more = async () => {
     setLoadingMore(true)
@@ -155,6 +171,7 @@ export default function Feed({ me, onSeen }) {
               onKudos={() => toggleKudos(card)}
               onHighlight={(game) => highlight(card, game)}
               pickable={card.userId === me.id && card.date === data.today}
+              focusGame={focused?.key === `${card.userId}-${card.date}` ? focused.submissionId : null}
             />
           ))}
         </section>
@@ -169,15 +186,21 @@ export default function Feed({ me, onSeen }) {
   )
 }
 
-function DayCard({ card, me, pickable, onKudos, onHighlight }) {
+function DayCard({ card, me, pickable, focusGame, onKudos, onHighlight }) {
   const [expanded, setExpanded] = useState(false)
   const [receipt, setReceipt] = useState(null) // submissionId whose share text is open
+  // the game tapped on Today: show every game if it's past the first few, and open its share
+  useEffect(() => {
+    if (!focusGame) return
+    if (card.games.findIndex((g) => g.submissionId === focusGame) >= SHOWN) setExpanded(true)
+    setReceipt(focusGame)
+  }, [focusGame])
   const mine = card.userId === me.id
   const canPick = pickable && card.games.length > 1
   const games = expanded ? card.games : card.games.slice(0, SHOWN)
 
   return (
-    <article id={`day-${card.userId}-${card.date}`} className="card feeditem daycard">
+    <article id={`day-${card.userId}-${card.date}`} className={`card feeditem daycard${focusGame ? ' focused' : ''}`}>
       <div className="feedhead">
         <div className="avatar">{card.username[0]}</div>
         <div className="feedwho">

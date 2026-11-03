@@ -35,7 +35,7 @@ function prettyDate(iso, today) {
   })
 }
 
-export default function Today({ me }) {
+export default function Today({ me, onOpenDay }) {
   const [games, setGames] = useState([])
   const [board, setBoard] = useState(null)
   const [date, setDate] = useState(null) // null until first load
@@ -132,6 +132,9 @@ export default function Today({ me }) {
   }, [games, prefs.favorites])
   const orderedCategories = useMemo(() => arrange(categories, prefs.categoryOrder ?? []), [categories, prefs.categoryOrder])
   const collapsed = useMemo(() => new Set(prefs.collapsed ?? []), [prefs.collapsed])
+  const [query, setQuery] = useState('') // the game search under the crown
+  const [only, setOnly] = useState('all') // the filter beside it: one group's games, or all
+  const [filterOpen, setFilterOpen] = useState(false)
   const groups = [
     { id: 'favorites', title: '★ Favorites', games: favGames, movable: false },
     ...orderedCategories.map((c) => ({
@@ -139,6 +142,12 @@ export default function Today({ me }) {
       games: ordered.filter((g) => g.category === c.id),
     })),
   ].filter((group) => group.games.length > 0)
+  const search = query.trim().toLowerCase()
+  const filtered = only !== 'all' && groups.some((group) => group.id === only)
+  const shownGroups = groups
+    .filter((group) => !filtered || group.id === only)
+    .map((group) => (search ? { ...group, games: group.games.filter((g) => g.name.toLowerCase().includes(search)) } : group))
+    .filter((group) => group.games.length > 0)
   // games only move within their group. Favorites are ordered by the favorites list itself and
   // categories by the game order, so rearranging one never reshuffles the other.
   const gameCategoryRef = useRef({})
@@ -469,8 +478,48 @@ export default function Today({ me }) {
 
       {prefsError && <div className="flash err gridflash" role="status">{prefsError}</div>}
 
-      {groups.map((group) => {
-        const open = !collapsed.has(group.id)
+      <div className="searchrow">
+        <input
+          className="input gamesearch"
+          type="search"
+          placeholder="Search games"
+          aria-label="Search games"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+        />
+        <button
+          className={`filterbtn${filtered ? ' on' : ''}`}
+          aria-expanded={filterOpen}
+          aria-label="Filter games by category"
+          title="Filter by category"
+          onClick={() => setFilterOpen((v) => !v)}
+        >
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+            <path d="M2.5 4h15l-6 7v5l-3 1.5V11z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          </svg>
+          {filtered && <span className="filtername">{groups.find((group) => group.id === only).title}</span>}
+        </button>
+      </div>
+      {filterOpen && (
+        <div className="scopechips filterchips" role="group" aria-label="Show games in">
+          {[{ id: 'all', title: 'All games' }, ...groups].map((group) => (
+            <button
+              key={group.id}
+              className={`scopechip${(group.id === 'all' ? !filtered : only === group.id) ? ' active' : ''}`}
+              aria-pressed={group.id === 'all' ? !filtered : only === group.id}
+              onClick={() => setOnly(group.id)}
+            >
+              {group.title}
+            </button>
+          ))}
+        </div>
+      )}
+      {search && shownGroups.length === 0 && <p className="hint nomatch">No games match “{query.trim()}”{filtered ? ' in this group' : ''}.</p>}
+
+      {shownGroups.map((group) => {
+        // searching or filtering opens the groups shown so a match is never hidden in a collapsed one
+        const open = search !== '' || filtered || !collapsed.has(group.id)
         return (
           <section
             key={group.id}
@@ -526,6 +575,7 @@ export default function Today({ me }) {
                     onManual={submitManual}
                     onPlay={setPlaying}
                     onLeave={leftForGame}
+                    onOpenDay={(e) => onOpenDay({ userId: e.userId, date, submissionId: e.submissionId })}
                   />
                 ))}
               </div>
@@ -542,6 +592,17 @@ export default function Today({ me }) {
       {playing && <GamePanel game={playing} onClose={closePanel} onSaved={() => load(dateRef.current)} />}
     </div>
   )
+}
+
+// a share without its link lines, which only lead back to the game
+function shareBody(text) {
+  if (!text) return null
+  const body = text
+    .split('\n')
+    .filter((line) => !/^\s*(https?:\/\/|www\.)\S*\s*$/i.test(line))
+    .join('\n')
+    .trim()
+  return body || null
 }
 
 // "Next in 4h 12m", ticking; seconds in the last hour
@@ -565,7 +626,7 @@ function NextDrop() {
 
 function GameTile({
   game, entries, me, isToday, favorite, dragging,
-  onFavorite, onDragStart, onNudge, onRemove, onManual, onPlay, onLeave,
+  onFavorite, onDragStart, onNudge, onRemove, onManual, onPlay, onLeave, onOpenDay,
 }) {
   const [manualOpen, setManualOpen] = useState(false)
   const [manualVal, setManualVal] = useState('')
@@ -598,7 +659,7 @@ function GameTile({
       // the whole card plays the game; its own buttons and links keep their jobs. Keyboard users
       // get the same through the Play link.
       onClick={(e) => {
-        if (e.target.closest('button, a, input, textarea, .manualrow, .paidinfo')) return
+        if (e.target.closest('button, a, input, textarea, .manualrow, .paidinfo, .boardrow.hasshare')) return
         play(e, false)
       }}
     >
@@ -718,26 +779,46 @@ function GameTile({
       {entries.length === 0 ? (
         <div className="noscores">No scores yet{isToday ? ' — be first' : ''}</div>
       ) : (
-        entries.map((e) => (
-          <div key={e.userId} className={`boardrow${e.userId === me.id ? ' me' : ''}`}>
-            <span className="rank">{['🥇', '🥈', '🥉'][e.rank - 1] ?? `${e.rank}.`}</span>
-            <span>
-              {e.username}
-              {!e.verified && <span className="unverified"> ~manual</span>}
-            </span>
-            <span className="score">{e.display}</span>
-            {e.userId === me.id && isToday && (
-              <button
-                className="del"
-                title="Delete my score"
-                aria-label={`Delete my ${game.name} score`}
-                onClick={() => onRemove(e.submissionId)}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        ))
+        entries.map((e) => {
+          const share = shareBody(e.shareText)
+          return (
+            <div
+              key={e.userId}
+              className={`boardrow${e.userId === me.id ? ' me' : ''}${share ? ' hasshare' : ''}`}
+              // hover shows what they pasted; tapping (focus) does the same on touch screens
+              tabIndex={share ? 0 : undefined}
+            >
+              <span className="rank">{['🥇', '🥈', '🥉'][e.rank - 1] ?? `${e.rank}.`}</span>
+              <span>
+                <button
+                  className="whobtn"
+                  title={`See ${e.userId === me.id ? 'your' : `${e.username}'s`} day on the Feed`}
+                  onClick={() => onOpenDay(e)}
+                >
+                  {e.username}
+                </button>
+                {!e.verified && <span className="unverified"> ~manual</span>}
+              </span>
+              <span className="score">{e.display}</span>
+              {e.userId === me.id && isToday && (
+                <button
+                  className="del"
+                  title="Delete my score"
+                  aria-label={`Delete my ${game.name} score`}
+                  onClick={() => onRemove(e.submissionId)}
+                >
+                  ✕
+                </button>
+              )}
+              {share && (
+                <div className="sharepop" role="tooltip">
+                  <div className="sharewho">{e.username}</div>
+                  <pre>{share}</pre>
+                </div>
+              )}
+            </div>
+          )
+        })
       )}
     </div>
   )
