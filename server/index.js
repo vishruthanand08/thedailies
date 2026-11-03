@@ -11,6 +11,7 @@ import { prefsRouter } from './prefs.js'
 import { suggestionsRouter } from './suggestions.js'
 import { adminRouter } from './admin.js'
 import { feedRouter } from './feed.js'
+import { globalRouter } from './global.js'
 import { pushRouter, startReminders } from './push.js'
 import { releaseRouter, macDownload, windowsDownload, windowsUpdateFeed, appcast } from './release.js'
 import { pageWithMeta, metaFor } from './meta.js'
@@ -34,6 +35,7 @@ app.use('/api/prefs', prefsRouter)
 app.use('/api/suggestions', suggestionsRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/feed', feedRouter)
+app.use('/api/global', globalRouter)
 app.use('/api/push', pushRouter)
 app.use('/api/app', releaseRouter)
 app.get('/download/mac', macDownload)

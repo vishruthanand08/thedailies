@@ -133,3 +133,13 @@ CREATE TABLE IF NOT EXISTS push_reminders (
   puzzle_date DATE PRIMARY KEY,
   sent_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Who joined the global leaderboard, and whether they show there under their fun name
+-- (alias, like "Zesty Zebra", picked when they join) instead of their username.
+CREATE TABLE IF NOT EXISTS global_members (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  anonymous BOOLEAN NOT NULL DEFAULT false,
+  alias TEXT,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE global_members ADD COLUMN IF NOT EXISTS alias TEXT;
