@@ -306,6 +306,7 @@ export default function Today({ me, onOpenDay }) {
 
   // the crown card can show the overall standings or one category's
   const [crownScope, setCrownScope] = useState('all')
+  const [crownAll, setCrownAll] = useState(false) // the whole standings, not just the top five
 
   const load = (d) => {
     api.get(`/submissions/board${d ? `?date=${d}` : ''}`).then((resp) => {
@@ -464,16 +465,37 @@ export default function Today({ me, onOpenDay }) {
         ) : (crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).length === 0 && (
           <p className="hint crownempty">Nobody has played these games {isToday ? 'yet today' : 'this day'}.</p>
         )}
-        {(crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []).map((c, i) => (
-          <div key={c.userId} className={`crownrow${c.userId === me.id ? ' me' : ''}`}>
-            <span>{['🥇', '🥈', '🥉'][(c.rank ?? i + 1) - 1] ?? `${c.rank ?? i + 1}.`}</span>
-            <span>
-              {c.username}{' '}
-              <span className="sub">· {c.games} game{c.games === 1 ? '' : 's'}</span>
-            </span>
-            <span className="pts">{c.points} pts</span>
-          </div>
-        ))}
+        {(() => {
+          const all = crownScope === 'all' ? board.crown : board.categoryCrowns?.[crownScope] ?? []
+          const short = leaders(all, 5, (c) => c.userId === me.id)
+          const row = (c) => {
+            const rank = c.rank ?? all.indexOf(c) + 1
+            return (
+              <div key={c.userId} className={`crownrow${c.userId === me.id ? ' me' : ''}`}>
+                <span className="rank">{['🥇', '🥈', '🥉'][rank - 1] ?? `${rank}.`}</span>
+                <span>
+                  {c.username}{' '}
+                  <span className="sub">· {c.games} game{c.games === 1 ? '' : 's'}</span>
+                </span>
+                <span className="pts">{c.points} pts</span>
+              </div>
+            )
+          }
+          return (
+            <>
+              {(crownAll ? all : short.top).map(row)}
+              {!crownAll && short.me && <>
+                {short.gap && <div className="boardgap" aria-hidden="true">⋯</div>}
+                {row(short.me)}
+              </>}
+              <MoreToggle
+                open={crownAll} hidden={short.hidden} total={all.length}
+                onToggle={() => setCrownAll(!crownAll)}
+                label={crownAll ? 'Show the top five' : `Show all ${all.length} players`}
+              />
+            </>
+          )
+        })()}
       </div>
 
       {prefsError && <div className="flash err gridflash" role="status">{prefsError}</div>}
@@ -595,6 +617,25 @@ export default function Today({ me, onOpenDay }) {
 }
 
 // a share without its link lines, which only lead back to the game
+// A short board: the first `top` rows, plus mine underneath when I'm further down, so you always
+// see your own place. `gap`: rows between the top and me that aren't shown (a ⋯ goes there).
+function leaders(all, top, isMe) {
+  const head = all.slice(0, top)
+  const at = all.findIndex(isMe)
+  if (at < top) return { top: head, me: null, gap: false, hidden: all.length - head.length }
+  return { top: head, me: all[at], gap: at > top, hidden: all.length - head.length - 1 }
+}
+
+// "Show all 8" / "Show less" under a short board
+function MoreToggle({ open, hidden, total, onToggle, label }) {
+  if (!hidden && !open) return null
+  return (
+    <button className="boardmore" aria-expanded={open} onClick={onToggle} aria-label={label}>
+      {open ? 'Show less' : `Show all ${total}`} <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+    </button>
+  )
+}
+
 function shareBody(text) {
   if (!text) return null
   const body = text
@@ -631,7 +672,9 @@ function GameTile({
   const [manualOpen, setManualOpen] = useState(false)
   const [manualVal, setManualVal] = useState('')
   const [paidOpen, setPaidOpen] = useState(false)
+  const [boardAll, setBoardAll] = useState(false) // every score, not just the top three
   const mine = entries.find((e) => e.userId === me.id)
+  const short = leaders(entries, 3, (e) => e.userId === me.id)
 
   // Play: in the app, native decides between the in-app game browser and Safari; on the site,
   // games that allow framing open in a panel (cmd/ctrl-click still opens a tab), others a new tab
@@ -778,8 +821,10 @@ function GameTile({
       {game.note && entries.length === 0 && <div className="hint">{game.note}</div>}
       {entries.length === 0 ? (
         <div className="noscores">No scores yet{isToday ? ' — be first' : ''}</div>
-      ) : (
-        entries.map((e) => {
+      ) : (<>{
+        [...(boardAll ? entries : short.top), ...(!boardAll && short.me ? [null, short.me] : [])].map((e) => {
+          // null: the ⋯ between the top three and my own row further down
+          if (!e) return short.gap ? <div key="gap" className="boardgap" aria-hidden="true">⋯</div> : null
           const share = shareBody(e.shareText)
           return (
             <div
@@ -818,8 +863,13 @@ function GameTile({
               )}
             </div>
           )
-        })
-      )}
+        })}
+        <MoreToggle
+          open={boardAll} hidden={short.hidden} total={entries.length}
+          onToggle={() => setBoardAll(!boardAll)}
+          label={boardAll ? `Show the top three for ${game.name}` : `Show all ${entries.length} ${game.name} scores`}
+        />
+      </>)}
     </div>
   )
 }

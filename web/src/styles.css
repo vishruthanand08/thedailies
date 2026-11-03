@@ -173,12 +173,13 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
 .flash.ok { background: #d9f2e2; }
 .flash.err { background: #fbd3cb; }
 
-.crowncard { background: var(--yellow); margin-bottom: 22px; }
-.crowncard h3 { margin: 0 0 12px; font-size: 18px; font-weight: 800; }
+.crowncard { background: var(--yellow); margin-bottom: 22px; padding: 16px 18px; }
+.crowncard h3 { margin: 0 0 10px; font-size: 16px; font-weight: 800; }
 .crownrow {
-  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px;
-  font-weight: 600; font-size: 15px;
+  display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 10px;
+  font-weight: 600; font-size: 14px;
 }
+.crownrow .rank { width: 22px; text-align: center; flex-shrink: 0; }
 .crownrow.me { background: #fff; border: var(--border); box-shadow: var(--shadow-sm); font-weight: 800; }
 .crownrow .pts { margin-left: auto; font-weight: 800; }
 .crownrow .sub { color: var(--muted); font-size: 12px; font-weight: 500; }
@@ -248,6 +249,15 @@ textarea.input { resize: vertical; min-height: 96px; font-size: 14px; line-heigh
   background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 2px; opacity: 0.6;
 }
 .boardrow .del:hover { opacity: 1; }
+/* ⋯ between the top of a short board and my own row; Show all / Show less under it */
+.boardgap { text-align: center; color: var(--muted); font-weight: 800; line-height: 0.6; padding: 2px 0 6px; letter-spacing: 2px; }
+.boardmore {
+  font: inherit; font-size: 12.5px; font-weight: 700; color: var(--muted); background: none; border: 0;
+  cursor: pointer; padding: 4px 8px; margin-top: 2px; align-self: flex-start; border-radius: 8px;
+}
+.boardmore:hover { color: var(--ink); text-decoration: underline; }
+.boardmore:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.crowncard .boardmore { display: block; margin: 4px auto 0; }
 .noscores { color: var(--muted); font-size: 13.5px; font-weight: 500; padding: 4px 2px; }
 .unverified { font-size: 11px; font-weight: 700; color: var(--muted); }
 
