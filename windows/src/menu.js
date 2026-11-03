@@ -58,6 +58,7 @@ function buildMenu(on) {
         { label: 'Support', click: () => on.openPage('/support') },
         { label: 'Privacy Policy', click: () => on.openPage('/privacy') },
         { type: 'separator' },
+        { label: 'Check for Updates…', click: on.checkForUpdates },
         {
           label: 'About The Dailies',
           click: () => dialog.showMessageBox({

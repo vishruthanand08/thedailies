@@ -8,6 +8,7 @@ const site = require('./site')
 const { readClipboardText } = require('./clipboard')
 const { GamePanel, panelIn, registerPanelIpc } = require('./gamePanel')
 const { buildMenu } = require('./menu')
+const updates = require('./updates')
 
 let mainWindow = null
 let overlay = null // the game panel open over the main window
@@ -91,9 +92,11 @@ function start() {
     day: (days) => onSite((wc) => site.showDay(wc, days))(),
     reload: onSite(() => site.loadSite(mainWindow)),
     openPage: (p) => site.openExternally(new URL(p, SITE).href),
+    checkForUpdates: () => updates.checkNow(),
   }))
 
   mainWindow = site.createMainWindow({ openGame })
+  updates.startUpdates()
   // closing the main window quits, game windows included
   mainWindow.on('closed', () => {
     mainWindow = null

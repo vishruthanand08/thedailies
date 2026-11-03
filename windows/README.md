@@ -26,6 +26,7 @@ adds a Start menu and desktop shortcut.
 | `src/pages/offline.*` | "Can't reach The Dailies", retrying by itself |
 | `src/pages/site.css` | The site's tokens and styles for these pages; keep in step with `web/src/styles.css` |
 | `src/hosts.js` | Which sites are games (from the server's list and Play taps); others open in the browser |
+| `src/updates.js` | Auto-updates: checks `/windows-update/latest.yml` at launch and every 6 hours, downloads in the background, installs on close; Help › Check for Updates… |
 | `src/menu.js` | File › Add Score… Ctrl+N, Edit › Paste Result Ctrl+Shift+V, Go › tabs Ctrl+1–4 and days Ctrl+[ ] T |
 
 Scores from the game panel are posted from the site's own page (`site.submit`), so they use the
@@ -36,7 +37,13 @@ player taps the game's Share or Copy, then Paste result reads the clipboard.
 
 Bump `version` in `package.json`, then `tools/release.sh "What's new"`: it builds the installer,
 uploads it to a GitHub release `windows-<version>` and writes `server/windows-release.json`.
-Commit that file and deploy: the website then offers the download to Windows browsers (a popup
+Commit that file and deploy: installed copies update themselves from `/windows-update/latest.yml`
+(served from that file; the installer and its `.blockmap` are on GitHub), and the website offers the download to Windows browsers (a popup
 once, and a card on the You tab, `web/src/DesktopApp.jsx`) at `/download/windows`.
 
-Not yet: auto-updates (people install a new version by hand), notifications, code signing.
+To try updates locally: `npm start -- --server=local --update-feed=<feed>` (with
+`dev-app-update.yml`). On a Mac the updater asks for `latest-mac.yml`, so serve the feed under
+that name; checking and downloading work there, installing needs Windows. 1.0.0 had no updater,
+so a 1.0.0 install has to be replaced by hand once.
+
+Not yet: notifications, code signing.

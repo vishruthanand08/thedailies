@@ -1,0 +1,4 @@
+# Stands in for the installed app's resources/app-update.yml in development runs (src/updates.js).
+provider: generic
+url: http://localhost:3001/windows-update
+updaterCacheDirName: thedailies-updater-dev

@@ -1,7 +1,7 @@
 {
   "name": "thedailies-windows",
   "productName": "The Dailies",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "The Dailies for Windows: the website in its own window, with every game playable in-app",
   "private": true,
   "main": "src/main.js",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "start:local": "electron . --server=local",
-    "dist": "electron-builder --win --x64 --arm64"
+    "dist": "electron-builder --win --x64 --arm64 --publish never"
   },
   "build": {
     "appId": "lol.thedailies.windows",
@@ -34,6 +34,7 @@
         }
       ]
     },
+    "publish": [{ "provider": "generic", "url": "https://www.thedailies.lol/windows-update" }],
     "nsis": {
       "oneClick": true,
       "perMachine": false,
@@ -45,5 +46,8 @@
   "devDependencies": {
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

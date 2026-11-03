@@ -76,3 +76,21 @@ export function windowsDownload(req, res) {
   if (!r) return res.status(404).send('There’s no Windows app to download yet.')
   res.redirect(302, r.url)
 }
+
+// The Windows app's update feed (windows/src/updates.js, electron-updater's generic provider):
+// the newest installer, its SHA-512 and size. A release without a sha512 isn't offered here.
+export function windowsUpdateFeed(req, res) {
+  const r = windowsRelease()
+  if (!r?.sha512) return res.status(404).type('text/plain').send('No Windows update feed yet.')
+  const q = JSON.stringify // a JSON string is a valid YAML double-quoted string
+  res.type('text/yaml').set('Cache-Control', 'no-cache').send(`version: ${q(r.version)}
+files:
+  - url: ${q(r.url)}
+    sha512: ${q(r.sha512)}
+    size: ${Number(r.length) || 0}
+path: ${q(r.url)}
+sha512: ${q(r.sha512)}
+releaseDate: ${q(r.published || new Date().toISOString())}
+releaseNotes: ${q(r.notes || '')}
+`)
+}
