@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="site.css" />
+  <title>Game</title>
+</head>
+<!-- The game panel's frame (src/gamePanel.js). The game's own view is laid over #hole. -->
+<body>
+  <div class="gamepanel-backdrop" id="backdrop">
+    <div class="gamepanel" role="dialog" aria-modal="true">
+      <div class="gamepanel-head">
+        <div class="gameicon" id="icon"></div>
+        <div class="name" id="name"></div>
+        <button class="playlink" id="popout" title="Play in its own window">Window ↗</button>
+        <button class="btn ghost small" id="close">✕</button>
+      </div>
+      <div class="hole" id="hole"></div>
+      <div class="gamepanel-foot">
+        <div class="flash" id="flash" role="status" hidden></div>
+        <div class="row">
+          <span class="hint">Finished? Tap Share or Copy in the game, then</span>
+          <button class="pastefab inpanel" id="paste" title="Paste the result you copied (Ctrl+Shift+V)">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <rect x="5" y="4" width="14" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.2" />
+              <rect x="8.5" y="2" width="7" height="4.5" rx="1.5" fill="var(--yellow)" stroke="currentColor" stroke-width="2" />
+              <path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+            <span id="pastelabel">Paste result</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="panel.js"></script>
+</body>
+</html>

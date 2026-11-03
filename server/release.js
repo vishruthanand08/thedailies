@@ -6,22 +6,32 @@ import { readFileSync } from 'node:fs'
 // "Get the Mac app" links go through /download/mac, which always points at the newest .dmg.
 // apple/tools/release-mac.sh writes mac-release.json for each release; until it exists, there's
 // no Mac download and the site doesn't offer one.
-const file = new URL('./mac-release.json', import.meta.url)
-
-function macRelease() {
+//
+// The Windows app (windows/) works the same way: windows/tools/release.sh writes
+// windows-release.json, /api/app/windows describes it and /download/windows fetches it.
+function readRelease(name, valid) {
   try {
-    const r = JSON.parse(readFileSync(file, 'utf8'))
-    return r.url && Number.isInteger(r.build) ? r : null
+    const r = JSON.parse(readFileSync(new URL(name, import.meta.url), 'utf8'))
+    return r.url && valid(r) ? r : null
   } catch {
     return null
   }
 }
+
+const macRelease = () => readRelease('./mac-release.json', (r) => Number.isInteger(r.build))
+const windowsRelease = () => readRelease('./windows-release.json', (r) => typeof r.version === 'string')
 
 export const releaseRouter = Router()
 
 releaseRouter.get('/mac', (req, res) => {
   const r = macRelease()
   if (!r) return res.status(404).json({ error: 'There’s no Mac app to download yet' })
+  res.set('Cache-Control', 'no-cache').json(r)
+})
+
+releaseRouter.get('/windows', (req, res) => {
+  const r = windowsRelease()
+  if (!r) return res.status(404).json({ error: 'There’s no Windows app to download yet' })
   res.set('Cache-Control', 'no-cache').json(r)
 })
 
@@ -58,5 +68,11 @@ export function appcast(req, res) {
 export function macDownload(req, res) {
   const r = macRelease()
   if (!r) return res.status(404).send('There’s no Mac app to download yet.')
+  res.redirect(302, r.url)
+}
+
+export function windowsDownload(req, res) {
+  const r = windowsRelease()
+  if (!r) return res.status(404).send('There’s no Windows app to download yet.')
   res.redirect(302, r.url)
 }

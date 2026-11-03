@@ -3,7 +3,7 @@ import { api } from './api.js'
 import { RangeRow, unitFor, useGames, useStats } from './Leaderboards.jsx'
 import Devices, { showDevices } from './Devices.jsx'
 import { inApp } from './native.js'
-import { MacAppCard } from './MacApp.jsx'
+import { DesktopAppCard } from './DesktopApp.jsx'
 
 // The You tab: my own stats, plus account things (password, log out, devices).
 export default function Profile({ me, onLogout }) {
@@ -110,7 +110,7 @@ export default function Profile({ me, onLogout }) {
         </div>
       )}
 
-      <MacAppCard />
+      <DesktopAppCard />
       <ChangePassword />
       {showDevices && <Devices />}
       <DeleteAccount onDeleted={onLogout} />

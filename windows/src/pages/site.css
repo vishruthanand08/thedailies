@@ -1,0 +1,106 @@
+/* The website's look (web/src/styles.css) for the app's own pages: the game panel and the
+   offline card. Keep the tokens in step with the site's. */
+:root {
+  --bg: #e9e4f7;
+  --ink: #16162e;
+  --card: #ffffff;
+  --coral: #f2735c;
+  --yellow: #f8d34c;
+  --lilac: #d9ccf5;
+  --muted: #6f6f8a;
+  --radius: 16px;
+  --border: 2.5px solid var(--ink);
+  --shadow: 5px 5px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  color: var(--ink);
+  font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+button { color: var(--ink); font-family: inherit; }
+
+.btn {
+  font-weight: 700; font-size: 15px; cursor: pointer;
+  background: var(--ink); color: #fff; border: var(--border); border-radius: 999px;
+  padding: 10px 22px; box-shadow: var(--shadow-sm);
+}
+.btn.ghost { background: #fff; color: var(--ink); }
+.btn.small { padding: 5px 14px; font-size: 13px; box-shadow: 2px 2px 0 var(--ink); }
+.btn, .pastefab { transition: transform 0.08s ease, box-shadow 0.08s ease; }
+.btn:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+.btn:focus-visible, .playlink:focus-visible { outline: 3px solid var(--coral); outline-offset: 2px; }
+
+.pastefab {
+  display: inline-flex; align-items: center; cursor: pointer; font-weight: 800; color: var(--ink);
+  background: var(--yellow); border: var(--border); border-radius: 999px;
+  height: 46px; padding: 0 20px 0 16px; gap: 7px; font-size: 15px; box-shadow: 4px 4px 0 var(--ink); white-space: nowrap;
+}
+.pastefab:not(:disabled):hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.pastefab:not(:disabled):active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink); }
+.pastefab:disabled { cursor: progress; opacity: 0.8; }
+.pastefab:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+.flash {
+  border: var(--border); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.flash.ok { background: #d9f2e2; }
+.flash.err { background: #fbd3cb; }
+.flash[hidden] { display: none; }
+
+.hint { color: var(--muted); font-size: 13.5px; font-weight: 500; }
+
+.gameicon {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  border: var(--border); border-radius: 10px; width: 34px; height: 34px; font-size: 18px;
+}
+
+/* ---------- game panel (web/src/styles.css .gamepanel) ---------- */
+body.panel { background: transparent; }
+.gamepanel-backdrop {
+  position: fixed; inset: 0; background: rgba(22, 22, 46, 0.55);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.gamepanel {
+  display: flex; flex-direction: column; width: min(560px, 100%); height: min(920px, 100%);
+  background: var(--bg); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+}
+.gamepanel-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: var(--border); }
+.gamepanel-head .name {
+  font-weight: 800; font-size: 16px; flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.playlink {
+  font-size: 13px; font-weight: 600; color: var(--coral); white-space: nowrap;
+  background: none; border: 0; padding: 4px 2px; cursor: pointer;
+}
+.playlink:hover { text-decoration: underline; }
+.hole { flex: 1; min-height: 0; background: #fff; }
+.gamepanel-foot { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-top: var(--border); }
+.gamepanel-foot .row { display: flex; gap: 10px; align-items: center; }
+.gamepanel-foot .hint { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* the pop-out window: the panel fills it */
+body.window .gamepanel-backdrop { background: var(--bg); padding: 0; }
+body.window .gamepanel { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+body.window #popout, body.window #close { display: none; }
+
+/* ---------- offline card ---------- */
+body.offline { background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.card {
+  background: var(--card); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 28px; width: min(420px, 100%); text-align: center;
+}
+.card h1 { margin: 12px 0 6px; font-size: 22px; font-weight: 800; }
+.card p { margin: 0 0 20px; }
+.logo { display: inline-flex; align-items: center; font-weight: 800; font-size: 22px; }
+.logo .pill { background: var(--ink); color: #fff; padding: 2px 12px; border-radius: 10px; transform: rotate(-3deg); display: inline-block; }
+.logo .rest { padding-left: 6px; }
+
+@media (prefers-reduced-motion: reduce) { .btn, .pastefab { transition: none; } }

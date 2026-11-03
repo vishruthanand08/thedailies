@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https: http:" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="site.css" />
+  <title>The Dailies</title>
+</head>
+<!-- Shown when the site doesn't load (src/site.js); like the Mac's CantReach card. -->
+<body class="offline">
+  <div class="card">
+    <div class="logo"><span class="pill">The</span><span class="rest">Dailies</span></div>
+    <h1>Can’t reach The Dailies</h1>
+    <p class="hint">Check your internet connection. This page tries again by itself once you’re back online.</p>
+    <button class="btn" id="retry">Try again</button>
+  </div>
+  <script src="offline.js"></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+{
+  "name": "thedailies-windows",
+  "productName": "The Dailies",
+  "version": "1.0.0",
+  "description": "The Dailies for Windows: the website in its own window, with every game playable in-app",
+  "private": true,
+  "main": "src/main.js",
+  "author": "The Dailies",
+  "scripts": {
+    "start": "electron .",
+    "start:local": "electron . --server=local",
+    "dist": "electron-builder --win --x64 --arm64"
+  },
+  "build": {
+    "appId": "lol.thedailies.windows",
+    "productName": "The Dailies",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "src/assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "TheDailies-Setup-${version}.exe",
+      "shortcutName": "The Dailies",
+      "uninstallDisplayName": "The Dailies"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  }
+}
