@@ -1,7 +1,7 @@
 {
   "name": "thedailies-windows",
   "productName": "The Dailies",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "The Dailies for Windows: the website in its own window, with every game playable in-app",
   "private": true,
   "main": "src/main.js",

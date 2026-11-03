@@ -1,8 +1,8 @@
 {
-  "version": "1.0.1",
-  "url": "https://github.com/vishruthanand08/thedailies/releases/download/windows-1.0.1/TheDailies-Setup-1.0.1.exe",
-  "notes": "The Dailies for Windows now updates itself: new versions download in the background and install when you close the app.",
-  "length": 236688399,
-  "sha512": "VQkPKGdMy2UzZ6YxVoEiDIJI8G/f7mIksi75TCl3Wet3FPe2jspEEsixWfzixJsTX2kZTvjAqYFKeMw+c8SE5Q==",
-  "published": "2026-11-03T03:08:36.354Z"
+  "version": "1.0.3",
+  "url": "https://github.com/vishruthanand08/thedailies/releases/download/windows-1.0.3/TheDailies-Setup-1.0.3.exe",
+  "notes": "Paste result in the game panel works on Windows, and the app keeps a log file for problems (Help › Open Log File).",
+  "length": 236689604,
+  "sha512": "PEdvi2D5xP0PjQx7IKP65MgDWIQhRhOyATU3yQ3jmtunk9rpd+jNFL4/b2P2kwRFxztJcSqpfUEEgF9ZqEl92w==",
+  "published": "2026-11-03T03:42:43.356Z"
 }
