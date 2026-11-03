@@ -1,11 +1,21 @@
 // The Windows clipboard as text: plain text, or the text of a rich copy (some games copy only HTML).
+// Electron's clipboard is asynchronous (modeled on the browser's navigator.clipboard): readText()
+// and read() return promises, so this does too. Always resolves to a string.
 const { clipboard } = require('electron')
 
-function readClipboardText() {
-  const text = clipboard.readText()
-  if (text.trim()) return text
-  const html = clipboard.readHTML()
-  return html ? htmlToText(html) : ''
+async function readClipboardText() {
+  try {
+    const text = await clipboard.readText()
+    if (typeof text === 'string' && text.trim()) return text
+  } catch {}
+  try {
+    for (const item of await clipboard.read()) {
+      if (!item.types.includes('text/html')) continue
+      const html = await item.getType('text/html')
+      return htmlToText(typeof html === 'string' ? html : await html.text())
+    }
+  } catch {}
+  return ''
 }
 
 function htmlToText(html) {

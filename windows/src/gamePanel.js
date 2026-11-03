@@ -77,7 +77,7 @@ class GamePanel {
   }
 
   async paste() {
-    const text = readClipboardText()
+    const text = await readClipboardText()
     if (!text.trim()) return { ok: false, msg: `Clipboard is empty. Tap Share or Copy in ${this.launch.name} first.` }
     return this.submit(text)
   }
