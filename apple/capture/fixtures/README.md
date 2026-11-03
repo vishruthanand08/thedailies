@@ -1,6 +1,7 @@
 # Share text fixtures
 
-One file per game, named `<gameId>.txt`, holding the **exact** text that game's Share button
+One file per game, named `<gameId>.txt` (a game whose share changed format can add more as
+`<gameId>.<label>.txt`), holding the **exact** text that game's Share button
 produced (copied from the share sheet, the Shortcut or the share extension, unedited).
 `npm test` checks that `detect()` in `server/parsers.js` recognizes every fixture as its game.
 
@@ -18,7 +19,8 @@ Only add text captured from a real share. Don't type one from memory or adapt an
 | chainle | chainle.io share, 2026-10-28 |
 | perceptle, poeltl, gridmlb, dailytens | web shares, 2026-10-28 |
 | poople | web share, 2026-10-30 |
-| sizeitup | web share, 2026-10-30 |
+| plain | web share, 2026-11-03 |
+| sizeitup | web share, 2026-10-30; `sizeitup.2026-11-03.txt`: the new "Magnitudle — Size It Up" format |
 
 ## Still needed
 

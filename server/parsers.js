@@ -343,15 +343,37 @@ export const GAMES = [
   {
     id: 'sizeitup', category: 'words', name: 'Size It Up', emoji: '📏', color: '#F4CFC9',
     url: 'https://magnitudle.com/size-it-up', embed: true, metricLabel: 'points', better: 'higher',
-    // Verified from a real share 2026-10-30 ("Size It Up\nOverall Score 222", five rows of 🟥/⬜ with
-    // each round's 0-100, the link) and magnitudle.com's own code. The share has no number or date.
-    // Unlimited, Archive and the Pop Culture / Geography editions put their name on the first line.
+    // Verified from real shares and magnitudle.com's own code (buildGameSharePayload). Since
+    // 2026-11-03: "Magnitudle — Size It Up\n2026-11-03\n\nScore: 250/500", five rows of 🟥/⬜ with each
+    // round's 0-100, the link. The Geography and Pop Culture editions ("Size It Up: Geography") are
+    // other puzzles, and Unlimited and Practice add " · Unlimited" to the date line, so none of those
+    // match. Before that (2026-10-30) the share was "Size It Up\nOverall Score 222", with no date.
     epoch: null, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/^\s*Size It Up\s*\n\s*Overall Score\s+([\d,]+)/i)
-      if (!m) return null
-      const pts = num(m[1])
+      const m = text.match(/^\s*Magnitudle\s*[—–-]\s*Size It Up[ \t]*\n[ \t]*(\d{4}-\d{2}-\d{2})[ \t]*\n\s*Score:\s*([\d,]+)\s*\/\s*[\d,]+/i)
+      if (m) {
+        const pts = num(m[2])
+        return { date: m[1], metric: pts, display: `${pts} pts` }
+      }
+      const old = text.match(/^\s*Size It Up\s*\n\s*Overall Score\s+([\d,]+)/i)
+      if (!old) return null
+      const pts = num(old[1])
       return { metric: pts, display: `${pts} pts` }
+    },
+  },
+  {
+    id: 'plain', category: 'words', name: 'Plain', emoji: '✈️', color: '#CFE3F5',
+    url: 'https://playplain.app/play', metricLabel: 'meters', better: 'higher',
+    // Verified from a real share 2026-11-03 ("Plain #17 — ✈️ 4,558 m", one dot per round, the Golden
+    // round, "Top 63% today", a challenge link) and playplain.app's own code: puzzle #1 is
+    // PUZZLE_EPOCH_DATE 2026-10-18, days count in UTC, and the best possible flight is 10,000 m.
+    // It refuses framing (X-Frame-Options: DENY), so Play opens a new tab on the website.
+    epoch: { date: '2026-10-18', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/^\s*Plain\s+#(\d+)\s*[—–-]\s*(?:✈️?\s*)?([\d,]+)\s*m\b/)
+      if (!m) return null
+      const meters = num(m[2])
+      return { puzzleNumber: num(m[1]), metric: meters, display: `${meters.toLocaleString('en-US')} m` }
     },
   },
   {
@@ -545,6 +567,8 @@ const SCORING = {
   chainle: { perfect: 5000, par: 3300, zero: 1000 },
   // five rounds of 0-100; a real day was 222 (rounds 31, 67, 2, 35, 87)
   sizeitup: { perfect: 450, par: 250, zero: 50 },
+  // meters of a 10,000 m best; a real day was 4,558 m, "Top 63% today"
+  plain: { perfect: 9000, par: 5000, zero: 1000 },
   // guesses beyond the shortest path; the best is 0, a few extra is a typical day
   poople: { perfect: 0, par: 4, zero: 15 },
   // entries found out of 10

@@ -13,8 +13,9 @@ test('fixtures exist', () => {
 })
 
 for (const file of fixtures) {
-  const gameId = file.replace(/\.txt$/, '')
-  test(`${gameId} fixture is detected as ${gameId}`, () => {
+  // <gameId>.txt, or <gameId>.<anything>.txt for another format of the same game
+  const gameId = file.replace(/(\.[^.]+)?\.txt$/, '')
+  test(`${file} is detected as ${gameId}`, () => {
     assert.ok(GAMES.some((g) => g.id === gameId), `no game with id "${gameId}"`)
     const text = fs.readFileSync(new URL(file, dir), 'utf8')
     const hit = detect(text)
