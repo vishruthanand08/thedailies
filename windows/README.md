@@ -27,10 +27,11 @@ adds a Start menu and desktop shortcut.
 | `src/pages/site.css` | The site's tokens and styles for these pages; keep in step with `web/src/styles.css` |
 | `src/hosts.js` | Which sites are games (from the server's list and Play taps); others open in the browser |
 | `src/updates.js` | Auto-updates: checks `/windows-update/latest.yml` at launch and every 6 hours, downloads in the background, installs on close; Help › Check for Updates… |
+| `src/log.js` | `%APPDATA%\\The Dailies\\dailies.log` (Help › Open Log File): failed saves and updates |
 | `src/menu.js` | File › Add Score… Ctrl+N, Edit › Paste Result Ctrl+Shift+V, Go › tabs Ctrl+1–4 and days Ctrl+[ ] T |
 
-Scores from the game panel are posted from the site's own page (`site.submit`), so they use the
-site's sign-in cookie; there are no device tokens on Windows. Game pages are never scripted: the
+Scores from the game panel are posted by the app itself (`site.submit`, `session.fetch` with the
+site's sign-in cookie), not from inside the page; there are no device tokens on Windows. Game pages are never scripted: the
 player taps the game's Share or Copy, then Paste result reads the clipboard.
 
 ## Releasing

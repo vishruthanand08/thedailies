@@ -11,6 +11,7 @@ const { BrowserWindow, WebContentsView, ipcMain } = require('electron')
 const path = require('node:path')
 const hosts = require('./hosts')
 const { readClipboardText } = require('./clipboard')
+const { log } = require('./log')
 
 const PANEL_PAGE = path.join(__dirname, 'pages', 'panel.html')
 const panels = new Map() // the panel page's webContents id -> GamePanel
@@ -141,7 +142,13 @@ function registerPanelIpc() {
   })
   ipcMain.handle('panel:paste', async (e) => {
     const p = from(e)
-    return p ? p.paste() : { ok: false, msg: 'That game is closed.' }
+    if (!p) return { ok: false, msg: 'That game is closed.' }
+    try {
+      return await p.paste()
+    } catch (err) {
+      log('paste failed:', err)
+      return { ok: false, msg: 'Couldn’t save that. Try again, or paste it on the board.' }
+    }
   })
 }
 

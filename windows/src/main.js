@@ -1,7 +1,7 @@
 // The Dailies for Windows: the website in its own window (src/site.js), every game playable in a
 // panel over it (src/gamePanel.js), and the Mac app's menu commands. The site needs no changes:
 // it already talks to the Mac app's bridge, which src/preload-site.js offers here too.
-const { app, BrowserWindow, Menu, ipcMain, session } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, session, shell } = require('electron')
 const { SITE, isOwnSite, cleanUserAgent } = require('./config')
 const hosts = require('./hosts')
 const site = require('./site')
@@ -9,6 +9,7 @@ const { readClipboardText } = require('./clipboard')
 const { GamePanel, panelIn, registerPanelIpc } = require('./gamePanel')
 const { buildMenu } = require('./menu')
 const updates = require('./updates')
+const { logFile } = require('./log')
 
 let mainWindow = null
 let overlay = null // the game panel open over the main window
@@ -93,6 +94,7 @@ function start() {
     reload: onSite(() => site.loadSite(mainWindow)),
     openPage: (p) => site.openExternally(new URL(p, SITE).href),
     checkForUpdates: () => updates.checkNow(),
+    openLog: () => shell.openPath(logFile()),
   }))
 
   mainWindow = site.createMainWindow({ openGame })

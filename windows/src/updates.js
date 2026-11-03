@@ -10,6 +10,7 @@
 const { app, dialog, BrowserWindow } = require('electron')
 const { NsisUpdater } = require('electron-updater')
 const { SITE } = require('./config')
+const { log } = require('./log')
 
 const EVERY = 6 * 60 * 60 * 1000
 
@@ -33,11 +34,11 @@ function startUpdates() {
   updater.autoInstallOnAppQuit = true
   updater.disableWebInstaller = true // one full installer, not a web installer
   updater.forceDevUpdateConfig = !app.isPackaged // lets a development run check the test feed
-  updater.logger = console
+  updater.logger = { info: () => {}, warn: (m) => log('update:', m), error: (m) => log('update:', m), debug: () => {} }
   updater.on('update-downloaded', (info) => {
     downloaded = info.version
   })
-  updater.on('error', (err) => console.error('update failed:', err?.message || err))
+  updater.on('error', (err) => log('update failed:', err?.message || err))
 
   // a failed download is logged by the 'error' handler above
   const check = () => updater.checkForUpdates().then((r) => r?.downloadPromise?.catch(() => {})).catch(() => {})

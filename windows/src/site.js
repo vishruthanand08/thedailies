@@ -1,10 +1,11 @@
 // The main window: the website itself, header, tabs and sign-in page included (like the Mac app's
 // MacRootView), plus the commands the menus send it.
-const { BrowserWindow, shell } = require('electron')
+const { BrowserWindow, session, shell } = require('electron')
 const path = require('node:path')
 const { SITE, isOwnSite, siteUserAgent } = require('./config')
 const hosts = require('./hosts')
 const windowState = require('./windowState')
+const { log } = require('./log')
 
 const ICON = path.join(__dirname, 'assets', 'icon.png')
 const OFFLINE_PAGE = path.join(__dirname, 'pages', 'offline.html')
@@ -143,24 +144,32 @@ function reloadBoard(wc) {
 
 const UNREACHABLE = 'Couldn’t reach The Dailies. Check your connection.'
 
-// Saves a result for the game panel. It posts from the site's own page, so it is signed in as
-// whoever is signed in there; the server's error messages are written to be shown as they are.
+// Saves a result for the game panel. The app posts it itself with the site's sign-in cookie (the
+// same session the window uses), so it doesn't depend on the page being loaded or ready; the
+// server's error messages are written to be shown as they are. Then the board reloads.
 async function submit(wc, text) {
-  if (!isOwnSite(wc.getURL())) return { ok: false, msg: UNREACHABLE }
+  let res
   try {
-    const r = await wc.executeJavaScript(`fetch('/api/submissions', {
+    res = await session.defaultSession.fetch(new URL('/api/submissions', SITE).href, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ text: ${JSON.stringify(text)} }),
-    }).then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))`)
-    if (!r.ok) return { ok: false, msg: r.data.error || 'Something went wrong. Try again.' }
-    const s = r.data.submission
-    reloadBoard(wc)
-    return { ok: true, msg: `${s.emoji} ${s.gameName} ${s.display} saved ✓` }
-  } catch {
+      body: JSON.stringify({ text }),
+      credentials: 'include', // the site's db_token cookie
+      cache: 'no-store',
+    })
+  } catch (err) {
+    log('save failed: no response:', err)
     return { ok: false, msg: UNREACHABLE }
   }
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    log(`save failed: ${res.status}`, data.error || '(no message)')
+    if (res.status === 401) return { ok: false, msg: 'You’re signed out. Sign in to The Dailies, then paste again.' }
+    return { ok: false, msg: data.error || 'Something went wrong. Try again.' }
+  }
+  const s = data.submission ?? {}
+  reloadBoard(wc)
+  return { ok: true, msg: `${s.emoji ?? ''} ${s.gameName ?? 'Score'} ${s.display ?? ''} saved ✓`.replace(/\s+/g, ' ').trim() }
 }
 
 module.exports = {
