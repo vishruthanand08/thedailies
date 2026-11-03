@@ -43,7 +43,7 @@ final class TodayModel {
     struct Group: Identifiable {
         let id: String
         let title: String
-        let symbol: String
+        let icon: String // Heroicon name
         let games: [Game]
         let movable: Bool
     }
@@ -56,15 +56,15 @@ final class TodayModel {
     }
 
     var groups: [Group] {
-        var out = [Group(id: "favorites", title: "Favorites", symbol: "star.fill", games: favorites, movable: false)]
+        var out = [Group(id: "favorites", title: "Favorites", icon: "star", games: favorites, movable: false)]
         for c in orderedCategories {
-            out.append(Group(id: c.id, title: c.name, symbol: c.symbol,
+            out.append(Group(id: c.id, title: c.name, icon: c.hero,
                              games: ordered.filter { $0.category == c.id }, movable: true))
         }
         // games outside every known category (or a server that doesn't send categories yet)
         // still show up, in one group at the end
         let known = Set(categories.map(\.id))
-        out.append(Group(id: "other", title: categories.isEmpty ? "Games" : "More Games", symbol: "square.grid.2x2.fill",
+        out.append(Group(id: "other", title: categories.isEmpty ? "Games" : "More Games", icon: "squares-2x2",
                          games: ordered.filter { !known.contains($0.category ?? "") }, movable: false))
         return out.filter { !$0.games.isEmpty }
     }
@@ -130,13 +130,21 @@ final class TodayModel {
         }
     }
 
+    /// Day arithmetic on ISO dates. Everything in UTC: a calendar in the phone's own time zone
+    /// would cross a daylight-saving change and land a day off (Nov 2 minus one day came out as Oct 31).
+    private static let utc: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+
     private func dateShifted(_ days: Int) -> String? {
         guard let current = board?.date else { return nil }
         let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = TimeZone(identifier: "UTC")
+        f.calendar = Self.utc
+        f.timeZone = Self.utc.timeZone
         f.dateFormat = "yyyy-MM-dd"
-        guard let d = f.date(from: current), let next = Calendar(identifier: .gregorian).date(byAdding: .day, value: days, to: d) else { return nil }
+        guard let d = f.date(from: current), let next = Self.utc.date(byAdding: .day, value: days, to: d) else { return nil }
         return f.string(from: next)
     }
 
@@ -156,7 +164,7 @@ final class TodayModel {
         f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "yyyy-MM-dd"
         guard let d = f.date(from: board.date), let t = f.date(from: board.today) else { return board.date }
-        if Calendar.current.dateComponents([.day], from: d, to: t).day == 1 { return "Yesterday" }
+        if Self.utc.dateComponents([.day], from: d, to: t).day == 1 { return "Yesterday" }
         let out = DateFormatter()
         out.timeZone = TimeZone(identifier: "UTC")
         out.dateFormat = "EEE, MMM d"
@@ -214,12 +222,10 @@ final class TodayModel {
         Task { try? await DailiesAPI.shared.savePrefs(categoryOrder: ids) }
     }
 
-    /// Puts category `id` where `target` is (dragging one header onto another).
-    func moveCategory(_ id: String, onto target: String) {
+    /// A drag in Arrange groups.
+    func moveCategories(from: IndexSet, to: Int) {
         var ids = orderedCategories.map(\.id)
-        guard let from = ids.firstIndex(of: id), let to = ids.firstIndex(of: target), from != to else { return }
-        ids.remove(at: from)
-        ids.insert(id, at: to)
+        ids.move(fromOffsets: from, toOffset: to)
         prefs.categoryOrder = ids
         Task { try? await DailiesAPI.shared.savePrefs(categoryOrder: ids) }
     }

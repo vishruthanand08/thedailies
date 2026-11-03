@@ -104,10 +104,10 @@ struct GameBrowserView: View {
             #endif
             .toolbar {
                 ToolbarItemGroup(placement: .navigation) {
-                    Button { browser?.webView.goBack() } label: { Image(systemName: "chevron.backward") }
+                    Button { browser?.webView.goBack() } label: { HeroIcon("chevron-left", size: 22) }
                         .disabled(!(browser?.canGoBack ?? false))
                         .accessibilityLabel("Back")
-                    Button { browser?.webView.reload() } label: { Image(systemName: "arrow.clockwise") }
+                    Button { browser?.webView.reload() } label: { HeroIcon("arrow-path", size: 22) }
                         .accessibilityLabel("Reload")
                 }
                 ToolbarItem(placement: .confirmationAction) {

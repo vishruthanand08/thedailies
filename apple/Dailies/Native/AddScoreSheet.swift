@@ -15,17 +15,16 @@ struct AddScoreSheet: View {
                 // the website's paste box: a white card on lavender
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {
-                        Image(systemName: "doc.on.clipboard.fill")
-                            .font(.title3.weight(.semibold))
+                        HeroIcon("clipboard-document", filled: true, size: 22)
                             .foregroundStyle(Color.onAccent)
                             .frame(width: 44, height: 44)
                             .background(Circle().fill(Color.sun))
                             .overlay(Circle().strokeBorder(Color.onAccent, lineWidth: 2))
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Paste your result").font(.brand(.title3, .heavy)).foregroundStyle(Color.ink).oneLine()
+                            Text("Paste your result").font(.brand(.headline, .heavy)).foregroundStyle(Color.ink).oneLine()
                             Text("Tap Share or Copy in the game, then paste.")
-                                .font(.subheadline)
+                                .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .oneLine()
                         }
@@ -52,7 +51,7 @@ struct AddScoreSheet: View {
                     if typing {
                         TextEditor(text: $text)
                             .focused($focused)
-                            .font(.body.monospaced())
+                            .font(.subheadline.monospaced())
                             .scrollContentBackground(.hidden)
                             .padding(8)
                             .frame(minHeight: 120)
@@ -62,7 +61,7 @@ struct AddScoreSheet: View {
                             .accessibilityLabel("Game result")
                         Button(action: add) {
                             Text("Add score")
-                                .font(.brand(.headline, .heavy))
+                                .font(.brand(.subheadline, .heavy))
                                 .foregroundStyle(Color.surface)
                                 .frame(maxWidth: .infinity, minHeight: 48)
                         }
@@ -70,11 +69,12 @@ struct AddScoreSheet: View {
                         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } else {
                         Button {
+                            Haptic.tap()
                             withAnimation(.snappy) { typing = true }
                             focused = true
                         } label: {
-                            Label("Type or paste it instead", systemImage: "keyboard")
-                                .font(.subheadline.weight(.semibold))
+                            Label("Type or paste it instead", hero: "pencil-square")
+                                .font(.footnote.weight(.semibold))
                                 .foregroundStyle(Color.ink)
                                 .oneLine(.center)
                                 .frame(minHeight: 44)
@@ -103,6 +103,7 @@ struct AddScoreSheet: View {
         PasteButton(payloadType: String.self) { strings in
             guard let text = strings.first else { return }
             Task { @MainActor in
+                Haptic.tap(.medium) // success or error follows when it's saved (TodayView)
                 SubmissionQueue.shared.enqueue(text)
                 dismiss()
             }
@@ -110,6 +111,7 @@ struct AddScoreSheet: View {
     }
 
     private func add() {
+        Haptic.tap(.medium)
         SubmissionQueue.shared.enqueue(text)
         dismiss()
     }
@@ -121,7 +123,7 @@ struct AddScoreSheet: View {
 /// the Mac's clipboard.
 struct ScreenshotPasteButton: View {
     var body: some View {
-        Button {} label: { Label("Paste", systemImage: "doc.on.clipboard") }
+        Button {} label: { Label("Paste", hero: "clipboard-document") }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
     }

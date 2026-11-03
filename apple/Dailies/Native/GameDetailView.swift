@@ -9,6 +9,9 @@ struct GameDetailView: View {
     @State private var manualError: String?
     @State private var saving = false
     @FocusState private var manualFocused: Bool
+    /// Rows dropped down to show what they pasted.
+    @State private var opened: Set<Int> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var entries: [BoardEntry] { model.entries(for: game) }
     private var mine: BoardEntry? { model.myEntry(for: game) }
@@ -21,7 +24,7 @@ struct GameDetailView: View {
                 if model.isToday && game.acceptsManual && mine == nil {
                     manualEntry
                 } else if let note = game.note, entries.isEmpty {
-                    Text(note).font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(note).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if let paid = game.paid { subscription(paid) }
             }
@@ -37,8 +40,9 @@ struct GameDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 let favorite = model.prefs.favorites.contains(game.id)
-                Button { model.toggleFavorite(game) } label: {
-                    Image(systemName: favorite ? "star.fill" : "star")
+                Button { Haptic.tap(); model.toggleFavorite(game) } label: {
+                    HeroIcon("star", filled: favorite, size: 24)
+                        .pop(on: favorite)
                         .foregroundStyle(favorite ? Color.sun : Color.ink)
                 }
                 .accessibilityLabel(favorite ? "Remove from Favorites" : "Add to Favorites")
@@ -51,14 +55,14 @@ struct GameDetailView: View {
     private var header: some View {
         VStack(spacing: 14) {
             HStack(spacing: 14) {
-                GameAvatar(game: game, size: 60)
+                GameAvatar(game: game, size: 48)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(game.name).font(.brand(.title2, .heavy)).foregroundStyle(Color.ink).oneLine()
+                    Text(game.name).font(.brand(.title3, .heavy)).foregroundStyle(Color.ink).oneLine()
                     if model.isToday && mine != nil { NextPuzzle() }
                 }
                 if let mine, model.isToday {
                     VStack(alignment: .trailing, spacing: 0) {
-                        Text(mine.display).font(.brand(.title3, .heavy)).monospacedDigit().lineLimit(1)
+                        Text(mine.display).font(.brand(.headline, .heavy)).monospacedDigit().lineLimit(1)
                         Text(ordinal(mine.rank)).font(.caption.weight(.bold)).foregroundStyle(.secondary)
                     }
                     .foregroundStyle(Color.ink)
@@ -66,9 +70,9 @@ struct GameDetailView: View {
                 }
             }
             if model.isToday {
-                Button { model.play(game) } label: {
-                    Label(mine == nil ? "Play today's \(game.name)" : "Open \(game.name)", systemImage: "play.fill")
-                        .font(.brand(.headline, .heavy))
+                Button { Haptic.tap(); model.play(game) } label: {
+                    Label(mine == nil ? "Play today's \(game.name)" : "Open \(game.name)", hero: "play", filled: true)
+                        .font(.brand(.subheadline, .heavy))
                         .oneLine(.center)
                         .padding(.horizontal, 16)
                         .foregroundStyle(Color.onAccent)
@@ -85,18 +89,19 @@ struct GameDetailView: View {
     private var board: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(model.isToday ? "Today's board" : "Board")
-                .font(.brand(.headline, .heavy))
+                .font(.brand(.subheadline, .heavy))
                 .foregroundStyle(Color.ink)
                 .accessibilityAddTraits(.isHeader)
             Text("Ranked by \(game.metricLabel), \(game.better == "higher" ? "higher" : "lower") is better")
-                .font(.footnote)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .oneLine()
                 .padding(.bottom, 4)
             if entries.isEmpty {
-                Text(model.isToday ? "No scores yet. Be the first." : "Nobody played this day.")
-                    .foregroundStyle(.secondary)
-                    .oneLine()
+                EmptyState(art: "EmptyBoard", icon: "trophy",
+                           title: model.isToday ? "No scores yet" : "Nobody played",
+                           message: model.isToday ? "Be the first. Whoever posts first sets the score to beat." : "No one played \(game.name) this day.",
+                           compact: true)
             }
             ForEach(entries) { e in boardRow(e) }
         }
@@ -108,10 +113,12 @@ struct GameDetailView: View {
     @ViewBuilder
     private func boardRow(_ e: BoardEntry) -> some View {
         let isMe = e.username == model.me
-        let row = HStack(spacing: 12) {
+        let open = opened.contains(e.id)
+        let share = e.shareText.map(Self.shareBody)
+        let line = HStack(spacing: 10) {
             RankBadge(rank: e.rank)
             HStack(spacing: 8) {
-                Text(e.username).font(.brand(.body, isMe ? .heavy : .semibold))
+                Text(e.username).font(.brand(.subheadline, isMe ? .heavy : .semibold))
                 if !e.verified {
                     Text("manual")
                         .font(.caption2.weight(.bold))
@@ -122,20 +129,54 @@ struct GameDetailView: View {
                 }
             }
             .oneLine()
-            Text(e.display).font(.brand(.body, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
+            Text(e.display).font(.brand(.subheadline, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
+            HeroIcon("chevron-down", size: 12)
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(open ? 180 : 0))
         }
-        .foregroundStyle(Color.ink)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(isMe ? Color.highlight : Color.clear))
+        // tap a name to see what they pasted
+        let row = Button {
+            Haptic.select()
+            withAnimation(reduceMotion ? nil : .snappy) {
+                if open { opened.remove(e.id) } else { opened.insert(e.id) }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                line
+                if open {
+                    Group {
+                        if let share {
+                            Text(share)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                        } else {
+                            Text(e.verified ? "Their pasted result isn't available." : "Typed in, so there's nothing pasted to show.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.canvas))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .foregroundStyle(Color.ink)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(isMe ? Color.highlight : Color.clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityHint(open ? "Hides what they pasted" : "Shows what they pasted")
 
         if model.isToday && isMe {
             // press and hold (or a VoiceOver action) to take my score off
             row
                 .contextMenu {
-                    Button(role: .destructive) { Task { await model.delete(e) } } label: {
-                        Label("Delete score", systemImage: "trash")
+                    Button(role: .destructive) { Haptic.warning(); Task { await model.delete(e) } } label: {
+                        Label("Delete score", image: "hero-trash")
                     }
                 }
                 .accessibilityAction(named: "Delete score") { Task { await model.delete(e) } }
@@ -144,9 +185,17 @@ struct GameDetailView: View {
         }
     }
 
+    /// The share without lines that are only a link (the website's popup does the same).
+    static func shareBody(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("http") }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var manualEntry: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Enter your score").font(.brand(.headline, .heavy)).foregroundStyle(Color.ink)
+            Text("Enter your score").font(.brand(.subheadline, .heavy)).foregroundStyle(Color.ink)
             HStack(spacing: 10) {
                 TextField(game.metricLabel.capitalized, text: $manualValue)
                     .keyboardType(.decimalPad)
@@ -156,17 +205,17 @@ struct GameDetailView: View {
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.canvas))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.onAccent, lineWidth: 2))
                 Button { Task { await addManual() } } label: {
-                    Text("Add").font(.brand(.headline, .heavy)).foregroundStyle(Color.onAccent)
+                    Text("Add").font(.brand(.subheadline, .heavy)).foregroundStyle(Color.onAccent)
                         .padding(.horizontal, 18).frame(minHeight: 44)
                 }
                 .buttonStyle(.pressIn(.sun))
                 .disabled(saving || Double(manualValue) == nil)
             }
             if let manualError {
-                Text(manualError).font(.footnote).foregroundStyle(.red) // errors may wrap
+                Text(manualError).font(.caption).foregroundStyle(.red) // errors may wrap
             }
             Text(game.note ?? "Typed-in scores are marked as manual on the board.")
-                .font(.footnote)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .oneLine()
         }
@@ -176,23 +225,23 @@ struct GameDetailView: View {
 
     private func subscription(_ paid: Game.Paid) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Subscription", systemImage: "dollarsign.circle.fill")
-                .font(.brand(.headline, .heavy))
+            Label("Subscription", hero: "currency-dollar")
+                .font(.brand(.subheadline, .heavy))
                 .foregroundStyle(Color.ink)
                 .oneLine()
             // full sentences: these wrap rather than cut off (the one exception to one-line text)
-            Text(paid.what).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(paid.what).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             ForEach(paid.deals, id: \.label) { deal in
                 if let s = deal.url, let url = URL(string: s) {
                     Link(destination: url) {
-                        Label(deal.label, systemImage: "arrow.up.right.square")
+                        Label(deal.label, hero: "arrow-top-right-on-square")
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(Color.ink)
                     .frame(minHeight: 36)
                 } else {
-                    Label(deal.label, systemImage: "building.columns")
+                    Label(deal.label, hero: "building-library")
                         .foregroundStyle(Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -205,9 +254,11 @@ struct GameDetailView: View {
 
     private func addManual() async {
         guard let value = Double(manualValue) else { return }
+        Haptic.tap(.medium)
         saving = true
         manualError = await model.submitManual(game, value: value)
         saving = false
+        if manualError == nil { Haptic.success() } else { Haptic.error() }
         if manualError == nil {
             manualValue = ""
             manualFocused = false

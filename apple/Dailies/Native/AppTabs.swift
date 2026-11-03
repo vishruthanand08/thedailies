@@ -14,27 +14,30 @@ struct AppTabs: View {
     var body: some View {
         TabView(selection: $selection) {
             TodayView(goToFriends: { selection = .friends })
-                .tabItem { Label("Today", systemImage: "sun.max.fill") }
+                .tabItem { tabLabel("Today", "sun", .today) }
                 .tag(Tab.today)
-            FeedView()
-                .tabItem { Label("Feed", systemImage: "list.bullet.rectangle.portrait.fill") }
+            FeedView(goToFriends: { selection = .friends })
+                .tabItem { tabLabel("Feed", "queue-list", .feed) }
                 .badge(feed.unseen) // kudos not seen yet
                 .tag(Tab.feed)
             // + in the middle of the tab bar: opens Add a score over whatever tab you're on
             Color.canvas
-                .tabItem { Label("Add score", systemImage: "plus.circle.fill") }
+                .tabItem { tabLabel("Add score", "plus-circle", .add) }
                 .tag(Tab.add)
             WebTab(title: "Friends", webTab: "Friends", active: selection == .friends)
-                .tabItem { Label("Friends", systemImage: "person.2.fill") }
+                .tabItem { tabLabel("Friends", "users", .friends) }
                 .tag(Tab.friends)
             WebTab(title: "You", webTab: "You", active: selection == .you)
-                .tabItem { Label("You", systemImage: "person.crop.circle.fill") }
+                .tabItem { tabLabel("You", "user-circle", .you) }
                 .tag(Tab.you)
         }
         .tint(Color.ink)
+        // a light tap on every tab change, a touch firmer than a picker's tick
+        .sensoryFeedback(.impact(weight: .light), trigger: shown)
         .onChange(of: selection) { _, tab in
             if tab == .add {
                 selection = shown
+                Haptic.tap(.medium) // the app's main action
                 adding = true
             } else {
                 shown = tab
@@ -58,6 +61,11 @@ struct AppTabs: View {
             if UserDefaults.standard.bool(forKey: "dailiesAddSheet") { adding = true }
         }
         #endif
+    }
+
+    /// Thin outline Heroicon at rest, the solid one on the selected tab.
+    private func tabLabel(_ title: String, _ icon: String, _ tab: Tab) -> some View {
+        Label(title, image: tab == shown ? "hero-\(icon)-fill" : "hero-\(icon)")
     }
 }
 

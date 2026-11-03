@@ -5,6 +5,7 @@ import SwiftUI
 /// today's friends' highlights in a row at the top.
 struct FeedView: View {
     @State private var model = FeedModel.shared
+    var goToFriends: () -> Void = {}
 
     var body: some View {
         NavigationStack {
@@ -35,20 +36,15 @@ struct FeedView: View {
     @ViewBuilder
     private func content(_ proxy: ScrollViewProxy) -> some View {
         if let error = model.error, model.feed == nil {
-            ContentUnavailableView {
-                Label("Couldn't load", systemImage: "wifi.exclamationmark")
-            } description: {
-                Text(error)
-            } actions: {
-                Button("Try again") { Task { await model.load() } }
-            }
+            EmptyState(art: "EmptyOffline", icon: "signal-slash", title: "Couldn't load", message: error,
+                       action: ("Try again", { Task { await model.load() } }))
         } else if let feed = model.feed {
             ForEach(feed.notices, id: \.date) { notice in
                 Label {
                     Text("\(FeedModel.names(notice.usernames)) gave you kudos for \(model.dayLabel(notice.date).lowercasedDay)")
-                        .font(.brand(.subheadline, .bold))
+                        .font(.brand(.footnote, .bold))
                 } icon: {
-                    Image(systemName: "hands.clap.fill")
+                    HeroIcon("hand-raised", filled: true)
                 }
                 .foregroundStyle(Color.onAccent)
                 .oneLine()
@@ -59,22 +55,22 @@ struct FeedView: View {
 
             if !feed.highlights.isEmpty {
                 HighlightsRow(highlights: feed.highlights) { id in
-                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(id, anchor: .top) }
+                    withAnimation(.smooth(duration: 0.35)) { proxy.scrollTo(id, anchor: .top) }
                 }
             }
 
             if feed.cards.isEmpty {
-                ContentUnavailableView(
-                    "Nothing here yet", systemImage: "list.bullet.rectangle.portrait",
-                    description: Text("Scores you and your friends add show up here. Add some friends and start playing."))
+                EmptyState(art: "EmptyFeed", icon: "queue-list", title: "Nothing here yet",
+                           message: "Scores you and your friends add show up here. Add some friends and start playing.",
+                           action: ("Find friends", goToFriends))
             }
             // one section per day, so a player's earlier days read as earlier days
             ForEach(days(feed), id: \.date) { day in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(model.dayLabel(day.date)).font(.brand(.title2, .heavy))
+                    Text(model.dayLabel(day.date)).font(.brand(.title3, .heavy))
                     if !day.cards.isEmpty {
                         Text("\(day.cards.count) \(day.cards.count == 1 ? "player" : "players")")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -84,7 +80,7 @@ struct FeedView: View {
                 .accessibilityAddTraits(.isHeader)
                 if day.date == feed.today, let waiting = feed.waiting, !waiting.isEmpty {
                     Text("Haven't played yet today: \(waiting.joined(separator: ", "))")
-                        .font(.footnote)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .oneLine()
                 }
@@ -124,14 +120,14 @@ private struct HighlightsRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Today's highlights", systemImage: "star.fill")
-                .font(.brand(.headline, .heavy))
+            Label("Today's highlights", hero: "star", filled: true)
+                .font(.brand(.subheadline, .heavy))
                 .foregroundStyle(Color.ink)
                 .oneLine()
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(highlights) { h in
-                        Button { onTap(h.cardId) } label: { chip(h) }
+                        Button { Haptic.tap(); onTap(h.cardId) } label: { chip(h) }
                             .buttonStyle(.pressIn(.sun, radius: 16, weight: 2, shadow: 3))
                             .accessibilityLabel("\(h.username): \(h.gameName) \(h.display)\(h.pb ? ", personal best" : "")")
                     }
@@ -147,10 +143,10 @@ private struct HighlightsRow: View {
         HStack(spacing: 10) {
             Avatar(name: h.username, size: 34)
             VStack(alignment: .leading, spacing: 1) {
-                Text(h.username).font(.brand(.subheadline, .heavy)).oneLine()
+                Text(h.username).font(.brand(.footnote, .heavy)).oneLine()
                 Text("\(h.emoji) \(h.gameName)").font(.caption.weight(.semibold)).oneLine()
                 HStack(spacing: 6) {
-                    Text(h.display).font(.brand(.headline, .heavy)).monospacedDigit().lineLimit(1)
+                    Text(h.display).font(.brand(.subheadline, .heavy)).monospacedDigit().lineLimit(1)
                     if h.pb { PBTag() }
                 }
             }
@@ -181,9 +177,9 @@ private struct DayCard: View {
             }
             if card.games.count > Self.shown {
                 Button(expanded ? "Show less" : "+\(card.games.count - Self.shown) more") {
-                    withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
+                    withAnimation(.snappy) { expanded.toggle() }
                 }
-                .font(.brand(.subheadline, .bold))
+                .font(.brand(.footnote, .bold))
                 .foregroundStyle(Color.ink)
                 .buttonStyle(.pressIn)
             }
@@ -198,12 +194,12 @@ private struct DayCard: View {
         HStack(spacing: 10) {
             Avatar(name: card.username, size: 40)
             VStack(alignment: .leading, spacing: 1) {
-                Text(mine ? "You" : card.username).font(.brand(.headline, .heavy)).oneLine()
+                Text(mine ? "You" : card.username).font(.brand(.subheadline, .heavy)).oneLine()
                 HStack(spacing: 4) {
                     Text("\(card.games.count) \(card.games.count == 1 ? "game" : "games")")
                     if card.streak > 1 {
                         Text("·")
-                        Label("\(card.streak)", systemImage: "flame.fill").labelStyle(.titleAndIcon)
+                        Label("\(card.streak)", hero: "fire", size: 14).labelStyle(.titleAndIcon)
                             .accessibilityLabel("\(card.streak)-day streak")
                     }
                 }
@@ -212,7 +208,7 @@ private struct DayCard: View {
                 .oneLine()
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("\(card.points)").font(.brand(.title, .heavy)).monospacedDigit()
+                Text("\(card.points)").font(.brand(.title2, .heavy)).monospacedDigit()
                 Text("pts").font(.caption.weight(.bold)).foregroundStyle(.secondary)
             }
             .fixedSize()
@@ -228,7 +224,7 @@ private struct DayCard: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Button {
-                    if g.rawText != nil { withAnimation(.easeOut(duration: 0.2)) { receipt = receipt == g.id ? nil : g.id } }
+                    if g.rawText != nil { Haptic.select(); withAnimation(.snappy) { receipt = receipt == g.id ? nil : g.id } }
                 } label: {
                     HStack(spacing: 8) {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -242,9 +238,9 @@ private struct DayCard: View {
                             .oneLine()
                         if g.pb { PBTag() }
                         if !g.verified {
-                            Image(systemName: "pencil")
-                                .font(.caption.weight(.bold))
+                            HeroIcon("pencil", size: 14)
                                 .foregroundStyle(fg.opacity(0.6))
+                                .accessibilityElement()
                                 .accessibilityLabel("Typed in")
                         }
                         Text(g.display)
@@ -272,7 +268,7 @@ private struct DayCard: View {
             }
             if receipt == g.id, let raw = g.rawText {
                 Text(raw)
-                    .font(.system(.footnote, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(Color.ink)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -290,9 +286,9 @@ private struct DayCard: View {
 
     /// Make a game my highlight for today; the current pick's star goes back to top points.
     private func star(_ g: Feed.Played, isHighlight: Bool) -> some View {
-        Button { Task { await model.highlight(g, on: card) } } label: {
-            Image(systemName: isHighlight ? "star.fill" : "star")
-                .font(.subheadline.weight(.bold))
+        Button { Haptic.tap(); Task { await model.highlight(g, on: card) } } label: {
+            HeroIcon("star", filled: isHighlight, size: 18)
+                .pop(on: isHighlight)
                 .foregroundStyle(isHighlight ? Color.sun : Color.ink)
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(isHighlight ? Color.onAccent : Color.surface))
@@ -309,26 +305,28 @@ private struct DayCard: View {
     private var footer: some View {
         HStack(spacing: 10) {
             if mine {
-                Label("\(card.kudos.count)", systemImage: "hands.clap.fill")
-                    .font(.brand(.subheadline, .heavy))
+                Label("\(card.kudos.count)", hero: "hand-raised", filled: true)
+                    .font(.brand(.footnote, .heavy))
+                    .rolling(card.kudos.count)
                     .labelStyle(.titleAndIcon)
                     .fixedSize()
                     .accessibilityLabel("\(card.kudos.count) kudos")
             } else {
                 Button { Task { await model.toggleKudos(card) } } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: card.kudos.mine ? "hands.clap.fill" : "hands.clap")
+                        HeroIcon("hand-raised", filled: card.kudos.mine)
+                            .pop(on: card.kudos.mine)
                         Text(card.kudos.mine ? "Kudos given" : "Give kudos")
                         if card.kudos.count > 0 {
                             Text("\(card.kudos.count)")
                                 .font(.caption.weight(.heavy))
-                                .monospacedDigit()
+                                .rolling(card.kudos.count)
                                 .foregroundStyle(Color.surface)
                                 .padding(.horizontal, 7)
                                 .background(Capsule().fill(Color.ink))
                         }
                     }
-                    .font(.brand(.subheadline, .bold))
+                    .font(.brand(.footnote, .bold))
                     .foregroundStyle(card.kudos.mine ? Color.onAccent : Color.ink)
                     .lineLimit(1)
                     .padding(.horizontal, 12)

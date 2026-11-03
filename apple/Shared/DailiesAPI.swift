@@ -74,6 +74,8 @@ struct BoardEntry: Decodable, Identifiable, Hashable {
     let points: Int
     let verified: Bool
     let submissionId: Int
+    /// What they pasted (nil for typed-in scores, and from servers that don't send it yet).
+    var shareText: String?
     var id: Int { submissionId }
 }
 

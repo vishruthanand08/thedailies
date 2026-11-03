@@ -8,22 +8,22 @@ struct ScoringInfoView: View {
     @State private var error: String?
 
     private let rules: [(String, String)] = [
-        ("number.circle.fill", "Every game turns your result into 0 to 100 points: perfect is 100, the game's typical result (par) is 50 and a fail is 0."),
-        ("lock.fill", "Your points depend only on your own result and are locked in when you post."),
-        ("crown.fill", "The daily crown goes to the most points across the day's games. A tie goes to whoever played fewer games."),
-        ("square.grid.2x2.fill", "Each category's crown counts just that category's games."),
-        ("trophy.fill", "Leaderboards add up daily points. A game's own board ranks the actual results."),
+        ("calculator", "Every game turns your result into 0 to 100 points: perfect is 100, the game's typical result (par) is 50 and a fail is 0."),
+        ("lock-closed", "Your points depend only on your own result and are locked in when you post."),
+        ("trophy", "The daily crown goes to the most points across the day's games. A tie goes to whoever played fewer games."),
+        ("squares-2x2", "Each category's crown counts just that category's games."),
+        ("chart-bar", "Leaderboards add up daily points. A game's own board ranks the actual results."),
     ]
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(rules, id: \.1) { symbol, text in
+                    ForEach(rules, id: \.1) { icon, text in
                         Label {
-                            Text(text).font(.subheadline)
+                            Text(text).font(.footnote)
                         } icon: {
-                            Image(systemName: symbol).foregroundStyle(Color.ink)
+                            HeroIcon(icon).foregroundStyle(Color.ink)
                         }
                     }
                 }
@@ -36,7 +36,7 @@ struct ScoringInfoView: View {
                             ForEach(table.games.filter { $0.category == category.id }) { row($0) }
                         } header: {
                             HStack {
-                                Label(category.name, systemImage: category.symbol)
+                                Label(category.name, hero: category.hero, size: 16)
                                 Spacer()
                                 Text("100 · 50 · 0 pts").monospacedDigit()
                             }
@@ -58,7 +58,7 @@ struct ScoringInfoView: View {
 
     private func row(_ r: ScoringTable.Row) -> some View {
         HStack(spacing: 10) {
-            Text("\(r.emoji) \(r.name)").font(.brand(.subheadline, .bold)).oneLine()
+            Text("\(r.emoji) \(r.name)").font(.brand(.footnote, .bold)).oneLine()
             Group {
                 Text(r.perfect)
                 Text(r.par)

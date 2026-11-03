@@ -9,7 +9,26 @@ struct TodayView: View {
     @State private var pageOffset: CGFloat = 0
     @State private var paging = false
     @State private var pageWidth: CGFloat = 400
+    /// The game search under the crown, and the category filter beside it (like the website).
+    @State private var query = ""
+    @State private var only = "all"
+    /// The Arrange groups sheet (from a group's ⠿ handle).
+    @State private var arranging = false
     var goToFriends: () -> Void = {}
+
+    private var searchText: String { query.trimmingCharacters(in: .whitespaces).lowercased() }
+    private var filtering: Bool { !searchText.isEmpty || only != "all" }
+
+    /// The groups with only the games that match. While searching or filtering every group shows
+    /// open, and reordering is off (the rows on screen aren't the whole group).
+    private var shownGroups: [TodayModel.Group] {
+        model.groups.compactMap { g in
+            guard only == "all" || g.id == only else { return nil }
+            let games = searchText.isEmpty ? g.games : g.games.filter { $0.name.lowercased().contains(searchText) }
+            guard !games.isEmpty else { return nil }
+            return TodayModel.Group(id: g.id, title: g.title, icon: g.icon, games: games, movable: g.movable)
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -34,6 +53,7 @@ struct TodayView: View {
             }
         }
         .tint(Color.ink)
+        .sheet(isPresented: $arranging) { ArrangeGroups(model: model) }
         .task {
             if model.board == nil { await model.load() }
             #if DEBUG
@@ -42,6 +62,7 @@ struct TodayView: View {
             #endif
         }
         .sensoryFeedback(.selection, trigger: model.date)
+        .sensoryFeedback(.selection, trigger: model.crownScope) // Overall / a category's standings
         .sensoryFeedback(trigger: queue.banner) { _, banner in
             switch banner?.kind {
             case .ok: .success
@@ -54,20 +75,16 @@ struct TodayView: View {
     private var dayPage: some View {
         List {
             if let error = model.error, model.board == nil {
-                ContentUnavailableView {
-                    Label("Couldn't load", systemImage: "wifi.exclamationmark")
-                } description: {
-                    Text(error)
-                } actions: {
-                    Button("Try again") { Task { await model.reload() } }
-                }
-                .listRowBackground(Color.clear)
+                EmptyState(art: "EmptyOffline", icon: "signal-slash", title: "Couldn't load", message: error,
+                           action: ("Try again", { Task { await model.reload() } }))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
 
             // the date title is part of the page, so it slides with the day instead of
             // staying put in the navigation bar while the content moves under it
             Text(model.title)
-                .font(.brand(.largeTitle, .heavy))
+                .font(.brand(.title, .heavy))
                 .foregroundStyle(Color.ink)
                 .oneLine()
                 .accessibilityAddTraits(.isHeader)
@@ -84,23 +101,42 @@ struct TodayView: View {
                     .listRowSeparator(.hidden)
             }
 
+            if !model.groups.isEmpty {
+                SearchRow(query: $query, only: $only, groups: model.groups)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 0, trailing: 4))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                if filtering && shownGroups.isEmpty {
+                    Text(searchText.isEmpty ? "No games in this group." : "No games match \u{201C}\(query.trimmingCharacters(in: .whitespaces))\u{201D}.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .oneLine(.center)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            }
+
             // one section per group; press and drag a game to reorder it within its group
-            ForEach(model.groups) { group in
+            ForEach(shownGroups) { group in
                 Section {
-                    if !model.isCollapsed(group) {
+                    if filtering || !model.isCollapsed(group) {
                         ForEach(group.games) { row($0) }
-                            .onMove { model.move(in: group.id, from: $0, to: $1) }
+                            .onMove(perform: filtering ? nil : { from, to in
+                                Haptic.tap() // dropped in place
+                                model.move(in: group.id, from: from, to: to)
+                            })
                     }
                 } header: {
                     groupHeader(group)
                 } footer: {
-                    if group.id == model.groups.last?.id && model.favorites.isEmpty {
+                    if group.id == shownGroups.last?.id && model.favorites.isEmpty && !filtering {
                         Text("Tap to play. Played? Tap for the leaderboard.").oneLine()
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
+        .scrollDismissesKeyboard(.immediately)
     }
 
     // MARK: swiping between days
@@ -145,17 +181,16 @@ struct TodayView: View {
         }
     }
 
-    /// A group's header: click to open or close it; hold and drag it (or its handle) onto another
-    /// group to move it there, like the website.
+    /// A group's header: tap to open or close it; its ⠿ handle opens Arrange groups. (Dragging a
+    /// header inside the List doesn't work: the List's own game reordering takes the drag.)
     private func groupHeader(_ group: TodayModel.Group) -> some View {
-        let open = !model.isCollapsed(group)
+        let open = filtering || !model.isCollapsed(group)
         return HStack(spacing: 8) {
-            Button { withAnimation(.snappy) { model.toggleCollapsed(group) } } label: {
+            Button { Haptic.select(); withAnimation(.snappy) { model.toggleCollapsed(group) } } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.heavy))
+                    HeroIcon("chevron-right", size: 14)
                         .rotationEffect(.degrees(open ? 90 : 0))
-                    Image(systemName: group.symbol)
+                    HeroIcon(group.icon, filled: group.id == "favorites")
                         .foregroundStyle(group.id == "favorites" ? Color.sun : Color.ink)
                     Text(group.title).oneLine()
                     Text("\(group.games.count)")
@@ -174,18 +209,24 @@ struct TodayView: View {
             .accessibilityHint(open ? "Collapses the group" : "Expands the group")
             Spacer(minLength: 0)
             if group.movable {
-                DragDots()
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-                    .accessibilityHidden(true)
+                Button {
+                    Haptic.tap()
+                    arranging = true
+                } label: {
+                    DragDots()
+                        .frame(width: 44, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressIn)
+                .accessibilityLabel("Arrange groups")
             }
         }
-        .font(.brand(.subheadline, .heavy))
+        .font(.brand(.footnote, .heavy))
         .foregroundStyle(Color.ink)
         .textCase(nil)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .modifier(CategoryDrag(group: group, model: model))
+        .modifier(CategoryMoves(group: group, model: model))
     }
 
     // MARK: game rows
@@ -203,7 +244,7 @@ struct TodayView: View {
         let entries = model.entries(for: game)
         let mine = model.myEntry(for: game)
         let favorite = model.prefs.favorites.contains(game.id)
-        return Button { open(game) } label: {
+        return Button { Haptic.tap(); open(game) } label: {
             GameCard(game: game, entries: entries, mine: mine, me: model.me, isToday: model.isToday)
         }
         .buttonStyle(.pressIn)
@@ -216,23 +257,23 @@ struct TodayView: View {
         // left offers Leaderboard (and Play or Delete score); VoiceOver gets the same as actions.
         .accessibilityAction(named: "Leaderboard") { path.append(game.id) }
         .swipeActions(edge: .leading) {
-            Button { model.toggleFavorite(game) } label: {
-                Label(favorite ? "Unfavorite" : "Favorite", systemImage: favorite ? "star.slash" : "star.fill")
+            Button { Haptic.tap(); model.toggleFavorite(game) } label: {
+                Label(favorite ? "Unfavorite" : "Favorite", image: favorite ? "hero-star" : "hero-star-fill")
             }
             .tint(Color.sun)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if model.isToday {
                 if let mine {
-                    Button(role: .destructive) { Task { await model.delete(mine) } } label: {
-                        Label("Delete score", systemImage: "trash")
+                    Button(role: .destructive) { Haptic.warning(); Task { await model.delete(mine) } } label: {
+                        Label("Delete score", image: "hero-trash")
                     }
                 } else {
-                    Button { model.play(game) } label: { Label("Play", systemImage: "play.fill") }
+                    Button { Haptic.tap(); model.play(game) } label: { Label("Play", image: "hero-play-fill") }
                         .tint(Color.ink)
                 }
             }
-            Button { path.append(game.id) } label: { Label("Leaderboard", systemImage: "list.number") }
+            Button { Haptic.tap(); path.append(game.id) } label: { Label("Leaderboard", image: "hero-numbered-list") }
                 .tint(Color.highlight)
         }
     }
@@ -247,41 +288,44 @@ private struct CrownCard: View {
     let onDragEnd: (_ dx: CGFloat, _ predicted: CGFloat) -> Void
     let onPage: (Int) -> Void
     @State private var showScoring = false
+    /// The whole standings instead of the top five (and me).
+    @State private var showAll = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let shown = 5
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Label("Daily crown", systemImage: "crown.fill")
-                    .font(.brand(.title3, .heavy))
+                Label("Daily crown", hero: "trophy", filled: true, size: 18)
+                    .font(.brand(.headline, .heavy))
                     .oneLine()
-                Button { showScoring = true } label: {
-                    Image(systemName: "info.circle")
-                        .font(.body.weight(.semibold))
+                Button { Haptic.tap(); showScoring = true } label: {
+                    HeroIcon("information-circle", size: 20)
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressIn)
                 .accessibilityLabel("How scoring works")
                 if !model.isToday {
-                    Image(systemName: "clock.arrow.circlepath").font(.subheadline.weight(.bold)).accessibilityHidden(true)
+                    HeroIcon("clock", size: 18)
                 }
                 // Overall, or one category's winners (NYT, LinkedIn, ...)
                 Menu {
                     Picker("Standings", selection: Binding(get: { model.crownScope }, set: { model.crownScope = $0 })) {
                         Text("Overall").tag("all")
                         ForEach(model.orderedCategories) { c in
-                            Label(c.name, systemImage: c.symbol).tag(c.id)
+                            Label(c.name, image: "hero-\(c.hero)").tag(c.id)
                         }
                     }
                 } label: {
                     HStack(spacing: 4) {
                         Text(model.crownScopeName).lineLimit(1)
-                        Image(systemName: "chevron.down").font(.caption2.weight(.heavy))
+                        HeroIcon("chevron-down", size: 12)
                     }
-                    .font(.brand(.subheadline, .bold))
+                    .font(.brand(.footnote, .bold))
                     .foregroundStyle(Color.onAccent)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 32)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 28)
                     .background(Capsule().fill(Color.white.opacity(0.75)))
                     .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
                     .layoutPriority(1)
@@ -295,19 +339,44 @@ private struct CrownCard: View {
             if model.crown.isEmpty {
                 Text(model.crownScope != "all" ? "Nobody has played these games \(model.isToday ? "yet today" : "this day")."
                      : model.isToday ? "No scores yet. Play a game to take the lead." : "Nobody played this day.")
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundStyle(Color.onAccent.opacity(0.8))
                     .oneLine()
             } else {
-                ForEach(Array(model.crown.enumerated()), id: \.element.id) { i, c in
-                    crownRow(rank: c.rank ?? i + 1, entry: c)
+                let board = leaders(model.crown, top: shown) { $0.username == model.me }
+                VStack(spacing: 0) {
+                    ForEach(showAll ? model.crown : board.top) { crownRow($0) }
+                    // further down than the top five: still see your own place
+                    if !showAll, let mine = board.me {
+                        if board.gap { BoardGap() }
+                        crownRow(mine)
+                    }
+                }
+                // a new score that changes the order slides the rows into place
+                .animation(reduceMotion ? nil : .snappy, value: model.crown.map(\.id))
+                if board.hidden > 0 {
+                    Button {
+                        Haptic.select()
+                        withAnimation(reduceMotion ? nil : .snappy) { showAll.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(showAll ? "Show less" : "Show all \(model.crown.count)")
+                            HeroIcon(showAll ? "chevron-up" : "chevron-down", size: 12)
+                        }
+                        .font(.brand(.footnote, .bold))
+                        .foregroundStyle(Color.onAccent.opacity(0.75))
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressIn)
+                    .accessibilityLabel(showAll ? "Show the top \(shown)" : "Show all \(model.crown.count) players")
                 }
             }
 
             if board.circleSize <= 1 {
                 Button(action: goToFriends) {
-                    Label("Add friends to compete", systemImage: "person.badge.plus")
-                        .font(.brand(.subheadline, .bold))
+                    Label("Add friends to compete", hero: "user-plus")
+                        .font(.brand(.footnote, .bold))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .foregroundStyle(Color.onAccent)
@@ -317,12 +386,12 @@ private struct CrownCard: View {
 
             let hint = model.isToday ? "Swipe right for earlier days" : "Swipe left to come back to today"
             Label(hint,
-                  systemImage: model.isToday ? "chevron.left.2" : "chevron.right.2")
-                .font(.caption.weight(.semibold))
+                  hero: model.isToday ? "chevron-double-left" : "chevron-double-right", size: 14)
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(Color.onAccent.opacity(0.6))
                 .oneLine()
         }
-        .padding(16)
+        .padding(14)
         .chunkyCard(.sun)
         .padding(.trailing, 4)
         .padding(.bottom, 4)
@@ -347,22 +416,23 @@ private struct CrownCard: View {
         .accessibilityAction(named: "Next day") { onPage(1) }
     }
 
-    private func crownRow(rank: Int, entry: Board.CrownEntry) -> some View {
+    private func crownRow(_ entry: Board.CrownEntry) -> some View {
+        let rank = entry.rank ?? (model.crown.firstIndex(of: entry) ?? 0) + 1
         let mine = entry.username == model.me
-        return HStack(spacing: 10) {
-            RankBadge(rank: rank, onAccent: true)
+        return HStack(spacing: 8) {
+            RankBadge(rank: rank, onAccent: true, size: 22)
             HStack(spacing: 6) {
-                Text(entry.username).font(.brand(.body, mine ? .heavy : .semibold))
+                Text(entry.username).font(.brand(.subheadline, mine ? .heavy : .semibold))
                 Text("\(entry.games) game\(entry.games == 1 ? "" : "s")")
                     .font(.caption)
                     .foregroundStyle(Color.onAccent.opacity(0.7))
             }
             .oneLine()
-            Text("\(entry.points) pts").font(.brand(.body, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
+            Text("\(entry.points) pts").font(.brand(.subheadline, .heavy)).rolling(entry.points).lineLimit(1).layoutPriority(1)
         }
         .foregroundStyle(Color.onAccent)
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(mine ? Color.white.opacity(0.85) : Color.clear))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(ordinal(rank)), \(mine ? "you" : entry.username), \(entry.points) points from \(entry.games) games")
@@ -381,18 +451,19 @@ struct GameCard: View {
 
     /// Three is enough to see who's winning; the leaderboard has the rest.
     private let shown = 3
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                GameAvatar(game: game, size: 42)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                GameAvatar(game: game, size: 36)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
-                        Text(game.name).font(.brand(.headline, .heavy)).foregroundStyle(Color.ink)
+                        Text(game.name).font(.brand(.subheadline, .heavy)).foregroundStyle(Color.ink)
                         if game.paid != nil {
-                            Image(systemName: "dollarsign.circle.fill")
-                                .imageScale(.small)
+                            HeroIcon("currency-dollar", size: 16)
                                 .foregroundStyle(.secondary)
+                                .accessibilityElement()
                                 .accessibilityLabel("Needs a subscription")
                         }
                     }
@@ -400,50 +471,61 @@ struct GameCard: View {
                     if isToday && mine != nil {
                         NextPuzzle()
                     } else if !isToday {
-                        Text("Tap for the leaderboard").font(.footnote).foregroundStyle(.secondary).oneLine()
+                        Text("Tap for the leaderboard").font(.caption).foregroundStyle(.secondary).oneLine()
                     }
                 }
                 if let mine, isToday {
                     Text(mine.display)
-                        .font(.brand(.headline, .heavy))
+                        .font(.brand(.subheadline, .heavy))
                         .monospacedDigit()
                         .lineLimit(1)
                         .foregroundStyle(Color.ink)
                         .layoutPriority(1)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
                 } else if isToday {
                     // a cue only: the whole card plays the game
                     Text("Play")
-                        .font(.brand(.subheadline, .heavy))
+                        .font(.brand(.footnote, .heavy))
                         .lineLimit(1)
                         .foregroundStyle(Color.onAccent)
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 34)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 30)
                         .background(Capsule().fill(Color.sun))
                         .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
                         .layoutPriority(1)
+                        .transition(.opacity)
                 }
             }
+            // a score you just added springs in where Play was
+            .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.35), value: mine?.display)
 
             if entries.isEmpty {
                 Text(isToday ? "No scores yet. Be the first." : "Nobody played this day.")
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                     .oneLine()
             } else {
-                VStack(spacing: 4) {
-                    ForEach(entries.prefix(shown)) { scoreRow($0) }
-                    if entries.count > shown {
-                        Text("+\(entries.count - shown) more")
-                            .font(.footnote.weight(.semibold))
+                let board = leaders(entries, top: shown) { $0.username == me }
+                VStack(spacing: 2) {
+                    ForEach(board.top) { scoreRow($0) }
+                    // further down than the top three: still see your own place
+                    if let mine = board.me {
+                        if board.gap { BoardGap() }
+                        scoreRow(mine)
+                    }
+                    if board.hidden > 0 {
+                        Text("+\(board.hidden) more")
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.leading, 8)
                             .padding(.top, 2)
                     }
                 }
+                .animation(reduceMotion ? nil : .snappy, value: entries.map(\.id))
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .chunkyCard(.surface)
         .contentShape(Rectangle())
@@ -452,15 +534,102 @@ struct GameCard: View {
 
     private func scoreRow(_ e: BoardEntry) -> some View {
         let isMe = e.username == me
-        return HStack(spacing: 10) {
-            RankBadge(rank: e.rank)
-            Text(e.username).font(.brand(.subheadline, isMe ? .heavy : .semibold)).oneLine()
-            Text(e.display).font(.brand(.subheadline, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
+        return HStack(spacing: 8) {
+            RankBadge(rank: e.rank, size: 22)
+            Text(e.username).font(.brand(.footnote, isMe ? .heavy : .semibold)).oneLine()
+            Text(e.display).font(.brand(.footnote, .heavy)).monospacedDigit().lineLimit(1).layoutPriority(1)
         }
         .foregroundStyle(Color.ink)
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(isMe ? Color.highlight : Color.clear))
+    }
+}
+
+/// Search games by name, and filter to one group with the funnel (the website's search row).
+/// The field sinks into its shadow while you type, like the site's.
+private struct SearchRow: View {
+    @Binding var query: String
+    @Binding var only: String
+    let groups: [TodayModel.Group]
+    @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var picked: TodayModel.Group? { groups.first { $0.id == only } }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                HeroIcon("magnifying-glass", size: 18).foregroundStyle(.secondary)
+                TextField("Search games", text: $query)
+                    .font(.brand(.subheadline, .semibold))
+                    .foregroundStyle(Color.ink)
+                    .focused($focused)
+                    .submitLabel(.search)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                if !query.isEmpty {
+                    Button {
+                        Haptic.tap()
+                        query = ""
+                    } label: {
+                        HeroIcon("x-mark", size: 16)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, query.isEmpty ? 12 : 4)
+            .frame(minHeight: 44)
+            .modifier(Sunken(down: focused, fill: .surface))
+            .contentShape(Rectangle())
+            .onTapGesture { focused = true }
+
+            // one tap to a group: All games, Favorites, NYT, LinkedIn, ...
+            Menu {
+                Picker("Show", selection: $only) {
+                    Label("All games", image: "hero-squares-2x2").tag("all")
+                    ForEach(groups) { g in
+                        Label(g.title, image: "hero-\(g.icon)").tag(g.id)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    HeroIcon("funnel", filled: picked != nil, size: 18)
+                    if let picked { Text(picked.title).lineLimit(1) }
+                }
+                .font(.brand(.footnote, .bold))
+                .foregroundStyle(picked != nil ? Color.onAccent : Color.ink)
+                .padding(.horizontal, 12)
+                .frame(minWidth: 44, minHeight: 44)
+                .modifier(Sunken(down: false, fill: picked != nil ? .sun : .surface))
+            }
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel(picked.map { "Showing \($0.title)" } ?? "Filter games")
+        }
+        .sensoryFeedback(.selection, trigger: only)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.15), value: focused)
+        .animation(reduceMotion ? nil : .snappy, value: query.isEmpty)
+    }
+}
+
+/// The chunky look for a field: outline and hard shadow, sitting down onto the shadow while active.
+private struct Sunken: ViewModifier {
+    let down: Bool
+    let fill: Color
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        content
+            .background(shape.fill(fill))
+            .overlay(shape.strokeBorder(Color.onAccent, lineWidth: 2))
+            .offset(x: down ? 3 : 0, y: down ? 3 : 0)
+            .background(shape.fill(Color.onAccent).offset(x: 3, y: 3).opacity(down ? 0 : 1))
     }
 }
 
@@ -470,7 +639,7 @@ struct NextPuzzle: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             Text("Next in \(Self.label(at: context.date))")
-                .font(.footnote.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .oneLine()
@@ -479,7 +648,9 @@ struct NextPuzzle: View {
     }
 
     static func label(at now: Date) -> String {
-        let midnight = Calendar.current.startOfDay(for: now).addingTimeInterval(24 * 60 * 60)
+        // the next calendar day, not +24h: a daylight-saving day is 23 or 25 hours long
+        let today = Calendar.current.startOfDay(for: now)
+        let midnight = Calendar.current.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86400)
         let secs = max(0, Int(midnight.timeIntervalSince(now)))
         let h = secs / 3600, m = secs % 3600 / 60, s = secs % 60
         return h > 0 ? "\(h)h \(m)m" : "\(m)m \(String(format: "%02d", s))s"
@@ -487,27 +658,52 @@ struct NextPuzzle: View {
 }
 
 
-/// Hold a category's header and drag it onto another category's header to put it there.
-/// VoiceOver gets Move Up / Move Down actions instead.
-private struct CategoryDrag: ViewModifier {
+/// Drag categories into the order Today shows them, with the system's reorder handles.
+private struct ArrangeGroups: View {
+    let model: TodayModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(model.orderedCategories) { c in
+                        Label(c.name, hero: c.hero)
+                            .font(.brand(.subheadline, .bold))
+                            .foregroundStyle(Color.ink)
+                    }
+                    .onMove { from, to in
+                        Haptic.tap()
+                        withAnimation(.snappy) { model.moveCategories(from: from, to: to) }
+                    }
+                } footer: {
+                    Text("Favorites stay on top. Drag the others into the order you want.")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .scrollContentBackground(.hidden)
+            .background(Color.canvas.ignoresSafeArea())
+            .navigationTitle("Arrange groups")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.font(.brand(.headline, .bold))
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .tint(Color.ink)
+    }
+}
+
+/// VoiceOver's Move Up / Move Down on a category's header.
+private struct CategoryMoves: ViewModifier {
     let group: TodayModel.Group
     let model: TodayModel
-    static let prefix = "dailies-category:"
 
     func body(content: Content) -> some View {
         if group.movable {
             content
-                .draggable(Self.prefix + group.id) {
-                    Label(group.title, systemImage: group.symbol)
-                        .font(.brand(.subheadline, .heavy))
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.surface))
-                }
-                .dropDestination(for: String.self) { items, _ in
-                    guard let item = items.first, item.hasPrefix(Self.prefix) else { return false }
-                    withAnimation(.snappy) { model.moveCategory(String(item.dropFirst(Self.prefix.count)), onto: group.id) }
-                    return true
-                }
                 .accessibilityAction(named: "Move up") { withAnimation { model.moveCategory(group.id, by: -1) } }
                 .accessibilityAction(named: "Move down") { withAnimation { model.moveCategory(group.id, by: 1) } }
         } else {

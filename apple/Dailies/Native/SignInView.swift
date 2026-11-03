@@ -63,7 +63,7 @@ struct SignInView: View {
                     }
 
                     if let error {
-                        Label(error, systemImage: "exclamationmark.circle.fill")
+                        Label(error, hero: "exclamation-circle", filled: true)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(Color.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -134,6 +134,7 @@ struct SignInView: View {
         busy = true
         error = nil
         focus = nil
+        Haptic.tap(.medium)
         Task {
             do {
                 try await AppSession.shared.signIn(
@@ -141,8 +142,10 @@ struct SignInView: View {
                     password: password, register: register)
             } catch let e as DailiesError {
                 error = e.message
+                Haptic.error()
             } catch {
                 self.error = "Couldn't sign in. Try again."
+                Haptic.error()
             }
             busy = false
         }
