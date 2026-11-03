@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from './api.js'
 import { inApp, nativeCapture, tellNative } from './native.js'
 import GamePanel from './GamePanel.jsx'
@@ -636,6 +637,66 @@ function MoreToggle({ open, hidden, total, onToggle, label }) {
   )
 }
 
+// A played game's full board: everyone's result with what they pasted (the iPhone app's game page).
+function BoardPanel({ game, entries, me, isToday, onClose, onOpenDay, onPlay }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // a portal still passes clicks up to the tile in React, so stop them here
+  return createPortal(
+    <div
+      className="gamepanel-backdrop"
+      onClick={(e) => {
+        e.stopPropagation()
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="card infopanel boardpanel" role="dialog" aria-modal="true" aria-labelledby={`board-${game.id}`}>
+        <div className="infohead">
+          <div className="tilehead">
+            <div className="gameicon" style={{ background: game.color }}>{game.emoji}</div>
+            <div className="titles">
+              <h3 id={`board-${game.id}`}>{game.name}</h3>
+              <div className="hint">Ranked by {game.metricLabel}, {game.better === 'higher' ? 'higher' : 'lower'} is better</div>
+            </div>
+          </div>
+          <button className="iconbtn" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        {isToday && (
+          <a className="btn boardplay" href={game.url} target="_blank" rel="noreferrer" onClick={(e) => onPlay(e)}>
+            Open {game.name} ↗
+          </a>
+        )}
+        <ol className="boardfull">
+          {entries.map((e) => {
+            const share = shareBody(e.shareText)
+            return (
+              // who and how they did on the left, what they pasted beside it
+              <li key={e.userId} className={`boardentry${e.userId === me.id ? ' me' : ''}`}>
+                <div className="entrywho">
+                  <div className="entryname">
+                    <span className="rank">{['🥇', '🥈', '🥉'][e.rank - 1] ?? `${e.rank}.`}</span>
+                    <span className="who">{e.username}</span>
+                  </div>
+                  <div className="score">{e.display}{!e.verified && <span className="unverified"> ~manual</span>}</div>
+                  <button className="linklike feedlink" onClick={() => { onClose(); onOpenDay(e) }}>
+                    Feed →
+                  </button>
+                </div>
+                {share ? <pre className="sharetext">{share}</pre> : <p className="hint sharenone">Typed in, nothing pasted.</p>}
+              </li>
+            )
+          })}
+        </ol>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 function shareBody(text) {
   if (!text) return null
   const body = text
@@ -673,6 +734,14 @@ function GameTile({
   const [manualVal, setManualVal] = useState('')
   const [paidOpen, setPaidOpen] = useState(false)
   const [boardAll, setBoardAll] = useState(false) // every score, not just the top three
+  const [opened, setOpened] = useState(() => new Set()) // names clicked open to show their paste
+  const [detail, setDetail] = useState(false) // the full board with everyone's pastes
+  const toggleShare = (id) => setOpened((s) => {
+    const next = new Set(s)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
   const mine = entries.find((e) => e.userId === me.id)
   const short = leaders(entries, 3, (e) => e.userId === me.id)
 
@@ -699,11 +768,13 @@ function GameTile({
     <div
       className={`card tile playable${dragging ? ' dragging' : ''}`}
       data-gameid={game.id}
-      // the whole card plays the game; its own buttons and links keep their jobs. Keyboard users
-      // get the same through the Play link.
+      // the whole card plays the game, or once you've played (or on a past day) opens the full
+      // board with everyone's pastes; its own buttons and links keep their jobs. Keyboard users
+      // get the same through the Play link and the names.
       onClick={(e) => {
-        if (e.target.closest('button, a, input, textarea, .manualrow, .paidinfo, .boardrow.hasshare')) return
-        play(e, false)
+        if (e.target.closest('button, a, input, textarea, .sharedrop, .manualrow, .paidinfo')) return
+        if (!isToday || mine) setDetail(true)
+        else play(e, false)
       }}
     >
       <div className="tilehead">
@@ -826,19 +897,18 @@ function GameTile({
           // null: the ⋯ between the top three and my own row further down
           if (!e) return short.gap ? <div key="gap" className="boardgap" aria-hidden="true">⋯</div> : null
           const share = shareBody(e.shareText)
+          const open = opened.has(e.userId)
           return (
-            <div
-              key={e.userId}
-              className={`boardrow${e.userId === me.id ? ' me' : ''}${share ? ' hasshare' : ''}`}
-              // hover shows what they pasted; tapping (focus) does the same on touch screens
-              tabIndex={share ? 0 : undefined}
-            >
+            <div key={e.userId}>
+            <div className={`boardrow${e.userId === me.id ? ' me' : ''}`}>
               <span className="rank">{['🥇', '🥈', '🥉'][e.rank - 1] ?? `${e.rank}.`}</span>
               <span>
+                {/* a name drops down what they pasted */}
                 <button
                   className="whobtn"
-                  title={`See ${e.userId === me.id ? 'your' : `${e.username}'s`} day on the Feed`}
-                  onClick={() => onOpenDay(e)}
+                  aria-expanded={open}
+                  title={`What ${e.userId === me.id ? 'you' : e.username} pasted`}
+                  onClick={() => toggleShare(e.userId)}
                 >
                   {e.username}
                 </button>
@@ -855,12 +925,15 @@ function GameTile({
                   ✕
                 </button>
               )}
-              {share && (
-                <div className="sharepop" role="tooltip">
-                  <div className="sharewho">{e.username}</div>
-                  <pre>{share}</pre>
-                </div>
-              )}
+            </div>
+            {open && (
+              <div className="sharedrop">
+                {share ? <pre className="sharetext">{share}</pre> : <p className="hint sharenone">Typed in, so there's nothing pasted to show.</p>}
+                <button className="linklike feedlink" onClick={() => onOpenDay(e)}>
+                  {e.userId === me.id ? 'Your' : `${e.username}'s`} day on the Feed →
+                </button>
+              </div>
+            )}
             </div>
           )
         })}
@@ -870,6 +943,17 @@ function GameTile({
           label={boardAll ? `Show the top three for ${game.name}` : `Show all ${entries.length} ${game.name} scores`}
         />
       </>)}
+      {detail && (
+        <BoardPanel
+          game={game} entries={entries} me={me} isToday={isToday}
+          onClose={() => setDetail(false)}
+          onOpenDay={onOpenDay}
+          onPlay={(e) => {
+            setDetail(false)
+            play(e, true)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -8,17 +8,6 @@ import { nativeClipboard, readNativeClipboard } from './native.js'
 // In the Mac app the app reads the clipboard, Edit › Paste Result presses this button and
 // File › Add Score… opens the box.
 const canRead = nativeClipboard || Boolean(navigator.clipboard?.readText)
-// the ⌘V tip, once, for computers (a phone has no keyboard shortcut)
-const TIP_KEY = 'dailies.pasteTip'
-const hasKeyboard = window.matchMedia?.('(pointer: fine)').matches
-const pasteKeys = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘V' : 'Ctrl+V'
-function tipSeen() {
-  try {
-    return localStorage.getItem(TIP_KEY) === 'seen'
-  } catch {
-    return true // no storage: don't show it on every visit
-  }
-}
 const readClipboard = () => (nativeClipboard ? readNativeClipboard() : navigator.clipboard.readText())
 
 // also on the game panel's Paste button (GamePanel.jsx), and drawn the same in the Mac app
@@ -39,16 +28,7 @@ export default function PasteDock({ busy, flash, onDismissFlash, onSubmit, backG
   const textRef = useRef(null)
   const submitRef = useRef(onSubmit)
   submitRef.current = onSubmit
-  const hideTipRef = useRef(null)
   const pasteRef = useRef(null)
-  const [tip, setTip] = useState(() => hasKeyboard && !tipSeen())
-  const hideTip = () => {
-    setTip(false)
-    try {
-      localStorage.setItem(TIP_KEY, 'seen')
-    } catch {}
-  }
-  hideTipRef.current = hideTip
 
   useEffect(() => {
     if (open) textRef.current?.focus()
@@ -67,7 +47,6 @@ export default function PasteDock({ busy, flash, onDismissFlash, onSubmit, backG
       const pasted = e.clipboardData?.getData('text') ?? ''
       if (!pasted.trim()) return
       e.preventDefault()
-      hideTipRef.current() // they've found it
       submitRef.current(pasted)
     }
     const onKey = (e) => e.key === 'Escape' && setOpen(false)
@@ -121,13 +100,6 @@ export default function PasteDock({ busy, flash, onDismissFlash, onSubmit, backG
         <div className={`flash ${flash.kind} pastetoast`} role="status">
           <span>{flash.msg}</span>
           <button className="iconbtn" aria-label="Dismiss" onClick={onDismissFlash}>✕</button>
-        </div>
-      )}
-
-      {tip && !flash && !backGame && !open && (
-        <div className="pastetip" role="note">
-          <span>Tip: press <kbd>{pasteKeys}</kbd> anywhere here to paste a result.</span>
-          <button className="iconbtn" aria-label="Got it" onClick={hideTip}>✕</button>
         </div>
       )}
 
