@@ -377,6 +377,22 @@ export const GAMES = [
     },
   },
   {
+    id: 'noillirk', category: 'words', name: 'Noillirk', emoji: '🧗', color: '#C9E6F2',
+    url: 'https://playdaily.org/noillirk', metricLabel: 'meters', better: 'higher',
+    // Verified from a real share 2026-11-04 ("Noillirk daily #39 - 3,913m", the zone reached, one
+    // square per prompt, then the link) and playdaily.org's own code: 7 prompts worth up to 100 points,
+    // 10 m a point (a perfect climb is 7,000 m); daily #1 was 2026-09-27 and it resets at midnight UTC.
+    // Only the daily counts: Classic and Endless shares leave out "daily #". Framed by another site it
+    // puts up a "Play on the official site" card, so Play opens a new tab on the website.
+    epoch: { date: '2026-09-27', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/^\s*Noillirk\s+daily\s+#(\d+)\s*[—–-]\s*([\d,]+)\s*m\b/i)
+      if (!m) return null
+      const meters = num(m[2])
+      return { puzzleNumber: num(m[1]), metric: meters, display: `${meters.toLocaleString('en-US')} m` }
+    },
+  },
+  {
     id: 'poople', category: 'words', name: 'Poople', emoji: '💩', color: '#E8D3BE',
     url: 'https://poople.io', embed: true, metricLabel: 'extra guesses', better: 'lower',
     // Verified from a real share 2026-10-30: "Poople #442 15/6", one row per word (🟫 a letter
@@ -569,6 +585,7 @@ const SCORING = {
   sizeitup: { perfect: 450, par: 250, zero: 50 },
   // meters of a 10,000 m best; a real day was 4,558 m, "Top 63% today"
   plain: { perfect: 9000, par: 5000, zero: 1000 },
+  noillirk: { perfect: 7000, par: 3500, zero: 500 },
   // guesses beyond the shortest path; the best is 0, a few extra is a typical day
   poople: { perfect: 0, par: 4, zero: 15 },
   // entries found out of 10

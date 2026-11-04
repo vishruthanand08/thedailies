@@ -54,7 +54,7 @@ enum GameHosts {
             "chainle.io": "Chainle", "perceptle.com": "Perceptle", "poeltl.nbpa.com": "Poeltl",
             "sports-reference.com": "Immaculate Grid", "dailytens.com": "Daily Tens",
             "poople.io": "Poople",
-            "magnitudle.com": "Size It Up", "playplain.app": "Plain",
+            "magnitudle.com": "Size It Up", "playplain.app": "Plain", "playdaily.org": "Noillirk",
         ]
         return byHost.first { host == $0.key || host.hasSuffix("." + $0.key) }?.value ?? host
     }
