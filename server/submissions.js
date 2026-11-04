@@ -2,9 +2,10 @@ import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
 import { circleIds } from './friends.js'
-import { GAMES, CATEGORIES, gameById, detect, expectedDate } from './parsers.js'
+import { CATEGORIES, gameById, detect, expectedDate } from './parsers.js'
 import { buildBoards } from './scoring.js'
 import { allRules, pointsFor } from './points.js'
+import { isGameHidden, visibleGames, visibleCategories, visibleRows } from './categories.js'
 import { todayISO, daysApart, isValidISODate, secondsToClock } from './util.js'
 
 export const submissionsRouter = Router()
@@ -12,10 +13,10 @@ submissionsRouter.use(requireAuth)
 
 submissionsRouter.get('/games', (req, res) => {
   res.json({
-    games: GAMES.map(({ id, category, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
+    games: visibleGames().map(({ id, category, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
       id, category, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed, paid: paid ?? null,
     })),
-    categories: CATEGORIES,
+    categories: visibleCategories(),
   })
 })
 
@@ -35,13 +36,16 @@ function describe(game, v) {
 submissionsRouter.get('/scoring', (req, res) => {
   const rules = allRules()
   res.json({
-    games: GAMES.map((g) => ({
+    games: visibleGames().map((g) => ({
       id: g.id, name: g.name, emoji: g.emoji, category: g.category,
       perfect: describe(g, rules[g.id].perfect), par: describe(g, rules[g.id].par), zero: describe(g, rules[g.id].zero),
     })),
-    categories: CATEGORIES,
+    categories: visibleCategories(),
   })
 })
+
+// a hidden category's games can't be played for now (server/categories.js)
+const hiddenGameError = (game) => `${game.name} isn’t on The Dailies right now, so that score wasn’t saved.`
 
 submissionsRouter.post('/', async (req, res) => {
   const today = todayISO()
@@ -56,6 +60,7 @@ submissionsRouter.post('/', async (req, res) => {
       })
     }
     const { game, parsed } = hit
+    if (isGameHidden(game.id)) return res.status(400).json({ error: hiddenGameError(game) })
     const derived = expectedDate(game, parsed)
     if (derived && game.dateTolerance != null) {
       if (daysApart(derived, today) > game.dateTolerance) {
@@ -73,6 +78,7 @@ submissionsRouter.post('/', async (req, res) => {
   } else if (req.body.gameId) {
     const game = gameById[req.body.gameId]
     if (!game) return res.status(400).json({ error: 'Unknown game' })
+    if (isGameHidden(game.id)) return res.status(400).json({ error: hiddenGameError(game) })
     if (!game.manual) {
       return res.status(400).json({ error: `${game.name} needs the pasted share text` })
     }
@@ -125,7 +131,7 @@ submissionsRouter.get('/board', async (req, res) => {
       WHERE s.puzzle_date = $1 AND s.user_id = ANY($2)`,
     [date, ids]
   )
-  const { boards, crown, categoryCrowns } = buildBoards(rows)
+  const { boards, crown, categoryCrowns } = buildBoards(visibleRows(rows))
   res.json({ date, today: todayISO(), boards, crown, categoryCrowns, circleSize: ids.length })
 })
 
@@ -146,13 +152,14 @@ submissionsRouter.get('/stats', async (req, res) => {
   const today = todayISO()
   const since = days ? new Date(Date.parse(today + 'T12:00:00Z') - (days - 1) * 86400000).toISOString().slice(0, 10) : null
   const ids = await circleIds(req.user.id)
-  const { rows } = await q(
+  const { rows: allRows } = await q(
     `SELECT s.id, s.user_id, s.game_id, s.puzzle_date, s.metric, s.points, s.display, s.verified, u.username
        FROM submissions s
        JOIN users u ON u.id = s.user_id
       WHERE s.user_id = ANY($1)`,
     [ids]
   )
+  const rows = visibleRows(allRows)
   for (const r of rows) r.puzzle_date = iso(r.puzzle_date)
 
   // standings per scope: 'all' plus one per category, so each category has its own winners
@@ -244,9 +251,9 @@ submissionsRouter.get('/stats', async (req, res) => {
     // most points; a tie goes to whoever played fewer games (more per game)
     .sort((a, b) => b.points - a.points || a.played - b.played || a.username.localeCompare(b.username))
   const overall = standings('all')
-  const categories = Object.fromEntries(CATEGORIES.map((c) => [c.id, standings(c.id)]))
+  const categories = Object.fromEntries(visibleCategories().map((c) => [c.id, standings(c.id)]))
 
-  const games = GAMES.filter((game) => perGame.has(game.id)).map((game) => {
+  const games = visibleGames().filter((game) => perGame.has(game.id)).map((game) => {
     const dir = game.better === 'higher' ? -1 : 1
     const entries = [...perGame.get(game.id).values()]
       .map((s) => ({

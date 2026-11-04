@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth, requireAdmin, deleteUser, isAdmin } from './auth.js'
-import { GAMES } from './parsers.js'
+import { GAMES, CATEGORIES } from './parsers.js'
+import { isCategoryHidden, setCategoryHidden } from './categories.js'
 import { allRules, checkRules, saveRules, resetRules } from './points.js'
 
 export const adminRouter = Router()
@@ -19,7 +20,32 @@ adminRouter.get('/scoring', async (req, res) => {
       defaults: { perfect: g.scoring.perfect, par: g.scoring.par, zero: g.scoring.zero },
       custom: rules[g.id].custom, edited: edits[g.id] ?? null,
     })),
+    // every category, hidden ones too, so their games can still be tuned
+    categories: CATEGORIES.map((c) => ({ ...c, hidden: isCategoryHidden(c.id) })),
   })
+})
+
+// ---------- categories ----------
+// Hide a category or bring it back (server/categories.js): hidden, its games aren't shown,
+// played or scored anywhere, and its scores are kept for when it comes back.
+adminRouter.get('/categories', async (req, res) => {
+  const { rows } = await q('SELECT category, updated_by, updated_at FROM category_settings')
+  const set = Object.fromEntries(rows.map((r) => [r.category, { by: r.updated_by, at: r.updated_at }]))
+  res.json({
+    categories: CATEGORIES.map((c) => ({
+      id: c.id, name: c.name, emoji: c.emoji, hidden: isCategoryHidden(c.id), changed: set[c.id] ?? null,
+      games: GAMES.filter((g) => g.category === c.id).map((g) => ({ id: g.id, name: g.name, emoji: g.emoji })),
+    })),
+  })
+})
+
+adminRouter.put('/categories/:id', async (req, res) => {
+  const category = CATEGORIES.find((c) => c.id === req.params.id)
+  if (!category) return res.status(404).json({ error: 'No such category' })
+  const hidden = req.body?.hidden === true
+  await setCategoryHidden(category.id, hidden, req.user.username)
+  console.log(`admin: ${req.user.username} ${hidden ? 'hid' : 'showed'} the ${category.name} category`)
+  res.json({ ok: true, id: category.id, hidden })
 })
 
 // New values apply to scores posted from now on; earlier scores keep the points they were saved with.

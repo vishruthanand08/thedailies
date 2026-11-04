@@ -143,3 +143,15 @@ CREATE TABLE IF NOT EXISTS global_members (
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE global_members ADD COLUMN IF NOT EXISTS alias TEXT;
+
+-- Categories an admin has hidden (server/categories.js): their games aren't shown, played or
+-- scored, but their scores are kept for when the category comes back. Sports starts hidden;
+-- ON CONFLICT keeps whatever an admin set since.
+CREATE TABLE IF NOT EXISTS category_settings (
+  category TEXT PRIMARY KEY,
+  hidden BOOLEAN NOT NULL DEFAULT false,
+  updated_by TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO category_settings (category, hidden, updated_by) VALUES ('sports', true, 'setup')
+  ON CONFLICT (category) DO NOTHING;

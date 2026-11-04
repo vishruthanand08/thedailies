@@ -16,11 +16,13 @@ import { pushRouter, startReminders } from './push.js'
 import { releaseRouter, macDownload, windowsDownload, windowsUpdateFeed, appcast } from './release.js'
 import { pageWithMeta, metaFor } from './meta.js'
 import { loadRules, backfillPoints } from './points.js'
+import { loadHiddenCategories } from './categories.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 await initDb()
 await loadRules()
+await loadHiddenCategories()
 await backfillPoints()
 startReminders() // the evening push, once APNs is configured
 

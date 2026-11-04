@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
-import { CATEGORIES } from './parsers.js'
+import { visibleCategories, visibleRows } from './categories.js'
 import { buildBoards } from './scoring.js'
 import { todayISO, isValidISODate } from './util.js'
 
@@ -88,14 +88,14 @@ globalRouter.get('/', async (req, res) => {
   // anonymous members: user id -> their fun name
   const aliases = new Map(members.filter((m) => m.anonymous).map((m) => [m.user_id, m.alias]))
   const mine = members.find((m) => m.user_id === req.user.id)
-  const { crown, categoryCrowns } = buildBoards(rows)
+  const { crown, categoryCrowns } = buildBoards(visibleRows(rows))
   res.json({
     date,
     today: todayISO(),
     members: members.length,
     me: mine ? { joined: true, anonymous: mine.anonymous, alias: mine.alias } : { joined: false, anonymous: false },
     overall: standings(crown, req.user.id, aliases),
-    categories: CATEGORIES.map((c) => ({
+    categories: visibleCategories().map((c) => ({
       id: c.id,
       name: c.name,
       emoji: c.emoji,

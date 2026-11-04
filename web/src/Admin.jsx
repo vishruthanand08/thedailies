@@ -1,14 +1,77 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
 
-// Admins only (the server checks too): each game's scoring values, the game suggestions, and
-// deleting a user's account.
+// Admins only (the server checks too): hiding a category, each game's scoring values, the game
+// suggestions, and deleting a user's account.
 export default function Admin() {
   return (
     <div className="admin">
+      <CategoriesAdmin />
       <ScoringEditor />
       <SuggestionsAdmin />
       <UsersAdmin />
+    </div>
+  )
+}
+
+// Hide a whole category (its games leave Today and stop counting toward any score) or bring it
+// back. Scores aren't deleted, so showing it again restores its boards and points.
+function CategoriesAdmin() {
+  const [list, setList] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const load = () => api.get('/admin/categories').then((d) => setList(d.categories)).catch((err) => setError(err.message))
+  useEffect(() => {
+    load()
+  }, [])
+
+  const toggle = async (c) => {
+    setBusy(c.id)
+    setError(null)
+    try {
+      await api.put(`/admin/categories/${c.id}`, { hidden: !c.hidden })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3 className="sectiontitle">🗂️ Categories</h3>
+      <p className="hint small">
+        A hidden category’s games leave Today, can’t be scored, and drop out of every board, crown, feed and stat.
+        Nobody’s scores are deleted: showing it again brings them back.
+      </p>
+      {error && <div className="flash err">{error}</div>}
+      {!list && !error && <div className="hint">loading…</div>}
+      {list && (
+        <ul className="admincats">
+          {list.map((c) => (
+            <li key={c.id} className={c.hidden ? 'hidden' : undefined}>
+              <div className="what">
+                <div>
+                  <b>{c.emoji} {c.name}</b>
+                  {c.hidden && <span className="hiddentag">Hidden</span>}
+                </div>
+                <div className="sub">{c.games.map((g) => g.name).join(', ')}</div>
+                {c.changed?.by && c.changed.by !== 'setup' && (
+                  <div className="sub">{c.hidden ? 'Hidden' : 'Shown'} by {c.changed.by} · {when(c.changed.at)}</div>
+                )}
+              </div>
+              <button
+                className={`btn small${c.hidden ? '' : ' ghost'}`}
+                onClick={() => toggle(c)}
+                disabled={busy === c.id}
+              >
+                {c.hidden ? 'Show' : 'Hide'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -129,10 +192,15 @@ function ScoringEditor() {
   const [categories, setCategories] = useState([])
   const [error, setError] = useState(null)
   const load = () =>
-    api.get('/admin/scoring').then((d) => setGames(d.games)).catch((err) => setError(err.message))
+    api
+      .get('/admin/scoring')
+      .then((d) => {
+        setGames(d.games)
+        setCategories(d.categories ?? [])
+      })
+      .catch((err) => setError(err.message))
   useEffect(() => {
     load()
-    api.get('/submissions/games').then((d) => setCategories(d.categories ?? []))
   }, [])
 
   return (
@@ -147,7 +215,7 @@ function ScoringEditor() {
       {games &&
         categories.map((c) => (
           <section key={c.id} className="admingroup">
-            <h4>{c.emoji} {c.name}</h4>
+            <h4>{c.emoji} {c.name}{c.hidden && <span className="hint"> · hidden</span>}</h4>
             {games.filter((g) => g.category === c.id).map((g) => (
               <ScoringRow key={g.id} game={g} onSaved={load} />
             ))}

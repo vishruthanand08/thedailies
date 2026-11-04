@@ -658,6 +658,17 @@ body:has(.tile.dragging) { cursor: grabbing; user-select: none; -webkit-user-sel
 .adminfield .input { width: 110px; padding: 6px 10px; font-size: 14px; }
 .trypoints { font-weight: 800; padding-bottom: 8px; min-width: 60px; }
 .adminactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Admin › Categories: hide or show a whole category */
+.admincats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.admincats li { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; }
+.admincats .what { flex: 1; min-width: 0; }
+.admincats .sub { color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admincats li.hidden .what b { opacity: 0.6; }
+.admincats .btn { flex: none; min-width: 64px; }
+.hiddentag {
+  display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; margin-left: 8px;
+  background: var(--lilac); border: 2px solid var(--ink); border-radius: 10px; white-space: nowrap;
+}
 .flash.inline { padding: 4px 10px; font-size: 13px; box-shadow: none; }
 .btn.danger { background: #fbd3cb; }
 .votecount { min-width: 52px; text-align: center; }

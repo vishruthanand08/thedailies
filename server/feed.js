@@ -4,6 +4,7 @@ import { requireAuth } from './auth.js'
 import { circleIds } from './friends.js'
 import { gameById } from './parsers.js'
 import { pointsFor } from './points.js'
+import { hiddenGameIds, visibleRows } from './categories.js'
 import { todayISO, isValidISODate } from './util.js'
 import { notifyKudos } from './push.js'
 
@@ -27,21 +28,22 @@ feedRouter.get('/', async (req, res) => {
 
   const { rows: dateRows } = await q(
     `SELECT DISTINCT puzzle_date FROM submissions
-      WHERE user_id = ANY($1) AND ($2::date IS NULL OR puzzle_date < $2::date)
+      WHERE user_id = ANY($1) AND ($2::date IS NULL OR puzzle_date < $2::date) AND game_id <> ALL($4::text[])
       ORDER BY puzzle_date DESC LIMIT $3`,
-    [ids, before, DAYS_PER_PAGE]
+    [ids, before, DAYS_PER_PAGE, hiddenGameIds()]
   )
   const dates = dateRows.map((r) => iso(r.puzzle_date))
   if (!before && !dates.includes(today)) dates.unshift(today) // the highlights row always looks at today
 
   // every score in the circle, small enough to read whole: personal bests and streaks need history
-  const { rows: all } = await q(
+  const { rows: everything } = await q(
     `SELECT s.id, s.user_id, s.game_id, s.puzzle_date, s.metric, s.points, s.display, s.raw_text,
             s.verified, s.created_at, u.username
        FROM submissions s JOIN users u ON u.id = s.user_id
       WHERE s.user_id = ANY($1) AND s.puzzle_date <= $2::date`,
     [ids, dates[0] ?? today]
   )
+  const all = visibleRows(everything) // hidden categories' scores stay out (server/categories.js)
   const [{ rows: picks }, { rows: kudos }] = await Promise.all([
     q('SELECT user_id, puzzle_date, submission_id FROM day_highlights WHERE user_id = ANY($1) AND puzzle_date = ANY($2::date[])', [ids, dates]),
     q(

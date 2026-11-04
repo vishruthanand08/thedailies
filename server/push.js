@@ -4,6 +4,7 @@ import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
 import { todayISO, TZ } from './util.js'
+import { hiddenGameIds } from './categories.js'
 
 // Push notifications to the iPhone and Mac apps through Apple's push service (APNs), using a
 // token-based .p8 key. Configure with APNS_KEY (the .p8 file's contents), APNS_KEY_ID and
@@ -163,8 +164,9 @@ async function remindIfDue() {
   if (!claimed.length) return // already sent today
   const { rows } = await q(
     `SELECT DISTINCT d.user_id FROM push_devices d
-      WHERE NOT EXISTS (SELECT 1 FROM submissions s WHERE s.user_id = d.user_id AND s.puzzle_date = $1)`,
-    [today]
+      WHERE NOT EXISTS (SELECT 1 FROM submissions s
+                         WHERE s.user_id = d.user_id AND s.puzzle_date = $1 AND s.game_id <> ALL($2::text[]))`,
+    [today, hiddenGameIds()]
   )
   for (const r of rows) {
     await notify(r.user_id, {
