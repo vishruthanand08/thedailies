@@ -547,6 +547,22 @@ export const GAMES = [
       return { puzzleNumber: num(m[1]), metric: miss ? 9 : num(m[2]), display: `${m[2].toUpperCase()}/8` }
     },
   },
+  {
+    id: 'dailyholes', category: 'sports', name: 'Daily Holes', emoji: '⛳', color: '#CFE8C9',
+    url: 'https://dailyholes.com', embed: true, metricLabel: 'to par', better: 'lower',
+    // Verified from a real share 2026-11-04 ("Daily Holes — Round #308\nGorsecombe Common · +5 (42)",
+    // a square per hole, longest drive, the beat-my-score link) and dailyholes.com's own code: a new
+    // nine at midnight New York time, round #1 was 2026-01-01; the score is strokes against the
+    // course's par ("E" for level). Practice and Wild Three shares have no "Round #", so don't count.
+    epoch: { date: '2026-01-01', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/Daily Holes\s*[—–-]\s*Round\s*#(\d+)[^\n]*\n[^\n]*·\s*([+\-−]?\d+|E)\s*\((\d+)\)/i)
+      if (!m) return null
+      const toPar = /^e$/i.test(m[2]) ? 0 : Number(m[2].replace('−', '-'))
+      const shown = toPar > 0 ? `+${toPar}` : toPar === 0 ? 'E' : String(toPar)
+      return { puzzleNumber: num(m[1]), metric: toPar, display: `${shown} (${m[3]})` }
+    },
+  },
 
   {
     id: 'ethnoguessr', category: 'geography', name: 'EthnoGuessr', emoji: '🧬', color: '#D8D3F2',
@@ -594,6 +610,8 @@ const SCORING = {
   perceptle: { perfect: 95, par: 55, zero: 10 },
   // guesses out of 8, a miss is 9
   poeltl: { perfect: 1, par: 5, zero: 9, failAt: 9 },
+  // strokes against the nine's par; a real day was +5
+  dailyholes: { perfect: -5, par: 3, zero: 15 },
   // cells right × 1000 + (900 − rarity): 9/9 at rarity 100 is 9,800; 5/9 at 500 is 5,400; 0/9 is 0
   gridmlb: { perfect: 9800, par: 5400, zero: 0 },
   gridnfl: { perfect: 9800, par: 5400, zero: 0 },

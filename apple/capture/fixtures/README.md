@@ -20,7 +20,7 @@ Only add text captured from a real share. Don't type one from memory or adapt an
 | perceptle, poeltl, gridmlb, dailytens | web shares, 2026-10-28 |
 | poople | web share, 2026-10-30 |
 | plain | web share, 2026-11-03 |
-| noillirk | web share, 2026-11-04 |
+| noillirk, dailyholes | web shares, 2026-11-04 |
 | sizeitup | web share, 2026-10-30; `sizeitup.2026-11-03.txt`: the new "Magnitudle — Size It Up" format |
 
 ## Still needed
