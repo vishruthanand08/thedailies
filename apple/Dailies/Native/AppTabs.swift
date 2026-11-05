@@ -1,15 +1,18 @@
 #if os(iOS)
 import SwiftUI
+import Observation
 
-/// The signed-in app: native tab bar. Today and Feed are native; Friends and You still show the
-/// website (without its own header and tabs) until they're rebuilt.
+/// The signed-in app: native tab bar, every tab native (the website shows only on the Mac).
+/// Today, Feed, + (Add a score), Friends and Global; your profile opens from the button at the
+/// top right of each tab.
 struct AppTabs: View {
-    enum Tab: String { case today, feed, add, friends, you }
+    enum Tab: String { case today, feed, add, friends, global }
     @State private var selection: Tab = .today
     @State private var shown: Tab = .today // the screen behind the + (which only opens a sheet)
     @State private var adding = false
     @State private var feed = FeedModel.shared
     @State private var push = Push.shared
+    @State private var profile = ProfileSheet.shared
 
     var body: some View {
         TabView(selection: $selection) {
@@ -24,12 +27,12 @@ struct AppTabs: View {
             Color.canvas
                 .tabItem { tabLabel("Add score", "plus-circle", .add) }
                 .tag(Tab.add)
-            WebTab(title: "Friends", webTab: "Friends", active: selection == .friends)
+            FriendsView()
                 .tabItem { tabLabel("Friends", "users", .friends) }
                 .tag(Tab.friends)
-            WebTab(title: "You", webTab: "You", active: selection == .you)
-                .tabItem { tabLabel("You", "user-circle", .you) }
-                .tag(Tab.you)
+            GlobalView()
+                .tabItem { tabLabel("Global", "globe-americas", .global) }
+                .tag(Tab.global)
         }
         .tint(Color.ink)
         // a light tap on every tab change, a touch firmer than a picker's tick
@@ -44,19 +47,32 @@ struct AppTabs: View {
             }
         }
         .sheet(isPresented: $adding) { AddScoreSheet() }
+        .sheet(isPresented: $profile.open) { YouView() }
         .onAppear { feed.startPolling() }
         .task { await push.registerIfAllowed() }
-        // a tapped notification opens its tab
+        // a tapped notification opens its tab ("you" opens the profile)
         .onChange(of: push.openTab, initial: true) { _, tab in
-            guard let tab, let t = Tab(rawValue: tab), t != .add else { return }
-            selection = t
+            guard let tab else { return }
+            if tab == "you" {
+                profile.open = true
+            } else if let t = Tab(rawValue: tab), t != .add {
+                selection = t
+            }
             push.openTab = nil
         }
-        .onDisappear { feed.signedOut() }
+        .onDisappear {
+            feed.signedOut()
+            FriendsModel.shared.signedOut()
+            YouModel.shared.signedOut()
+            GlobalModel.shared.signedOut()
+            profile.open = false
+        }
         #if DEBUG
         .onAppear {
-            // -dailiesTab feed|friends|you: open on that tab (scripted Simulator runs)
-            if let t = UserDefaults.standard.string(forKey: "dailiesTab").flatMap(Tab.init(rawValue:)) { selection = t }
+            // -dailiesTab feed|friends|global|you: open on that tab, or the profile (scripted Simulator runs)
+            let tab = UserDefaults.standard.string(forKey: "dailiesTab")
+            if tab == "you" { profile.open = true }
+            if let t = tab.flatMap(Tab.init(rawValue:)) { selection = t }
             // -dailiesAddSheet YES: open Add a score (screenshots)
             if UserDefaults.standard.bool(forKey: "dailiesAddSheet") { adding = true }
         }
@@ -69,23 +85,44 @@ struct AppTabs: View {
     }
 }
 
-/// The one shared web view can only sit in one place, so only the active web tab hosts it.
-private struct WebTab: View {
-    let title: String
-    let webTab: String
-    let active: Bool
+/// Whether the profile (You) is showing; any tab's ProfileButton opens it.
+@MainActor
+@Observable
+final class ProfileSheet {
+    static let shared = ProfileSheet()
+    var open = false
+}
 
+/// Your initial at the top right of each tab: opens your profile.
+struct ProfileButton: View {
     var body: some View {
-        NavigationStack {
-            Group {
-                if active { MainWebView() } else { Color.canvas }
-            }
-            .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+        Button {
+            Haptic.tap()
+            ProfileSheet.shared.open = true
+        } label: {
+            Text((AppSession.shared.username ?? "?").prefix(1).uppercased())
+                .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                .foregroundStyle(Color.onAccent)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.sun))
+                .overlay(Circle().strokeBorder(Color.onAccent, lineWidth: 2))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
         }
-        .onChange(of: active, initial: true) { _, isActive in
-            if isActive { WebController.shared.showTab(webTab) }
+        .buttonStyle(.pressIn)
+        .accessibilityLabel("Your profile")
+        .accessibilityIdentifier("profileButton")
+    }
+}
+/// The profile button in a tab's navigation bar, without iOS 26's glass circle around it (the
+/// button is its own yellow circle, like on Today).
+struct ProfileToolbarItem: ToolbarContent {
+    var body: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .topBarTrailing) { ProfileButton() }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .topBarTrailing) { ProfileButton() }
         }
     }
 }

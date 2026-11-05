@@ -183,6 +183,101 @@ struct Feed: Decodable {
     var nextBefore: String?
 }
 
+/// Friends, requests both ways (server/friends.js).
+struct FriendList: Decodable {
+    struct Person: Decodable, Identifiable, Hashable { let id: Int; let username: String }
+    let friends: [Person]
+    let incoming: [Person]
+    let outgoing: [Person]
+}
+
+/// "People you may know": friends of friends, most friends in common first.
+struct Suggestion: Decodable, Identifiable, Hashable {
+    let id: Int
+    let username: String
+    let mutualCount: Int
+    let mutuals: [String]
+
+    /// "Friends with maya", "Friends with maya and sam", "Friends with maya and 3 more"
+    var why: String {
+        guard let first = mutuals.first else { return "" }
+        if mutualCount == 1 { return "Friends with \(first)" }
+        if mutualCount == 2, mutuals.count > 1 { return "Friends with \(first) and \(mutuals[1])" }
+        return "Friends with \(first) and \(mutualCount - 1) more"
+    }
+}
+
+/// My circle's standings over a range (server/submissions.js /stats).
+struct Stats: Decodable {
+    struct Player: Decodable, Identifiable, Hashable {
+        let userId: Int
+        let username: String
+        let points: Int
+        let crowns: Int
+        let wins: Int
+        let played: Int
+        let daysPlayed: Int?
+        let streak: Int
+        let bestStreak: Int?
+        var id: Int { userId }
+    }
+    struct GameStanding: Decodable, Identifiable, Hashable {
+        let userId: Int
+        let username: String
+        let played: Int
+        let wins: Int
+        let bestDisplay: String
+        let avgDisplay: String
+        var id: Int { userId }
+    }
+    struct GameBoard: Decodable, Identifiable, Hashable {
+        let gameId: String
+        let better: String
+        let entries: [GameStanding]
+        var id: String { gameId }
+    }
+    let overall: [Player]
+    let categories: [String: [Player]]?
+    let games: [GameBoard]
+}
+
+/// Today's crowns across everyone who joined the global board (server/global.js). Anonymous
+/// players come with their fun name only; no user ids are sent.
+struct GlobalBoard: Decodable {
+    struct Row: Decodable, Hashable, Identifiable {
+        let rank: Int
+        let name: String
+        let anonymous: Bool
+        let points: Int
+        let games: Int
+        let me: Bool
+        var id: String { "\(rank)-\(name)-\(me)" }
+    }
+    struct Standings: Decodable, Hashable {
+        let top: [Row]
+        let mine: Row?
+        let total: Int
+    }
+    struct Category: Decodable, Hashable, Identifiable {
+        let id: String
+        let name: String
+        let top: [Row]
+        let mine: Row?
+        let total: Int
+        var standings: Standings { Standings(top: top, mine: mine, total: total) }
+    }
+    struct Me: Decodable, Hashable {
+        let joined: Bool
+        let anonymous: Bool
+        let alias: String?
+    }
+    let today: String
+    let members: Int
+    let me: Me
+    let overall: Standings
+    let categories: [Category]
+}
+
 enum DailiesError: Error, Equatable {
     case notSignedIn(String)
     case duplicate(String)
@@ -283,6 +378,74 @@ actor DailiesAPI {
         } else {
             _ = try await send("/api/feed/highlight", method: "DELETE")
         }
+    }
+
+    // MARK: friends
+
+    func friends() async throws -> FriendList {
+        try decode(FriendList.self, try await send("/api/friends"))
+    }
+
+    /// Sends a request, or accepts theirs if they already asked me (`accepted`).
+    func requestFriend(username: String) async throws -> (accepted: Bool, user: FriendList.Person) {
+        struct Body: Decodable { let accepted: Bool; let user: FriendList.Person }
+        let body = try decode(Body.self, try await send("/api/friends/request", method: "POST", json: ["username": username]))
+        return (body.accepted, body.user)
+    }
+
+    func respondToFriend(userId: Int, accept: Bool) async throws {
+        _ = try await send("/api/friends/respond", method: "POST", json: ["userId": userId, "accept": accept])
+    }
+
+    func removeFriend(userId: Int) async throws {
+        _ = try await send("/api/friends/\(userId)", method: "DELETE")
+    }
+
+    /// Friends of my friends; `via` keeps to one friend's friends.
+    func suggestions(via: Int? = nil) async throws -> [Suggestion] {
+        struct Body: Decodable { let suggestions: [Suggestion] }
+        return try decode(Body.self, try await send("/api/friends/suggestions" + (via.map { "?via=\($0)" } ?? ""))).suggestions
+    }
+
+    func dismissSuggestion(userId: Int) async throws {
+        _ = try await send("/api/friends/suggestions/dismiss", method: "POST", json: ["userId": userId])
+    }
+
+    // MARK: global leaderboard
+
+    func global() async throws -> GlobalBoard {
+        try decode(GlobalBoard.self, try await send("/api/global"))
+    }
+
+    /// Join, or switch between my username and my fun name.
+    func joinGlobal(anonymous: Bool) async throws {
+        _ = try await send("/api/global/join", method: "POST", json: ["anonymous": anonymous])
+    }
+
+    func leaveGlobal() async throws {
+        _ = try await send("/api/global/leave", method: "POST")
+    }
+
+    // MARK: profile
+
+    /// When I joined (ISO date-time).
+    func profileCreatedAt() async throws -> String? {
+        struct Body: Decodable { let createdAt: String? }
+        return try decode(Body.self, try await send("/api/auth/profile")).createdAt
+    }
+
+    func changePassword(current: String, next: String) async throws {
+        _ = try await send("/api/auth/password", method: "POST", json: ["current": current, "next": next])
+    }
+
+    /// Deletes the account and everything in it; the password confirms it.
+    func deleteAccount(password: String) async throws {
+        _ = try await send("/api/auth/account", method: "DELETE", json: ["password": password])
+    }
+
+    /// `days` nil for all time.
+    func stats(days: Int?) async throws -> Stats {
+        try decode(Stats.self, try await send("/api/submissions/stats" + (days.map { "?days=\($0)" } ?? "")))
     }
 
     func registerPush(token: String, platform: String, env: String) async throws {

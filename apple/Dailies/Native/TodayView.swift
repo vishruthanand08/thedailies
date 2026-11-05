@@ -83,13 +83,16 @@ struct TodayView: View {
 
             // the date title is part of the page, so it slides with the day instead of
             // staying put in the navigation bar while the content moves under it
-            Text(model.title)
-                .font(.brand(.title, .heavy))
-                .foregroundStyle(Color.ink)
-                .oneLine()
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("dayTitle")
-                .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 0, trailing: 0))
+            HStack(spacing: 8) {
+                Text(model.title)
+                    .font(.brand(.title, .heavy))
+                    .foregroundStyle(Color.ink)
+                    .oneLine()
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("dayTitle")
+                ProfileButton()
+            }
+            .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 0, trailing: 0))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
@@ -619,7 +622,7 @@ private struct SearchRow: View {
 }
 
 /// The chunky look for a field: outline and hard shadow, sitting down onto the shadow while active.
-private struct Sunken: ViewModifier {
+struct Sunken: ViewModifier {
     let down: Bool
     let fill: Color
 

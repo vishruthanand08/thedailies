@@ -54,8 +54,9 @@ struct DebugMenu: View {
 ///   -dailiesOpenGame <url>      open that game through the normal Play routing after launch
 ///   -dailiesGameEval "<js>"     run once in the game browser after its first page load
 ///   -dailiesScreenshots YES     hide the debug gear (App Store screenshots)
-///   -dailiesTab feed|friends|you  start on that tab (native iOS UI)
+///   -dailiesTab feed|friends|global|you  start on that tab, or with the profile open (native iOS UI)
 ///   -dailiesGame <gameId>       open that game's screen on Today (native iOS UI)
+///   -dailiesScrollTo <id>       start Friends (leaderboard, friends) or You (games, account) scrolled there
 ///   -dailiesAddSheet YES        open the Add a score sheet (native iOS UI)
 ///   -dailiesSignIn "<user> <password>"  sign in with a local test account (local server only)
 @MainActor

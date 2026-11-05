@@ -22,6 +22,7 @@ struct FeedView: View {
             }
             .background(Color.canvas.ignoresSafeArea())
             .navigationTitle("Feed")
+            .toolbar { ProfileToolbarItem() }
             .refreshable { await model.load() }
             .overlay {
                 if model.feed == nil && model.error == nil { ProgressView() }
@@ -353,7 +354,7 @@ private struct DayCard: View {
     }
 }
 
-private struct Avatar: View {
+struct Avatar: View {
     let name: String
     var size: CGFloat = 40
 
