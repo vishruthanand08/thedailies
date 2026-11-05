@@ -659,12 +659,22 @@ body:has(.tile.dragging) { cursor: grabbing; user-select: none; -webkit-user-sel
 .trypoints { font-weight: 800; padding-bottom: 8px; min-width: 60px; }
 .adminactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 /* Admin › Categories: hide or show a whole category */
-.admincats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.admincats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
 .admincats li { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; }
 .admincats .what { flex: 1; min-width: 0; }
 .admincats .sub { color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .admincats li.hidden .what b { opacity: 0.6; }
 .admincats .btn { flex: none; min-width: 64px; }
+.admincats li { flex-wrap: wrap; }
+.admingames { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.admingame {
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; white-space: nowrap;
+  padding: 3px 10px; background: var(--card); border: 2px solid var(--ink); border-radius: 999px;
+}
+.admingame.off { background: transparent; border-style: dashed; color: var(--muted); text-decoration: line-through; }
+.admingame .offtag { margin-left: 6px; font-size: 11px; font-weight: 800; text-decoration: none; display: inline-block; }
+.admincats li.hidden .admingame { opacity: 0.6; }
+.admingame:disabled { cursor: progress; }
 .hiddentag {
   display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; margin-left: 8px;
   background: var(--lilac); border: 2px solid var(--ink); border-radius: 10px; white-space: nowrap;

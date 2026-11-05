@@ -155,3 +155,12 @@ CREATE TABLE IF NOT EXISTS category_settings (
 );
 INSERT INTO category_settings (category, hidden, updated_by) VALUES ('sports', true, 'setup')
   ON CONFLICT (category) DO NOTHING;
+
+-- Single games an admin has hidden, the same way (server/categories.js): not shown, played or
+-- scored, scores kept for when the game comes back.
+CREATE TABLE IF NOT EXISTS game_settings (
+  game_id TEXT PRIMARY KEY,
+  hidden BOOLEAN NOT NULL DEFAULT false,
+  updated_by TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

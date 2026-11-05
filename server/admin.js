@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth, requireAdmin, deleteUser, isAdmin } from './auth.js'
 import { GAMES, CATEGORIES } from './parsers.js'
-import { isCategoryHidden, setCategoryHidden } from './categories.js'
+import { isCategoryHidden, setCategoryHidden, isGameSwitchedOff, setGameHidden } from './categories.js'
 import { allRules, checkRules, saveRules, resetRules } from './points.js'
 
 export const adminRouter = Router()
@@ -25,18 +25,33 @@ adminRouter.get('/scoring', async (req, res) => {
   })
 })
 
-// ---------- categories ----------
-// Hide a category or bring it back (server/categories.js): hidden, its games aren't shown,
-// played or scored anywhere, and its scores are kept for when it comes back.
+// ---------- categories and games ----------
+// Hide a category or a single game, or bring it back (server/categories.js): hidden, its games
+// aren't shown, played or scored anywhere, and their scores are kept for when they come back.
 adminRouter.get('/categories', async (req, res) => {
-  const { rows } = await q('SELECT category, updated_by, updated_at FROM category_settings')
-  const set = Object.fromEntries(rows.map((r) => [r.category, { by: r.updated_by, at: r.updated_at }]))
+  const [cats, games] = await Promise.all([
+    q('SELECT category, updated_by, updated_at FROM category_settings'),
+    q('SELECT game_id, updated_by, updated_at FROM game_settings'),
+  ])
+  const set = Object.fromEntries(cats.rows.map((r) => [r.category, { by: r.updated_by, at: r.updated_at }]))
+  const gameSet = Object.fromEntries(games.rows.map((r) => [r.game_id, { by: r.updated_by, at: r.updated_at }]))
   res.json({
     categories: CATEGORIES.map((c) => ({
       id: c.id, name: c.name, emoji: c.emoji, hidden: isCategoryHidden(c.id), changed: set[c.id] ?? null,
-      games: GAMES.filter((g) => g.category === c.id).map((g) => ({ id: g.id, name: g.name, emoji: g.emoji })),
+      games: GAMES.filter((g) => g.category === c.id).map((g) => ({
+        id: g.id, name: g.name, emoji: g.emoji, hidden: isGameSwitchedOff(g.id), changed: gameSet[g.id] ?? null,
+      })),
     })),
   })
+})
+
+adminRouter.put('/games/:id', async (req, res) => {
+  const game = GAMES.find((g) => g.id === req.params.id)
+  if (!game) return res.status(404).json({ error: 'No such game' })
+  const hidden = req.body?.hidden === true
+  await setGameHidden(game.id, hidden, req.user.username)
+  console.log(`admin: ${req.user.username} ${hidden ? 'hid' : 'showed'} ${game.name}`)
+  res.json({ ok: true, id: game.id, hidden })
 })
 
 adminRouter.put('/categories/:id', async (req, res) => {

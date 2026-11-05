@@ -44,7 +44,7 @@ submissionsRouter.get('/scoring', (req, res) => {
   })
 })
 
-// a hidden category's games can't be played for now (server/categories.js)
+// a hidden game (or a hidden category's) can't be played for now (server/categories.js)
 const hiddenGameError = (game) => `${game.name} isn’t on The Dailies right now, so that score wasn’t saved.`
 
 submissionsRouter.post('/', async (req, res) => {

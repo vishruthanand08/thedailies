@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
 
-// Admins only (the server checks too): hiding a category, each game's scoring values, the game
+// Admins only (the server checks too): hiding a category or a game, each game's scoring values, the game
 // suggestions, and deleting a user's account.
 export default function Admin() {
   return (
@@ -14,8 +14,8 @@ export default function Admin() {
   )
 }
 
-// Hide a whole category (its games leave Today and stop counting toward any score) or bring it
-// back. Scores aren't deleted, so showing it again restores its boards and points.
+// Hide a whole category or a single game (it leaves Today and stops counting toward any score) or
+// bring it back. Scores aren't deleted, so showing it again restores its boards and points.
 function CategoriesAdmin() {
   const [list, setList] = useState(null)
   const [error, setError] = useState(null)
@@ -25,11 +25,12 @@ function CategoriesAdmin() {
     load()
   }, [])
 
-  const toggle = async (c) => {
-    setBusy(c.id)
+  // kind is 'categories' or 'games'
+  const toggle = async (kind, item) => {
+    setBusy(item.id)
     setError(null)
     try {
-      await api.put(`/admin/categories/${c.id}`, { hidden: !c.hidden })
+      await api.put(`/admin/${kind}/${item.id}`, { hidden: !item.hidden })
       await load()
     } catch (err) {
       setError(err.message)
@@ -40,10 +41,10 @@ function CategoriesAdmin() {
 
   return (
     <div className="card">
-      <h3 className="sectiontitle">🗂️ Categories</h3>
+      <h3 className="sectiontitle">🗂️ Categories and games</h3>
       <p className="hint small">
-        A hidden category’s games leave Today, can’t be scored, and drop out of every board, crown, feed and stat.
-        Nobody’s scores are deleted: showing it again brings them back.
+        Hide a whole category, or tap a game to hide just that one. Hidden games leave Today, can’t be scored, and
+        drop out of every board, crown, feed and stat. Nobody’s scores are deleted: showing it again brings them back.
       </p>
       {error && <div className="flash err">{error}</div>}
       {!list && !error && <div className="hint">loading…</div>}
@@ -56,18 +57,35 @@ function CategoriesAdmin() {
                   <b>{c.emoji} {c.name}</b>
                   {c.hidden && <span className="hiddentag">Hidden</span>}
                 </div>
-                <div className="sub">{c.games.map((g) => g.name).join(', ')}</div>
                 {c.changed?.by && c.changed.by !== 'setup' && (
                   <div className="sub">{c.hidden ? 'Hidden' : 'Shown'} by {c.changed.by} · {when(c.changed.at)}</div>
                 )}
               </div>
               <button
                 className={`btn small${c.hidden ? '' : ' ghost'}`}
-                onClick={() => toggle(c)}
+                onClick={() => toggle('categories', c)}
                 disabled={busy === c.id}
               >
                 {c.hidden ? 'Show' : 'Hide'}
               </button>
+              <div className="admingames">
+                {c.games.map((g) => (
+                  <button
+                    key={g.id}
+                    className={`admingame${g.hidden ? ' off' : ''}`}
+                    aria-pressed={!g.hidden}
+                    onClick={() => toggle('games', g)}
+                    disabled={busy === g.id}
+                    title={
+                      (g.hidden ? `Hidden${g.changed?.by ? ` by ${g.changed.by} · ${when(g.changed.at)}` : ''}. Tap to show` : 'Tap to hide') +
+                      (c.hidden ? ` (the whole ${c.name} category is hidden too)` : '')
+                    }
+                  >
+                    {g.emoji} {g.name}
+                    {g.hidden && <span className="offtag">Hidden</span>}
+                  </button>
+                ))}
+              </div>
             </li>
           ))}
         </ul>
