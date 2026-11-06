@@ -1,8 +1,31 @@
-// All daily boards roll over on US Eastern time (matches NYT).
+// Each player's day rolls over at midnight where they are: their time zone comes from their
+// browser or app (the X-Timezone header, saved on their account by requireAuth). US Eastern is
+// the fallback for anyone the server hasn't heard a zone from yet (it matches NYT).
 export const TZ = 'America/New_York'
 
-export function todayISO() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: TZ })
+const zoneOK = new Map()
+export function isValidTimeZone(tz) {
+  if (typeof tz !== 'string' || !tz || tz.length > 64) return false
+  if (!zoneOK.has(tz)) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz })
+      zoneOK.set(tz, true)
+    } catch {
+      zoneOK.set(tz, false)
+    }
+  }
+  return zoneOK.get(tz)
+}
+
+// Today's date (ISO) in a time zone; Eastern when it's missing or not a real zone.
+export function todayISO(tz = TZ) {
+  return new Date().toLocaleDateString('en-CA', { timeZone: isValidTimeZone(tz) ? tz : TZ })
+}
+
+// The hour (0-23) right now in a time zone.
+export function hourIn(tz = TZ) {
+  const zone = isValidTimeZone(tz) ? tz : TZ
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', hourCycle: 'h23' }).format(new Date()))
 }
 
 // Date (ISO) of puzzle number `n`, given the date of puzzle #firstNumber.

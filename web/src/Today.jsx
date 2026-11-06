@@ -390,7 +390,8 @@ export default function Today({ me, onOpenDay }) {
       const d = await api.post('/submissions', { text: value })
       setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added ✓` })
       clearAway()
-      load(dateRef.current)
+      load(null) // today, where the new score is
+
       return true
     } catch (err) {
       setFlash({ kind: 'err', msg: err.message })
@@ -431,7 +432,9 @@ export default function Today({ me, onOpenDay }) {
         <h2>{prettyDate(date, today)}</h2>
       </div>
 
-      {isToday && !nativeCapture && (
+      {/* on every day: a pasted result always counts for its own day, so after saving the
+          board comes to today */}
+      {!nativeCapture && (
         <PasteDock
           busy={busy}
           flash={flash}
@@ -612,7 +615,7 @@ export default function Today({ me, onOpenDay }) {
 
       <Suggestions />
 
-      {playing && <GamePanel game={playing} onClose={closePanel} onSaved={() => load(dateRef.current)} />}
+      {playing && <GamePanel game={playing} onClose={closePanel} onSaved={() => load(null)} />}
     </div>
   )
 }

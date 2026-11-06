@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { q } from './db.js'
+import { TZ, isValidTimeZone } from './util.js'
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'dailyboard-dev-secret'
 const COOKIE = 'db_token'
@@ -20,13 +21,25 @@ function setSession(res, user) {
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex')
 const MAX_TOKENS = 10
 
+// The player's time zone: the one their browser or app sends (X-Timezone), else the one saved
+// on their account, else Eastern. A new or changed zone is saved, so requests that don't send
+// one (the Windows app's game panel, older app builds) still use it.
+function timeZoneFor(req, userId, saved) {
+  const sent = req.get('x-timezone')
+  if (isValidTimeZone(sent)) {
+    if (sent !== saved) q('UPDATE users SET timezone = $2 WHERE id = $1', [userId, sent]).catch(() => {})
+    return sent
+  }
+  return isValidTimeZone(saved) ? saved : TZ
+}
+
 // Bearer device token (native app, share extension, Shortcut) first, then the cookie.
 export async function requireAuth(req, res, next) {
   try {
     const h = req.get('authorization') || ''
     if (h.startsWith('Bearer dly_')) {
       const { rows } = await q(
-        `SELECT u.id, u.username, t.id AS token_id
+        `SELECT u.id, u.username, u.timezone, t.id AS token_id
            FROM api_tokens t JOIN users u ON u.id = t.user_id
           WHERE t.token_hash = $1`,
         [sha256(h.slice(7))]
@@ -34,7 +47,7 @@ export async function requireAuth(req, res, next) {
       if (!rows.length) {
         return res.status(401).json({ error: 'That device token is no longer valid. Sign in again in the app.' })
       }
-      req.user = { id: rows[0].id, username: rows[0].username }
+      req.user = { id: rows[0].id, username: rows[0].username, tz: timeZoneFor(req, rows[0].id, rows[0].timezone) }
       req.tokenId = rows[0].token_id
       q('UPDATE api_tokens SET last_used_at = now() WHERE id = $1', [rows[0].token_id]).catch(() => {})
       return next()
@@ -49,12 +62,12 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Session expired — sign in again' })
     }
     // the account may have been deleted since (by its owner or an admin): that signs it out
-    const { rows } = await q('SELECT id, username FROM users WHERE id = $1', [session.id])
+    const { rows } = await q('SELECT id, username, timezone FROM users WHERE id = $1', [session.id])
     if (!rows.length) {
       res.clearCookie(COOKIE)
       return res.status(401).json({ error: 'Not signed in' })
     }
-    req.user = { id: rows[0].id, username: rows[0].username }
+    req.user = { id: rows[0].id, username: rows[0].username, tz: timeZoneFor(req, rows[0].id, rows[0].timezone) }
     next()
   } catch (err) {
     next(err)
@@ -166,6 +179,7 @@ export async function deleteUser(id) {
   await q('DELETE FROM day_kudos WHERE owner_id = $1 OR giver_id = $1', [id])
   await q('DELETE FROM day_highlights WHERE user_id = $1', [id])
   await q('DELETE FROM push_devices WHERE user_id = $1', [id])
+  await q('DELETE FROM push_user_reminders WHERE user_id = $1', [id])
   await q('DELETE FROM global_members WHERE user_id = $1', [id])
   await q('DELETE FROM friend_suggestion_dismissals WHERE user_id = $1 OR other_id = $1', [id])
   await q('DELETE FROM submissions WHERE user_id = $1', [id])

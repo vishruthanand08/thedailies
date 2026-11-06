@@ -522,6 +522,8 @@ actor DailiesAPI {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("Bearer \(try token ?? currentToken())", forHTTPHeaderField: "Authorization")
+        // the server rolls my day over at my midnight (server/auth.js)
+        req.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Timezone")
         if let json {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: json)

@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
-import { todayISO, TZ } from './util.js'
+import { todayISO, hourIn } from './util.js'
 import { hiddenGameIds } from './categories.js'
 
 // Push notifications to the iPhone and Mac apps through Apple's push service (APNs), using a
@@ -19,7 +19,7 @@ export const pushEnabled = Boolean(KEY && KEY_ID && TEAM_ID)
 const HOSTS = process.env.APNS_HOST
   ? { production: process.env.APNS_HOST, sandbox: process.env.APNS_HOST }
   : { production: 'https://api.push.apple.com', sandbox: 'https://api.sandbox.push.apple.com' }
-// hour (Eastern, 0-23) of the evening reminder for anyone who hasn't posted a score today
+// hour (0-23, in each player's own time zone) of the evening reminder for anyone who hasn't posted a score today
 const REMINDER_HOUR = Number(process.env.PUSH_REMINDER_HOUR ?? 20)
 
 export const pushRouter = Router()
@@ -138,7 +138,8 @@ export async function notifyKudos(ownerId, date) {
   const names = rows.map((r) => r.username)
   const who = names.length <= 2 ? names.join(' and ') : `${names[0]}, ${names[1]} and ${names.length - 2} more`
   const { rows: unseen } = await q('SELECT count(*)::int AS n FROM day_kudos WHERE owner_id = $1 AND NOT seen', [ownerId])
-  const day = date === todayISO() ? 'today' : 'your day'
+  const { rows: owner } = await q('SELECT timezone FROM users WHERE id = $1', [ownerId])
+  const day = date === todayISO(owner[0]?.timezone) ? 'today' : 'your day'
   await notify(ownerId, {
     title: '👏 Kudos',
     body: `${who} gave you kudos for ${day}`,
@@ -151,32 +152,37 @@ export async function notifyKudos(ownerId, date) {
 
 // ---------- the evening reminder ----------
 
-// Once a day at REMINDER_HOUR Eastern: everyone with a device who hasn't posted a score today.
-// The day is recorded in push_reminders so a restart doesn't send it twice.
+// Once a day at REMINDER_HOUR in each player's own time zone: everyone with a device who hasn't
+// posted a score on their today. Each player's day is recorded in push_user_reminders, so a
+// restart doesn't send it twice.
 async function remindIfDue() {
-  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' }).format(new Date()))
-  if (hour < REMINDER_HOUR) return
-  const today = todayISO()
-  const { rows: claimed } = await q(
-    'INSERT INTO push_reminders (puzzle_date) VALUES ($1) ON CONFLICT DO NOTHING RETURNING puzzle_date',
-    [today]
+  const { rows: players } = await q(
+    `SELECT DISTINCT d.user_id, u.timezone FROM push_devices d JOIN users u ON u.id = d.user_id`
   )
-  if (!claimed.length) return // already sent today
-  const { rows } = await q(
-    `SELECT DISTINCT d.user_id FROM push_devices d
-      WHERE NOT EXISTS (SELECT 1 FROM submissions s
-                         WHERE s.user_id = d.user_id AND s.puzzle_date = $1 AND s.game_id <> ALL($2::text[]))`,
-    [today, hiddenGameIds()]
-  )
-  for (const r of rows) {
-    await notify(r.user_id, {
+  let sent = 0
+  for (const p of players) {
+    if (hourIn(p.timezone) < REMINDER_HOUR) continue
+    const today = todayISO(p.timezone)
+    const { rows: played } = await q(
+      `SELECT 1 FROM submissions WHERE user_id = $1 AND puzzle_date = $2 AND game_id <> ALL($3::text[]) LIMIT 1`,
+      [p.user_id, today, hiddenGameIds()]
+    )
+    if (played.length) continue
+    const { rows: claimed } = await q(
+      `INSERT INTO push_user_reminders (user_id, puzzle_date) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING RETURNING user_id`,
+      [p.user_id, today]
+    )
+    if (!claimed.length) continue // already reminded today
+    await notify(p.user_id, {
       title: 'Still time to play',
       body: 'You haven’t posted a score today. Today’s puzzles reset at midnight.',
       tab: 'today',
       collapseId: `reminder-${today}`,
     })
+    sent += 1
   }
-  console.log(`push: evening reminder sent to ${rows.length}`)
+  if (sent) console.log(`push: evening reminder sent to ${sent}`)
 }
 
 export function startReminders() {

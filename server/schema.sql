@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- The player's IANA time zone (from the X-Timezone header), for when their day rolls over.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
 
 -- One row per pair, normalized so user_a < user_b.
 CREATE TABLE IF NOT EXISTS friendships (
@@ -163,4 +165,11 @@ CREATE TABLE IF NOT EXISTS game_settings (
   hidden BOOLEAN NOT NULL DEFAULT false,
   updated_by TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- The evening reminder, once per player per day in their own time zone.
+CREATE TABLE IF NOT EXISTS push_user_reminders (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  puzzle_date DATE NOT NULL,
+  PRIMARY KEY (user_id, puzzle_date)
 );

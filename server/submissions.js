@@ -48,7 +48,7 @@ submissionsRouter.get('/scoring', (req, res) => {
 const hiddenGameError = (game) => `${game.name} isn’t on The Dailies right now, so that score wasn’t saved.`
 
 submissionsRouter.post('/', async (req, res) => {
-  const today = todayISO()
+  const today = todayISO(req.user.tz)
   let gameId, metric, display, rawText, puzzleNumber = null, verified = true, puzzleDate = today
 
   if (req.body.text) {
@@ -123,7 +123,7 @@ submissionsRouter.delete('/:id', async (req, res) => {
 })
 
 submissionsRouter.get('/board', async (req, res) => {
-  const date = isValidISODate(String(req.query.date || '')) ? req.query.date : todayISO()
+  const date = isValidISODate(String(req.query.date || '')) ? req.query.date : todayISO(req.user.tz)
   const ids = await circleIds(req.user.id)
   const { rows } = await q(
     `SELECT s.*, u.username FROM submissions s
@@ -132,7 +132,7 @@ submissionsRouter.get('/board', async (req, res) => {
     [date, ids]
   )
   const { boards, crown, categoryCrowns } = buildBoards(visibleRows(rows))
-  res.json({ date, today: todayISO(), boards, crown, categoryCrowns, circleSize: ids.length })
+  res.json({ date, today: todayISO(req.user.tz), boards, crown, categoryCrowns, circleSize: ids.length })
 })
 
 // An average or best metric; the unit (metricLabel) goes in the column header, except for times.
@@ -149,7 +149,7 @@ const iso = (d) => (typeof d === 'string' ? d : new Date(d).toISOString().slice(
 // counts when at least two people played, so playing alone never wins anything.
 submissionsRouter.get('/stats', async (req, res) => {
   const days = ['7', '30'].includes(req.query.days) ? Number(req.query.days) : null
-  const today = todayISO()
+  const today = todayISO(req.user.tz)
   const since = days ? new Date(Date.parse(today + 'T12:00:00Z') - (days - 1) * 86400000).toISOString().slice(0, 10) : null
   const ids = await circleIds(req.user.id)
   const { rows: allRows } = await q(

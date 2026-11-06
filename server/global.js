@@ -69,7 +69,7 @@ function standings(list, meId, aliases) {
 }
 
 globalRouter.get('/', async (req, res) => {
-  const date = isValidISODate(String(req.query.date || '')) ? req.query.date : todayISO()
+  const date = isValidISODate(String(req.query.date || '')) ? req.query.date : todayISO(req.user.tz)
   const [{ rows }, { rows: members }] = await Promise.all([
     q(
       `SELECT s.*, u.username FROM submissions s
@@ -91,7 +91,7 @@ globalRouter.get('/', async (req, res) => {
   const { crown, categoryCrowns } = buildBoards(visibleRows(rows))
   res.json({
     date,
-    today: todayISO(),
+    today: todayISO(req.user.tz),
     members: members.length,
     me: mine ? { joined: true, anonymous: mine.anonymous, alias: mine.alias } : { joined: false, anonymous: false },
     overall: standings(crown, req.user.id, aliases),

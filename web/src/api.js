@@ -1,6 +1,15 @@
+// This browser's time zone: the server rolls my day over at my midnight, not Eastern's.
+const timeZone = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  } catch {
+    return ''
+  }
+})()
+
 async function call(path, opts = {}) {
   const res = await fetch('/api' + path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(timeZone ? { 'X-Timezone': timeZone } : {}) },
     credentials: 'same-origin',
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,

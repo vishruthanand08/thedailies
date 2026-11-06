@@ -23,7 +23,7 @@ const better = (game, a, b) => (game.better === 'higher' ? a > b : a < b)
 feedRouter.get('/', async (req, res) => {
   const me = req.user.id
   const ids = await circleIds(me)
-  const today = todayISO()
+  const today = todayISO(req.user.tz)
   const before = isValidISODate(String(req.query.before || '')) ? req.query.before : null
 
   const { rows: dateRows } = await q(
@@ -216,7 +216,7 @@ feedRouter.put('/highlight', async (req, res) => {
   const { rows } = await q('SELECT puzzle_date FROM submissions WHERE id = $1 AND user_id = $2', [id, req.user.id])
   if (!rows.length) return res.status(404).json({ error: 'That score is gone' })
   const date = iso(rows[0].puzzle_date)
-  if (date !== todayISO()) return res.status(400).json({ error: 'You can only change today’s highlight' })
+  if (date !== todayISO(req.user.tz)) return res.status(400).json({ error: 'You can only change today’s highlight' })
   await q(
     `INSERT INTO day_highlights (user_id, puzzle_date, submission_id) VALUES ($1, $2, $3)
      ON CONFLICT (user_id, puzzle_date) DO UPDATE SET submission_id = EXCLUDED.submission_id`,
@@ -227,6 +227,6 @@ feedRouter.put('/highlight', async (req, res) => {
 
 // Back to the automatic highlight (top points).
 feedRouter.delete('/highlight', async (req, res) => {
-  await q('DELETE FROM day_highlights WHERE user_id = $1 AND puzzle_date = $2', [req.user.id, todayISO()])
+  await q('DELETE FROM day_highlights WHERE user_id = $1 AND puzzle_date = $2', [req.user.id, todayISO(req.user.tz)])
   res.json({ ok: true })
 })
