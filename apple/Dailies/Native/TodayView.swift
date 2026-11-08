@@ -96,6 +96,11 @@ struct TodayView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
+            AccountNudge()
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
             if let board = model.board {
                 CrownCard(board: board, model: model, goToFriends: goToFriends,
                           onDrag: dragChanged, onDragEnd: dragEnded, onPage: page)

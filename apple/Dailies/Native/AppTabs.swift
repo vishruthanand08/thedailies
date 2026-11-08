@@ -47,9 +47,10 @@ struct AppTabs: View {
             }
         }
         .sheet(isPresented: $adding) { AddScoreSheet() }
-        .sheet(isPresented: $profile.open) { YouView() }
+        .sheet(isPresented: $profile.open, onDismiss: { Task { await YouModel.shared.loadRecovery() } }) { YouView() }
         .onAppear { feed.startPolling() }
         .task { await push.registerIfAllowed() }
+        .task { await YouModel.shared.loadRecovery() } // the account nudge on Today
         // a tapped notification opens its tab ("you" opens the profile)
         .onChange(of: push.openTab, initial: true) { _, tab in
             guard let tab else { return }

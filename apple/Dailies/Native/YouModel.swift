@@ -21,6 +21,8 @@ final class YouModel {
     private(set) var stats: Stats?
     private(set) var error: String?
     private(set) var joined: Date?
+    /// Email, Apple and password state (server/account.js).
+    private(set) var recovery: DailiesAPI.Recovery?
 
     var range: FriendsModel.Range = .all { didSet { if range != oldValue { Task { await loadStats() } } } }
 
@@ -31,7 +33,44 @@ final class YouModel {
         if joined == nil, let iso = try? await DailiesAPI.shared.profileCreatedAt() {
             joined = Self.isoTime.date(from: iso) ?? Self.isoTimePlain.date(from: iso)
         }
+        await loadRecovery()
         await loadStats()
+    }
+
+    func loadRecovery() async {
+        if let r = try? await DailiesAPI.shared.recovery() { recovery = r }
+    }
+
+    var hasPassword: Bool { recovery?.hasPassword != false }
+
+    /// nil when it worked, otherwise the message to show.
+    func addEmail(_ email: String) async -> String? {
+        do {
+            try await DailiesAPI.shared.addEmail(email.trimmingCharacters(in: .whitespaces).lowercased())
+            await loadRecovery()
+            return nil
+        } catch let e as DailiesError {
+            return e.message
+        } catch {
+            return "Something went wrong. Try again."
+        }
+    }
+
+    func removeEmail() async {
+        try? await DailiesAPI.shared.removeEmail()
+        await loadRecovery()
+    }
+
+    func linkApple(identityToken: String, code: String?) async -> String? {
+        do {
+            try await DailiesAPI.shared.linkApple(identityToken: identityToken, code: code)
+            await loadRecovery()
+            return nil
+        } catch let e as DailiesError {
+            return e.message
+        } catch {
+            return "Something went wrong. Try again."
+        }
     }
 
     func loadStats() async {
@@ -65,6 +104,7 @@ final class YouModel {
     func changePassword(current: String, next: String) async -> String? {
         do {
             try await DailiesAPI.shared.changePassword(current: current, next: next)
+            await loadRecovery()
             return nil
         } catch let e as DailiesError {
             return e.message
@@ -74,9 +114,14 @@ final class YouModel {
     }
 
     /// nil when the account is gone (and this device signed out), otherwise the message to show.
+    /// `password` is the username for an account that signs in with Apple only.
     func deleteAccount(password: String) async -> String? {
         do {
-            try await DailiesAPI.shared.deleteAccount(password: password)
+            if hasPassword {
+                try await DailiesAPI.shared.deleteAccount(password: password)
+            } else {
+                try await DailiesAPI.shared.deleteAccount(confirmUsername: password)
+            }
             AppSession.shared.signOut()
             return nil
         } catch let e as DailiesError {
@@ -87,6 +132,7 @@ final class YouModel {
     }
 
     func signedOut() {
+        recovery = nil
         stats = nil
         joined = nil
         error = nil

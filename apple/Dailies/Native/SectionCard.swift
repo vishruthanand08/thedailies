@@ -112,4 +112,61 @@ struct NoticeView: View {
             .accessibilityElement(children: .combine)
     }
 }
+/// The account nudge at the top of Today, one at a time, most important first (the website's
+/// AccountNudge): choose your own password after support's reset; confirm the email waiting for
+/// its link (Resend); add an email to an older account ("Not now" hides it for a week).
+struct AccountNudge: View {
+    @State private var model = YouModel.shared
+    @AppStorage("dailies.emailNudgeLater") private var laterUntil: Double = 0
+    @State private var resent: String?
+
+    var body: some View {
+        if let r = model.recovery {
+            if r.mustChangePassword {
+                card("You signed in with a temporary password", "Choose your own now", icon: "lock-closed") {
+                    SmallButton(title: "Change", primary: true) { ProfileSheet.shared.open = true }
+                }
+            } else if r.emailAvailable, r.email == nil, let pending = r.pendingEmail {
+                card("Confirm your email", resent ?? "We sent a link to \(pending)", icon: "envelope") {
+                    if resent == nil {
+                        SmallButton(title: "Resend") {
+                            Task {
+                                let failed = await model.addEmail(pending)
+                                resent = failed ?? "Sent again. Check your inbox."
+                            }
+                        }
+                    }
+                }
+            } else if r.emailAvailable, r.email == nil, r.appleLinked != true, Date().timeIntervalSince1970 > laterUntil {
+                card("Add an email", "So you can always get back in", icon: "envelope") {
+                    SmallButton(title: "Add", primary: true) { ProfileSheet.shared.open = true }
+                    Button {
+                        Haptic.select()
+                        withAnimation(.snappy) { laterUntil = Date().addingTimeInterval(7 * 86400).timeIntervalSince1970 }
+                    } label: {
+                        HeroIcon("x-mark", size: 16).foregroundStyle(.secondary).frame(width: 32, height: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressIn)
+                    .accessibilityLabel("Not now")
+                }
+            }
+        }
+    }
+
+    private func card<Actions: View>(_ title: String, _ detail: String, icon: String, @ViewBuilder actions: () -> Actions) -> some View {
+        HStack(spacing: 10) {
+            HeroIcon(icon, filled: true, size: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.brand(.subheadline, .heavy)).oneLine()
+                Text(detail).font(.caption.weight(.semibold)).opacity(0.75).oneLine()
+            }
+            actions()
+        }
+        .foregroundStyle(Color.onAccent)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .chunkyCard(.sun)
+        .padding(.trailing, 4)
+    }
+}
 #endif

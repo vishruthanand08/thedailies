@@ -40,18 +40,35 @@ final class AppSession {
         }
     }
 
-    func signIn(username: String, password: String, register: Bool) async throws {
+    func signIn(username: String, password: String, register: Bool, email: String? = nil) async throws {
         let result = try await DailiesAPI.shared.authenticate(
-            username: username, password: password, register: register,
+            username: username, password: password, register: register, email: email,
             deviceName: Self.deviceName)
+        try await finishSignIn(result.token, cookie: result.cookie)
+    }
+
+    /// Sign in with Apple. Returns a suggested username when it's a new Apple account: ask for
+    /// one, then call again with it (the same Apple token works for a few minutes).
+    func signInWithApple(identityToken: String, code: String?, username: String? = nil) async throws -> String? {
+        switch try await DailiesAPI.shared.signInWithApple(
+            identityToken: identityToken, code: code, username: username, deviceName: Self.deviceName) {
+        case .needsUsername(let suggestion):
+            return suggestion
+        case .signedIn(let token, let cookie):
+            try await finishSignIn(token, cookie: cookie)
+            return nil
+        }
+    }
+
+    private func finishSignIn(_ token: StoredToken, cookie: HTTPCookie?) async throws {
         if let old = Keychain.load() { await DailiesAPI.shared.revoke(old) }
-        guard Keychain.save(result.token) else {
+        guard Keychain.save(token) else {
             throw DailiesError.server("Couldn't save your sign-in on this device.")
         }
-        if let cookie = result.cookie {
+        if let cookie {
             await WKWebsiteDataStore.default().httpCookieStore.setCookie(cookie)
         }
-        state = .signedIn(result.token.username)
+        state = .signedIn(token.username)
         WebController.shared.load()
         await SubmissionQueue.shared.flush()
     }

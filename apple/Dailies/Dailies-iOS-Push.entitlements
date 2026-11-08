@@ -5,6 +5,17 @@
 	<!-- push notifications; archives for TestFlight/App Store get the production value -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Sign in with Apple (server/appleid.js) -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+	<!-- invite links (/?add=) open the app; the site serves apple-app-site-association (server/applinks.js) -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:www.thedailies.lol</string>
+		<string>webcredentials:www.thedailies.lol</string>
+	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.lol.thedailies</string>

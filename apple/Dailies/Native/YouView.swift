@@ -1,5 +1,6 @@
 #if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
+import AuthenticationServices
 
 /// You (the profile, a sheet from the button at the top right of each tab), in Today's style: who you are and your numbers on the yellow card, your stats over a range,
 /// game by game, then your account (password, help, sign out, delete account).
@@ -16,6 +17,7 @@ struct YouView: View {
                         ProfileCard(model: model)
                         StatsCard(model: model)
                         if !model.games.isEmpty { ByGameCard(lines: model.games).id("games") }
+                        RecoveryCard(model: model)
                         PasswordCard(model: model)
                         HelpCard()
                         AccountCard(onSignOut: { signingOut = true }, onDelete: { deleting = true }).id("account")
@@ -229,6 +231,123 @@ private struct ByGameCard: View {
     }
 }
 
+/// Getting back in: a confirmed email (for reset links) and Sign in with Apple.
+private struct RecoveryCard: View {
+    let model: YouModel
+    @State private var adding = false
+    @State private var email = ""
+    @State private var busy = false
+    @State private var flash: (ok: Bool, text: String)?
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if let r = model.recovery, r.emailAvailable || r.appleAvailable == true {
+            SectionCard(title: "Sign-in & recovery", icon: "lock-closed") {
+                if r.emailAvailable { emailRow(r) }
+                if r.appleAvailable == true {
+                    if r.emailAvailable { Divider() }
+                    appleRow(r)
+                }
+                if let flash { NoticeView(ok: flash.ok, text: flash.text) }
+            }
+            .sensoryFeedback(trigger: flash?.text) { _, _ in flash.map { $0.ok ? .success : .error } }
+        }
+    }
+
+    @ViewBuilder
+    private func emailRow(_ r: DailiesAPI.Recovery) -> some View {
+        HStack(spacing: 10) {
+            HeroIcon("envelope", size: 18).foregroundStyle(Color.ink)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(r.email ?? r.pendingEmail ?? "No email yet").font(.brand(.subheadline, .bold)).oneLine()
+                Text(r.email != nil ? "Confirmed. Reset links go here." : r.pendingEmail != nil ? "Check your inbox to confirm it" : "For resetting your password")
+                    .font(.caption).foregroundStyle(.secondary).oneLine()
+            }
+            if !adding {
+                if r.email == nil, let pending = r.pendingEmail {
+                    SmallButton(title: "Resend") { send(pending) }
+                } else {
+                    SmallButton(title: r.email == nil ? "Add" : "Change", primary: r.email == nil) {
+                        withAnimation(reduceMotion ? nil : .snappy) { adding = true; flash = nil }
+                    }
+                }
+            }
+        }
+        .foregroundStyle(Color.ink)
+        if adding {
+            TextField("you@example.com", text: $email)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.send)
+                .onSubmit { send(email) }
+                .font(.brand(.subheadline, .semibold))
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .modifier(Sunken(down: false, fill: .canvas))
+            HStack(spacing: 8) {
+                SmallButton(title: busy ? "Sending…" : "Send confirmation", primary: true) { send(email) }
+                    .disabled(busy || !email.contains("@"))
+                SmallButton(title: "Cancel") { withAnimation(reduceMotion ? nil : .snappy) { adding = false } }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func appleRow(_ r: DailiesAPI.Recovery) -> some View {
+        if r.appleLinked == true {
+            HStack(spacing: 10) {
+                Image(systemName: "applelogo").font(.body.weight(.medium)) // Apple's own mark, required on its sign-in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Sign in with Apple").font(.brand(.subheadline, .bold)).oneLine()
+                    Text("Linked. Sign in with one tap.").font(.caption).foregroundStyle(.secondary).oneLine()
+                }
+                HeroIcon("check", size: 18)
+            }
+            .foregroundStyle(Color.ink)
+        } else {
+            SignInWithAppleButton(.continue) { request in
+                request.requestedScopes = [.email]
+            } onCompletion: { result in
+                guard case .success(let auth) = result,
+                      let credential = auth.credential as? ASAuthorizationAppleIDCredential,
+                      let data = credential.identityToken, let token = String(data: data, encoding: .utf8) else { return }
+                let code = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+                Task {
+                    let failed = await model.linkApple(identityToken: token, code: code)
+                    withAnimation(.snappy) { flash = failed.map { (false, $0) } ?? (true, "Apple linked. Sign in with one tap from now on.") }
+                }
+            }
+            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+            .frame(height: 44)
+            .clipShape(Capsule())
+            Text("Link your Apple ID to sign in without a password").font(.caption).foregroundStyle(.secondary).oneLine()
+        }
+    }
+
+    private func send(_ address: String) {
+        let value = address.trimmingCharacters(in: .whitespaces)
+        guard value.contains("@"), !busy else { return }
+        busy = true
+        Task {
+            let failed = await model.addEmail(value)
+            busy = false
+            withAnimation(reduceMotion ? nil : .snappy) {
+                if let failed {
+                    flash = (false, failed)
+                } else {
+                    flash = (true, "Check \(value) for a link to confirm it.")
+                    adding = false
+                    email = ""
+                }
+            }
+        }
+    }
+}
+
 /// A password field in the app's sunken style.
 private struct PasswordField: View {
     let placeholder: String
@@ -262,17 +381,22 @@ private struct PasswordCard: View {
     var body: some View {
         SectionCard(title: "Password", icon: "lock-closed") {
             if !open {
-                SmallButton(title: "Change") {
+                SmallButton(title: model.hasPassword ? "Change" : "Set") {
                     withAnimation(reduceMotion ? nil : .snappy) { open = true; flash = nil }
                 }
             }
         } content: {
             if open {
-                PasswordField(placeholder: "Current password", text: $current)
+                if model.hasPassword {
+                    PasswordField(placeholder: model.recovery?.mustChangePassword == true ? "Temporary password" : "Current password", text: $current)
+                } else {
+                    Text("You sign in with Apple. Add a password to sign in with your username too.")
+                        .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
                 PasswordField(placeholder: "New password (6+ characters)", text: $next, newPassword: true)
                 HStack(spacing: 8) {
                     SmallButton(title: busy ? "Saving…" : "Save", primary: true, action: save)
-                        .disabled(busy || current.isEmpty || next.count < 6)
+                        .disabled(busy || (model.hasPassword && current.isEmpty) || next.count < 6)
                     SmallButton(title: "Cancel") {
                         withAnimation(reduceMotion ? nil : .snappy) { open = false; current = ""; next = "" }
                     }
@@ -393,7 +517,18 @@ private struct DeleteAccountSheet: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                PasswordField(placeholder: "Your password", text: $password)
+                if model.hasPassword {
+                    PasswordField(placeholder: "Your password", text: $password)
+                } else {
+                    // a Sign in with Apple account has no password: typing the username confirms
+                    TextField("Type \(model.me ?? "your username") to confirm", text: $password)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.brand(.subheadline, .semibold))
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .modifier(Sunken(down: false, fill: .surface))
+                }
                 if let error {
                     NoticeView(ok: false, text: error)
                 }

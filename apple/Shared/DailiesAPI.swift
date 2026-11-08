@@ -464,26 +464,67 @@ actor DailiesAPI {
 
     /// Native sign-in or sign-up. The site answers with its session cookie; that cookie mints a
     /// device token (kept in the keychain) and is handed back so the web tabs share the session.
-    func authenticate(username: String, password: String, register: Bool, deviceName: String)
+    /// Sign-up can carry an email (confirmed afterwards by its link).
+    func authenticate(username: String, password: String, register: Bool, email: String? = nil, deviceName: String)
         async throws -> (token: StoredToken, cookie: HTTPCookie?) {
-        let server = Server.current
-        let url = server.baseURL.appending(path: register ? "/api/auth/register" : "/api/auth/login")
+        var body: [String: Any] = ["username": username, "password": password]
+        if register, let email, !email.isEmpty { body["email"] = email }
+        let result = try await sessionRequest(path: register ? "/api/auth/register" : "/api/auth/login", body: body)
+        guard case .signedIn(let user, let cookie) = result else { throw DailiesError.server("Unexpected response from The Dailies.") }
+        let token = try await mintToken(username: user.username, cookie: cookie, deviceName: deviceName)
+        if register, let email, !email.isEmpty {
+            // the confirmation email: a failure here shouldn't undo the new account
+            _ = try? await send("/api/auth/email", method: "POST", json: ["email": email], token: token.token)
+        }
+        return (token, cookie)
+    }
+
+    enum AppleResult { case signedIn(StoredToken, HTTPCookie?), needsUsername(suggestion: String) }
+
+    /// Sign in with Apple: a known Apple account signs in; a new one first answers needsUsername,
+    /// then call again with the same token and a username.
+    func signInWithApple(identityToken: String, code: String?, username: String?, deviceName: String) async throws -> AppleResult {
+        var body: [String: Any] = ["identityToken": identityToken]
+        if let code { body["code"] = code }
+        if let username { body["username"] = username }
+        switch try await sessionRequest(path: "/api/auth/apple", body: body) {
+        case .needsUsername(let suggestion):
+            return .needsUsername(suggestion: suggestion)
+        case .signedIn(let user, let cookie):
+            return .signedIn(try await mintToken(username: user.username, cookie: cookie, deviceName: deviceName), cookie)
+        }
+    }
+
+    private enum SessionResult { case signedIn(User, HTTPCookie), needsUsername(String) }
+
+    /// A sign-in style request: no bearer token; the answer sets the site's session cookie.
+    private func sessionRequest(path: String, body: [String: Any]) async throws -> SessionResult {
+        let url = Server.current.baseURL.appending(path: path)
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["username": username, "password": password])
+        req.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Timezone")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await perform(req)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let message = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error
             throw DailiesError.rejected(message ?? "Couldn't sign in.")
         }
-        let user = try decode(MeBody.self, data).user
+        struct Answer: Decodable { let user: User?; let needsUsername: Bool?; let suggestion: String? }
+        let answer = try decode(Answer.self, data)
+        if answer.needsUsername == true { return .needsUsername(answer.suggestion ?? "") }
+        guard let user = answer.user else { throw DailiesError.server("Unexpected response from The Dailies.") }
         let headers = ((response as? HTTPURLResponse)?.allHeaderFields as? [String: String]) ?? [:]
         guard let cookie = HTTPCookie.cookies(withResponseHeaderFields: headers, for: url).first(where: { $0.name == "db_token" }) else {
             throw DailiesError.server("Signed in, but the server didn't start a session.")
         }
+        return .signedIn(user, cookie)
+    }
 
+    /// Turns a fresh session cookie into this device's own token.
+    private func mintToken(username: String, cookie: HTTPCookie, deviceName: String) async throws -> StoredToken {
+        let server = Server.current
         var tokenReq = URLRequest(url: server.baseURL.appending(path: "/api/auth/tokens"))
         tokenReq.httpMethod = "POST"
         tokenReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -495,7 +536,69 @@ actor DailiesAPI {
             throw DailiesError.server(message ?? "Couldn't set up this device.")
         }
         let minted = try decode(TokenBody.self, tokenData)
-        return (StoredToken(token: minted.token, tokenId: minted.id, username: user.username, server: server.rawValue), cookie)
+        return StoredToken(token: minted.token, tokenId: minted.id, username: username, server: server.rawValue)
+    }
+
+    // MARK: account recovery (server/account.js)
+
+    struct Recovery: Decodable {
+        let emailAvailable: Bool
+        let email: String?
+        let pendingEmail: String?
+        let mustChangePassword: Bool
+        let hasPassword: Bool?
+        let appleAvailable: Bool?
+        let appleLinked: Bool?
+    }
+
+    func recovery() async throws -> Recovery {
+        try decode(Recovery.self, try await send("/api/auth/recovery"))
+    }
+
+    /// Whether email (and so Forgot password by email) works, and whether Sign in with Apple is on.
+    func signInOptions() async -> (email: Bool, apple: Bool) {
+        struct Mail: Decodable { let emailAvailable: Bool }
+        struct Apple: Decodable { let app: Bool? }
+        async let mail = try? decode(Mail.self, try await publicGet("/api/auth/email-available"))
+        async let apple = try? decode(Apple.self, try await publicGet("/api/auth/apple/config"))
+        return (await mail?.emailAvailable ?? false, await apple?.app ?? false)
+    }
+
+    /// Emails a reset link if the account has a confirmed email; the answer is the same either way.
+    func forgotPassword(login: String) async throws {
+        var req = URLRequest(url: Server.current.baseURL.appending(path: "/api/auth/forgot"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["login": login])
+        let (data, response) = try await perform(req)
+        guard (200..<300).contains((response as? HTTPURLResponse)?.statusCode ?? 0) else {
+            throw DailiesError.rejected((try? JSONDecoder().decode(ErrorBody.self, from: data))?.error ?? "Try again in a few minutes.")
+        }
+    }
+
+    func addEmail(_ email: String) async throws {
+        _ = try await send("/api/auth/email", method: "POST", json: ["email": email])
+    }
+
+    func removeEmail() async throws {
+        _ = try await send("/api/auth/email", method: "DELETE")
+    }
+
+    func linkApple(identityToken: String, code: String?) async throws {
+        var body: [String: Any] = ["identityToken": identityToken]
+        if let code { body["code"] = code }
+        _ = try await send("/api/auth/apple/link", method: "POST", json: body)
+    }
+
+    /// Delete an account that signs in with Apple only: typing the username confirms it.
+    func deleteAccount(confirmUsername: String) async throws {
+        _ = try await send("/api/auth/account", method: "DELETE", json: ["confirm": confirmUsername])
+    }
+
+    private func publicGet(_ path: String) async throws -> Data {
+        let (data, response) = try await perform(URLRequest(url: Server.current.baseURL.appending(path: path)))
+        guard (200..<300).contains((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw DailiesError.server("") }
+        return data
     }
 
     /// Best-effort revoke of a token that is being replaced or signed out.

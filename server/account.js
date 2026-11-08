@@ -202,7 +202,10 @@ const USERNAME = /^[a-z0-9_]{2,20}$/
 
 // what the website needs to show the button (the app signs in as its bundle id)
 accountRouter.get('/apple/config', (req, res) => {
-  res.json(appleEnabled && appleClients.web ? { enabled: true, clientId: appleClients.web, redirectURI: `${PUBLIC_URL}/` } : { enabled: false })
+  // enabled: the website's button (needs a Services ID); app: the iPhone app's button
+  res.json(appleEnabled && appleClients.web
+    ? { enabled: true, clientId: appleClients.web, redirectURI: `${PUBLIC_URL}/`, app: true }
+    : { enabled: false, app: appleEnabled })
 })
 
 async function appleIdentity(req) {
