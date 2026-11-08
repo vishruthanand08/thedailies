@@ -15,6 +15,11 @@ struct DailiesApp: App {
         #if os(iOS)
         WindowGroup {
             RootView()
+                // invite links (www.thedailies.lol/?add=…), from Associated Domains or the site's banner
+                .onOpenURL { InviteLink.shared.receive($0) }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL { InviteLink.shared.receive(url) }
+                }
         }
         #else
         // one main window: the shared web view can only live in one view hierarchy

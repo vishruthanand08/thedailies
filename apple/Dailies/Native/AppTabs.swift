@@ -13,6 +13,8 @@ struct AppTabs: View {
     @State private var feed = FeedModel.shared
     @State private var push = Push.shared
     @State private var profile = ProfileSheet.shared
+    @State private var invite = InviteLink.shared
+    @State private var onboarding = OnboardingState.shared
 
     var body: some View {
         TabView(selection: $selection) {
@@ -49,8 +51,27 @@ struct AppTabs: View {
         .sheet(isPresented: $adding) { AddScoreSheet() }
         .sheet(isPresented: $profile.open, onDismiss: { Task { await YouModel.shared.loadRecovery() } }) { YouView() }
         .onAppear { feed.startPolling() }
-        .task { await push.registerIfAllowed() }
         .task { await YouModel.shared.loadRecovery() } // the account nudge on Today
+        .task {
+            if let me = AppSession.shared.username { await onboarding.checkAfterSignIn(me) }
+            // the notification question waits until onboarding is closed (asking over it loses people)
+            while onboarding.showing { try? await Task.sleep(for: .milliseconds(500)) }
+            await push.registerIfAllowed()
+        }
+        .fullScreenCover(isPresented: $onboarding.showing) {
+            OnboardingView(goToFriends: { selection = .friends })
+        }
+        // an invite link: send the request (or accept theirs) and show Friends
+        .onChange(of: invite.pending, initial: true) { _, name in
+            guard let name else { return }
+            invite.pending = nil
+            guard name != AppSession.shared.username else { return }
+            selection = .friends
+            Task {
+                let result = await FriendsModel.shared.add(username: name)
+                SubmissionQueue.shared.show(result.ok ? .ok : .err, result.message)
+            }
+        }
         // a tapped notification opens its tab ("you" opens the profile)
         .onChange(of: push.openTab, initial: true) { _, tab in
             guard let tab else { return }

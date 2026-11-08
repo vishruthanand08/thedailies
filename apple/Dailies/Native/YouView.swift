@@ -436,6 +436,25 @@ private struct HelpCard: View {
     var body: some View {
         SectionCard(title: "Help", icon: "information-circle") {
             VStack(spacing: 0) {
+                Button {
+                    Haptic.tap()
+                    ProfileSheet.shared.open = false
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(450)) // after the profile sheet goes
+                        OnboardingState.shared.showing = true
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        HeroIcon("play", size: 18)
+                        Text("How it works").font(.brand(.subheadline, .bold)).oneLine()
+                        HeroIcon("chevron-right", size: 14).foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(Color.ink)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressIn)
+                Divider()
                 row("Privacy Policy", icon: "lock-closed", url: Server.current.baseURL.appending(path: "privacy"))
                 Divider()
                 row("Help & support", icon: "information-circle", url: Server.current.baseURL.appending(path: "support"))
