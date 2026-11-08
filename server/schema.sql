@@ -6,6 +6,14 @@ CREATE TABLE IF NOT EXISTS users (
 );
 -- The player's IANA time zone (from the X-Timezone header), for when their day rolls over.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+-- Account recovery (server/account.js): a verified email (optional; only set once its link is
+-- clicked), sessions signed before sessions_valid_after no longer count (a password reset signs
+-- out everywhere), and must_change_password after an admin hands out a temporary one.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_after TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (lower(email));
 
 -- One row per pair, normalized so user_a < user_b.
 CREATE TABLE IF NOT EXISTS friendships (
@@ -173,3 +181,16 @@ CREATE TABLE IF NOT EXISTS push_user_reminders (
   puzzle_date DATE NOT NULL,
   PRIMARY KEY (user_id, puzzle_date)
 );
+
+-- One-time links sent by email: 'verify' an address (email is the address being confirmed) or
+-- 'reset' a password. Only a hash of the token is kept.
+CREATE TABLE IF NOT EXISTS account_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  email TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_account_tokens_user ON account_tokens (user_id, kind, created_at);

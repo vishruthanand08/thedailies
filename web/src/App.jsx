@@ -9,6 +9,7 @@ import Profile from './Profile.jsx'
 import Global from './Global.jsx'
 import Admin from './Admin.jsx'
 import { DesktopAppPrompt } from './DesktopApp.jsx'
+import { AccountNudge, ResetPassword, VerifyNotice, resetTokenInUrl } from './Recovery.jsx'
 
 export default function App() {
   const [me, setMe] = useState(undefined) // undefined = loading, null = signed out
@@ -16,6 +17,8 @@ export default function App() {
   // a player's day to open on the Feed, from tapping their name on Today: { userId, date, submissionId }
   const [feedFocus, setFeedFocus] = useState(null)
   // ?add=username from an invite link — kept through login/signup, consumed in Friends
+  // ?reset=… from a password reset email: choose a new password, signed in or not
+  const [resetToken, setResetToken] = useState(resetTokenInUrl)
   const [pendingAdd, setPendingAdd] = useState(() => {
     const p = new URLSearchParams(window.location.search).get('add')
     return p ? p.toLowerCase() : null
@@ -51,8 +54,18 @@ export default function App() {
     window.history.replaceState(null, '', window.location.pathname)
   }
 
+  const refreshMe = () => api.get('/auth/me').then((d) => setMe(d.user), () => {})
+
+  if (resetToken) {
+    return <ResetPassword token={resetToken} onDone={async () => {
+      setResetToken(null)
+      // the reset signed every session out, this one included
+      await api.post('/auth/logout').catch(() => {})
+      setMe(null)
+    }} />
+  }
   if (me === undefined) return <div className="spin">loading…</div>
-  if (me === null) return <Auth onAuth={setMe} />
+  if (me === null) return <><VerifyNotice /><Auth onAuth={setMe} /></>
 
   const logout = async () => {
     await api.post('/auth/logout')
@@ -97,11 +110,14 @@ export default function App() {
         ))}
       </nav>
 
+      <VerifyNotice />
+      {tab !== 'you' && tab !== 'admin' && <AccountNudge me={me} onOpenProfile={() => setTab('you')} />}
+
       {tab === 'today' && <Today me={me} onOpenDay={(focus) => { setFeedFocus(focus); setTab('feed') }} />}
       {tab === 'feed' && <Feed me={me} onSeen={() => setUnseen(0)} focus={feedFocus} onFocused={() => setFeedFocus(null)} />}
       {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
       {tab === 'global' && <Global />}
-      {tab === 'you' && <Profile me={me} onLogout={logout} />}
+      {tab === 'you' && <Profile me={me} onLogout={logout} onPasswordChanged={refreshMe} />}
       {tab === 'admin' && me.admin && <Admin />}
       <DesktopAppPrompt />
     </div>

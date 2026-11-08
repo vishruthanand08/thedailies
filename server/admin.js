@@ -1,9 +1,12 @@
 import { Router } from 'express'
+import crypto from 'node:crypto'
+import bcrypt from 'bcryptjs'
 import { q } from './db.js'
 import { requireAuth, requireAdmin, deleteUser, isAdmin } from './auth.js'
 import { GAMES, CATEGORIES } from './parsers.js'
 import { isCategoryHidden, setCategoryHidden, isGameSwitchedOff, setGameHidden } from './categories.js'
 import { allRules, checkRules, saveRules, resetRules } from './points.js'
+import { revokeSessions } from './account.js'
 
 export const adminRouter = Router()
 adminRouter.use(requireAuth, requireAdmin)
@@ -81,7 +84,7 @@ adminRouter.delete('/scoring/:gameId', async (req, res) => {
 // Look up an account before deleting it: when it joined, what it has, who it's connected to.
 async function findUser(raw) {
   const name = String(raw || '').trim().toLowerCase().replace(/^@/, '')
-  const { rows } = await q('SELECT id, username, created_at FROM users WHERE username = $1', [name])
+  const { rows } = await q('SELECT id, username, created_at, email, must_change_password FROM users WHERE username = $1', [name])
   return rows[0] ?? null
 }
 
@@ -105,7 +108,28 @@ adminRouter.get('/users/:username', async (req, res) => {
     devices: await count('SELECT count(*)::int AS n FROM api_tokens WHERE user_id = $1'),
     friends: friends.filter((f) => f.status === 'accepted').map((f) => f.username),
     pending: friends.filter((f) => f.status !== 'accepted').map((f) => f.username),
+    // enough to tell them where a reset link would go, without showing the whole address
+    email: u.email ? maskEmail(u.email) : null,
+    mustChangePassword: Boolean(u.must_change_password),
   })
+})
+
+const maskEmail = (e) => e.replace(/^(.)[^@]*(@.*)$/, (_, first, rest) => `${first}•••${rest}`)
+
+// A temporary password, for someone who wrote to support because they're locked out (check it's
+// them first). It's shown once, here; the account is signed out everywhere and asked to choose a
+// new password when they sign in. No admins: they reset their own.
+const TEMP_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789' // no look-alikes (l, 1, o, 0, i)
+adminRouter.post('/users/:username/reset-password', async (req, res) => {
+  const u = await findUser(req.params.username)
+  if (!u) return res.status(404).json({ error: `No user named "${req.params.username}"` })
+  if (isAdmin(u)) return res.status(403).json({ error: 'Admins reset their own password from the profile' })
+  const temp = Array.from(crypto.randomBytes(10), (b) => TEMP_CHARS[b % TEMP_CHARS.length]).join('')
+  const password = `${temp.slice(0, 5)}-${temp.slice(5)}`
+  await q('UPDATE users SET password_hash = $2, must_change_password = true WHERE id = $1', [u.id, await bcrypt.hash(password, 10)])
+  await revokeSessions(u.id)
+  console.log(`admin: ${req.user.username} reset the password for ${u.username} (id ${u.id})`)
+  res.json({ ok: true, username: u.username, password })
 })
 
 // Deletes an account and everything tied to it, the same as Delete account on its You tab.

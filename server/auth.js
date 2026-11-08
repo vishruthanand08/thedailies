@@ -39,7 +39,7 @@ export async function requireAuth(req, res, next) {
     const h = req.get('authorization') || ''
     if (h.startsWith('Bearer dly_')) {
       const { rows } = await q(
-        `SELECT u.id, u.username, u.timezone, t.id AS token_id
+        `SELECT u.id, u.username, u.timezone, u.must_change_password, t.id AS token_id
            FROM api_tokens t JOIN users u ON u.id = t.user_id
           WHERE t.token_hash = $1`,
         [sha256(h.slice(7))]
@@ -47,7 +47,10 @@ export async function requireAuth(req, res, next) {
       if (!rows.length) {
         return res.status(401).json({ error: 'That device token is no longer valid. Sign in again in the app.' })
       }
-      req.user = { id: rows[0].id, username: rows[0].username, tz: timeZoneFor(req, rows[0].id, rows[0].timezone) }
+      req.user = {
+        id: rows[0].id, username: rows[0].username, tz: timeZoneFor(req, rows[0].id, rows[0].timezone),
+        mustChangePassword: Boolean(rows[0].must_change_password),
+      }
       req.tokenId = rows[0].token_id
       q('UPDATE api_tokens SET last_used_at = now() WHERE id = $1', [rows[0].token_id]).catch(() => {})
       return next()
@@ -62,12 +65,24 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Session expired — sign in again' })
     }
     // the account may have been deleted since (by its owner or an admin): that signs it out
-    const { rows } = await q('SELECT id, username, timezone FROM users WHERE id = $1', [session.id])
+    const { rows } = await q(
+      'SELECT id, username, timezone, must_change_password, sessions_valid_after FROM users WHERE id = $1',
+      [session.id]
+    )
     if (!rows.length) {
       res.clearCookie(COOKIE)
       return res.status(401).json({ error: 'Not signed in' })
     }
-    req.user = { id: rows[0].id, username: rows[0].username, tz: timeZoneFor(req, rows[0].id, rows[0].timezone) }
+    // a password reset since this session was signed (server/account.js) signs it out
+    const cutoff = rows[0].sessions_valid_after
+    if (cutoff && session.iat < Math.floor(new Date(cutoff).getTime() / 1000)) {
+      res.clearCookie(COOKIE)
+      return res.status(401).json({ error: 'Your password was reset. Sign in again.' })
+    }
+    req.user = {
+      id: rows[0].id, username: rows[0].username, tz: timeZoneFor(req, rows[0].id, rows[0].timezone),
+      mustChangePassword: Boolean(rows[0].must_change_password),
+    }
     next()
   } catch (err) {
     next(err)
@@ -83,6 +98,16 @@ authRouter.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Username: 2-20 letters, numbers, or _' })
   }
   if (password.length < 6) return res.status(400).json({ error: 'Password needs 6+ characters' })
+  // The website asks for an email at sign-up (it's confirmed afterwards, from /api/auth/email in
+  // account.js); the iPhone app 1.6 signs up without one, so it stays optional here.
+  const email = String(req.body.email || '').trim().toLowerCase()
+  if (email) {
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'That doesn’t look like an email address' })
+    }
+    const { rows: taken } = await q('SELECT 1 FROM users WHERE lower(email) = $1', [email])
+    if (taken.length) return res.status(409).json({ error: 'That email is already on an account. Sign in, or use Forgot password.' })
+  }
   // admin names can't be signed up by anyone else, even if an admin deletes their account
   if (ADMINS.has(username)) return res.status(409).json({ error: 'That username is taken' })
 
@@ -131,7 +156,9 @@ export function requireAdmin(req, res, next) {
 }
 
 authRouter.get('/me', requireAuth, (req, res) => {
-  res.json({ user: { id: req.user.id, username: req.user.username, admin: isAdmin(req.user) } })
+  res.json({
+    user: { id: req.user.id, username: req.user.username, admin: isAdmin(req.user), mustChangePassword: req.user.mustChangePassword },
+  })
 })
 
 authRouter.get('/profile', requireAuth, async (req, res) => {
@@ -140,7 +167,8 @@ authRouter.get('/profile', requireAuth, async (req, res) => {
   res.json({ username: rows[0].username, createdAt: rows[0].created_at })
 })
 
-// Existing sessions and device tokens stay signed in; only the password changes.
+// Existing sessions and device tokens stay signed in; only the password changes. Clears the
+// "change your password" nudge after an admin reset.
 authRouter.post('/password', requireAuth, async (req, res) => {
   const current = String(req.body.current || '')
   const next = String(req.body.next || '')
@@ -149,7 +177,7 @@ authRouter.post('/password', requireAuth, async (req, res) => {
   if (!rows.length || !(await bcrypt.compare(current, rows[0].password_hash))) {
     return res.status(400).json({ error: 'Your current password is wrong' })
   }
-  await q('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user.id, await bcrypt.hash(next, 10)])
+  await q('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [req.user.id, await bcrypt.hash(next, 10)])
   res.json({ ok: true })
 })
 
@@ -180,6 +208,7 @@ export async function deleteUser(id) {
   await q('DELETE FROM day_highlights WHERE user_id = $1', [id])
   await q('DELETE FROM push_devices WHERE user_id = $1', [id])
   await q('DELETE FROM push_user_reminders WHERE user_id = $1', [id])
+  await q('DELETE FROM account_tokens WHERE user_id = $1', [id])
   await q('DELETE FROM global_members WHERE user_id = $1', [id])
   await q('DELETE FROM friend_suggestion_dismissals WHERE user_id = $1 OR other_id = $1', [id])
   await q('DELETE FROM submissions WHERE user_id = $1', [id])

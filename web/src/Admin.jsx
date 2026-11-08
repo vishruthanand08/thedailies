@@ -105,11 +105,13 @@ function UsersAdmin() {
   const [confirm, setConfirm] = useState('')
   const [flash, setFlash] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [temp, setTemp] = useState(null) // { username, password } just handed out
 
   const lookUp = async (e) => {
     e.preventDefault()
     setFlash(null)
     setUser(null)
+    setTemp(null)
     setConfirm('')
     try {
       setUser(await api.get(`/admin/users/${encodeURIComponent(name.trim().replace(/^@/, ''))}`))
@@ -134,10 +136,25 @@ function UsersAdmin() {
     }
   }
 
+  // for someone locked out who wrote to support: check it's really them first
+  const resetPassword = async () => {
+    if (!confirm(`Give @${user.username} a temporary password? This signs them out everywhere.`)) return
+    setFlash(null)
+    try {
+      const d = await api.post(`/admin/users/${encodeURIComponent(user.username)}/reset-password`)
+      setTemp({ username: d.username, password: d.password })
+    } catch (err) {
+      setFlash({ kind: 'err', msg: err.message })
+    }
+  }
+
   return (
     <div className="card">
-      <h3 className="sectiontitle">🧹 Delete a user</h3>
-      <p className="hint small">Look someone up by username. Deleting removes their scores, friendships, kudos, suggestions and devices for good.</p>
+      <h3 className="sectiontitle">🧹 Users</h3>
+      <p className="hint small">
+        Look someone up by username to reset their password or delete their account. Deleting removes their scores,
+        friendships, kudos, suggestions and devices for good.
+      </p>
       <form className="adminfind" onSubmit={lookUp}>
         <input className="input" placeholder="username" value={name} onChange={(e) => setName(e.target.value)} aria-label="Username to look up" />
         <button className="btn" disabled={!name.trim()}>Look up</button>
@@ -159,7 +176,21 @@ function UsersAdmin() {
             <li><b>{user.kudos}</b> kudos given or received</li>
             <li><b>{user.suggestions}</b> game suggestions</li>
             <li><b>{user.devices}</b> signed-in app devices</li>
+            <li>{user.email ? <>Email <b>{user.email}</b> (they can use Forgot password)</> : 'No email on the account'}</li>
+            {user.mustChangePassword && <li>Still on a temporary password</li>}
           </ul>
+          {!user.admin && (
+            <div className="adminreset">
+              <button className="btn small" onClick={resetPassword}>Reset password</button>
+              {temp && temp.username === user.username && (
+                <div className="flash ok">
+                  Temporary password for @{temp.username}: <code className="temppass">{temp.password}</code>
+                  <br />
+                  Send it to them. It's shown only now; they'll be asked to choose their own after signing in.
+                </div>
+              )}
+            </div>
+          )}
           {user.admin ? (
             <p className="hint">Admins can't be deleted here.</p>
           ) : (

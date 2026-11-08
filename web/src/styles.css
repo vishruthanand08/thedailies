@@ -716,3 +716,17 @@ body:has(.tile.dragging) { cursor: grabbing; user-select: none; -webkit-user-sel
 .adminuser .who { display: flex; align-items: center; gap: 10px; }
 .adminuser .sub { color: var(--muted); font-size: 12.5px; font-weight: 600; }
 .adminfacts { margin: 12px 0 0; padding-left: 18px; font-size: 14px; font-weight: 500; display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- account recovery (Recovery.jsx) ---------- */
+/* the result of an email confirmation link, over whatever page it opened */
+.topnotice {
+  position: fixed; z-index: 30; top: 14px; left: 50%; transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px)); display: flex; align-items: flex-start; gap: 8px;
+}
+.topnotice span { flex: 1; min-width: 0; }
+.topnotice .iconbtn { flex: none; width: 26px; height: 26px; font-size: 12px; box-shadow: none; }
+/* after support hands out a temporary password */
+.nudgecard { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--yellow); font-weight: 700; margin-bottom: 16px; }
+.nudgecard span { flex: 1; min-width: 200px; }
+.adminreset { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 4px 0 12px; }
+.temppass { font-size: 16px; font-weight: 800; letter-spacing: 0.5px; user-select: all; }

@@ -4,9 +4,10 @@ import { RangeRow, unitFor, useGames, useStats } from './Leaderboards.jsx'
 import Devices, { showDevices } from './Devices.jsx'
 import { inApp } from './native.js'
 import { DesktopAppCard } from './DesktopApp.jsx'
+import { EmailCard } from './Recovery.jsx'
 
 // The You tab: my own stats, plus account things (password, log out, devices).
-export default function Profile({ me, onLogout }) {
+export default function Profile({ me, onLogout, onPasswordChanged }) {
   const [range, setRange] = useState('all')
   const { stats, error } = useStats(range)
   const gameById = useGames()
@@ -111,7 +112,8 @@ export default function Profile({ me, onLogout }) {
       )}
 
       <DesktopAppCard />
-      <ChangePassword />
+      <EmailCard />
+      <ChangePassword mustChange={me.mustChangePassword} onChanged={onPasswordChanged} />
       {showDevices && <Devices />}
       <DeleteAccount onDeleted={onLogout} />
 
@@ -126,8 +128,9 @@ export default function Profile({ me, onLogout }) {
   )
 }
 
-function ChangePassword() {
-  const [open, setOpen] = useState(false)
+function ChangePassword({ mustChange, onChanged }) {
+  // open already after support's reset: the temporary password goes in the first box
+  const [open, setOpen] = useState(Boolean(mustChange))
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [busy, setBusy] = useState(false)
@@ -140,6 +143,7 @@ function ChangePassword() {
     try {
       await api.post('/auth/password', { current, next })
       setFlash({ kind: 'ok', msg: 'Password changed ✓' })
+      onChanged?.()
       setCurrent('')
       setNext('')
       setOpen(false)
@@ -172,7 +176,7 @@ function ChangePassword() {
             className="input"
             type="password"
             autoComplete="current-password"
-            placeholder="Current password"
+            placeholder={mustChange ? 'Temporary password' : 'Current password'}
             aria-label="Current password"
             value={current}
             onChange={(e) => setCurrent(e.target.value)}

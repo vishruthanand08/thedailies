@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { initDb } from './db.js'
 import { authRouter } from './auth.js'
+import { accountRouter } from './account.js'
 import { friendsRouter } from './friends.js'
 import { submissionsRouter } from './submissions.js'
 import { prefsRouter } from './prefs.js'
@@ -31,6 +32,7 @@ app.use(express.json({ limit: '32kb' }))
 app.use(cookieParser())
 
 app.use('/api/auth', authRouter)
+app.use('/api/auth', accountRouter) // email, forgot and reset password
 app.use('/api/friends', friendsRouter)
 app.use('/api/submissions', submissionsRouter)
 app.use('/api/prefs', prefsRouter)
