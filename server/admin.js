@@ -126,7 +126,7 @@ adminRouter.post('/users/:username/reset-password', async (req, res) => {
   if (isAdmin(u)) return res.status(403).json({ error: 'Admins reset their own password from the profile' })
   const temp = Array.from(crypto.randomBytes(10), (b) => TEMP_CHARS[b % TEMP_CHARS.length]).join('')
   const password = `${temp.slice(0, 5)}-${temp.slice(5)}`
-  await q('UPDATE users SET password_hash = $2, must_change_password = true WHERE id = $1', [u.id, await bcrypt.hash(password, 10)])
+  await q('UPDATE users SET password_hash = $2, must_change_password = true, has_password = true WHERE id = $1', [u.id, await bcrypt.hash(password, 10)])
   await revokeSessions(u.id)
   console.log(`admin: ${req.user.username} reset the password for ${u.username} (id ${u.id})`)
   res.json({ ok: true, username: u.username, password })

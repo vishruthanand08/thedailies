@@ -4,11 +4,12 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { q } from './db.js'
 import { TZ, isValidTimeZone } from './util.js'
+import { revokeToken } from './appleid.js'
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'dailyboard-dev-secret'
 const COOKIE = 'db_token'
 
-function setSession(res, user) {
+export function setSession(res, user) {
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '90d' })
   res.cookie(COOKIE, token, {
     httpOnly: true,
@@ -173,11 +174,15 @@ authRouter.post('/password', requireAuth, async (req, res) => {
   const current = String(req.body.current || '')
   const next = String(req.body.next || '')
   if (next.length < 6) return res.status(400).json({ error: 'New password needs 6+ characters' })
-  const { rows } = await q('SELECT password_hash FROM users WHERE id = $1', [req.user.id])
-  if (!rows.length || !(await bcrypt.compare(current, rows[0].password_hash))) {
+  const { rows } = await q('SELECT password_hash, has_password FROM users WHERE id = $1', [req.user.id])
+  // an account made with Sign in with Apple can set its first password without a current one
+  if (!rows.length || (rows[0].has_password && !(await bcrypt.compare(current, rows[0].password_hash)))) {
     return res.status(400).json({ error: 'Your current password is wrong' })
   }
-  await q('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [req.user.id, await bcrypt.hash(next, 10)])
+  await q(
+    'UPDATE users SET password_hash = $2, must_change_password = false, has_password = true WHERE id = $1',
+    [req.user.id, await bcrypt.hash(next, 10)]
+  )
   res.json({ ok: true })
 })
 
@@ -185,9 +190,13 @@ authRouter.post('/password', requireAuth, async (req, res) => {
 // the app must be deletable in the app). Children first, since the tables reference users(id).
 authRouter.delete('/account', requireAuth, async (req, res) => {
   const password = String(req.body?.password || '')
-  const { rows } = await q('SELECT password_hash FROM users WHERE id = $1', [req.user.id])
-  if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash))) {
-    return res.status(400).json({ error: 'Your password is wrong' })
+  const { rows } = await q('SELECT username, password_hash, has_password FROM users WHERE id = $1', [req.user.id])
+  if (!rows.length) return res.status(400).json({ error: 'Your password is wrong' })
+  if (rows[0].has_password) {
+    if (!(await bcrypt.compare(password, rows[0].password_hash))) return res.status(400).json({ error: 'Your password is wrong' })
+  } else if (String(req.body?.confirm || '').trim().toLowerCase().replace(/^@/, '') !== rows[0].username) {
+    // a Sign in with Apple account has no password: typing the username confirms instead
+    return res.status(400).json({ error: `Type ${rows[0].username} to confirm` })
   }
   await deleteUser(req.user.id)
   res.clearCookie(COOKIE)
@@ -200,6 +209,9 @@ authRouter.delete('/account', requireAuth, async (req, res) => {
  * user_id belongs here.
  */
 export async function deleteUser(id) {
+  const { rows: apple } = await q('SELECT refresh_token, client_id FROM apple_accounts WHERE user_id = $1', [id])
+  if (apple[0]) await revokeToken(apple[0].refresh_token, apple[0].client_id) // App Store rule
+  await q('DELETE FROM apple_accounts WHERE user_id = $1', [id])
   await q('DELETE FROM game_suggestion_votes WHERE user_id = $1', [id])
   await q('DELETE FROM game_suggestions WHERE user_id = $1', [id]) // their votes cascade
   await q('DELETE FROM api_tokens WHERE user_id = $1', [id])

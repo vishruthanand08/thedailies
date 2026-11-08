@@ -2,7 +2,8 @@ import { Router } from 'express'
 import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { q } from './db.js'
-import { requireAuth } from './auth.js'
+import { requireAuth, setSession, isAdmin } from './auth.js'
+import { appleEnabled, appleClients, verifyIdentityToken, exchangeCode } from './appleid.js'
 import { mailEnabled, sendMail, PUBLIC_URL } from './mail.js'
 
 // Account recovery, mounted beside authRouter at /api/auth:
@@ -77,7 +78,8 @@ accountRouter.get('/email-available', (req, res) => res.json({ emailAvailable: m
 
 // What the profile shows: my email (confirmed), one waiting for its link, and whether email works.
 accountRouter.get('/recovery', requireAuth, async (req, res) => {
-  const { rows } = await q('SELECT email, email_verified_at, must_change_password FROM users WHERE id = $1', [req.user.id])
+  const { rows } = await q('SELECT email, email_verified_at, must_change_password, has_password FROM users WHERE id = $1', [req.user.id])
+  const { rows: apple } = await q('SELECT email FROM apple_accounts WHERE user_id = $1', [req.user.id])
   const { rows: pending } = await q(
     `SELECT email FROM account_tokens WHERE user_id = $1 AND kind = 'verify' AND used_at IS NULL AND expires_at > now()
       ORDER BY created_at DESC LIMIT 1`,
@@ -89,6 +91,9 @@ accountRouter.get('/recovery', requireAuth, async (req, res) => {
     emailVerifiedAt: rows[0]?.email_verified_at ?? null,
     pendingEmail: pending[0]?.email ?? null,
     mustChangePassword: Boolean(rows[0]?.must_change_password),
+    hasPassword: rows[0]?.has_password !== false,
+    appleAvailable: appleEnabled,
+    appleLinked: Boolean(apple[0]),
   })
 })
 
@@ -177,11 +182,141 @@ accountRouter.post('/reset', async (req, res) => {
   const t = await findToken(req.body?.token, 'reset')
   if (!t) return res.status(400).json({ error: 'That reset link has expired or was already used. Ask for a new one.' })
   await q(
-    'UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1',
+    'UPDATE users SET password_hash = $2, must_change_password = false, has_password = true WHERE id = $1',
     [t.user_id, await bcrypt.hash(password, 10)]
   )
   await q(`UPDATE account_tokens SET used_at = now() WHERE user_id = $1 AND kind = 'reset' AND used_at IS NULL`, [t.user_id])
   await revokeSessions(t.user_id)
   console.log(`account: password reset by email link for ${t.username}`)
   res.json({ ok: true, username: t.username })
+})
+
+// ---------- Sign in with Apple ----------
+// The website and the iPhone app get an identity token from Apple and send it here with its
+// one-time code. A known Apple account signs in; a new one picks a username first (the first call
+// answers needsUsername, the second sends it); a new one whose Apple email matches an account's
+// confirmed email signs in to that account and links it. Signed in, /apple/link adds Apple to
+// my account. Apple-only accounts have no password (has_password false) until they set one.
+
+const USERNAME = /^[a-z0-9_]{2,20}$/
+
+// what the website needs to show the button (the app signs in as its bundle id)
+accountRouter.get('/apple/config', (req, res) => {
+  res.json(appleEnabled && appleClients.web ? { enabled: true, clientId: appleClients.web, redirectURI: `${PUBLIC_URL}/` } : { enabled: false })
+})
+
+async function appleIdentity(req) {
+  if (!appleEnabled) throw Object.assign(new Error('Sign in with Apple isn’t set up yet'), { status: 503 })
+  try {
+    return await verifyIdentityToken(req.body?.identityToken, req.body?.nonce)
+  } catch (err) {
+    console.warn('apple: token rejected:', err.message)
+    throw Object.assign(new Error('Apple didn’t confirm that sign-in. Try again.'), { status: 401 })
+  }
+}
+
+async function linkApple(userId, who, code) {
+  const refresh = await exchangeCode(code, who.clientId)
+  await q(
+    `INSERT INTO apple_accounts (user_id, sub, email, client_id, refresh_token) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (user_id) DO UPDATE SET sub = EXCLUDED.sub, email = EXCLUDED.email, client_id = EXCLUDED.client_id,
+       refresh_token = COALESCE(EXCLUDED.refresh_token, apple_accounts.refresh_token)`,
+    [userId, who.sub, who.email, who.clientId, refresh]
+  )
+  // Apple vouches for the address (a private relay address works too): use it unless I have one
+  if (who.email && who.emailVerified) {
+    await q(
+      `UPDATE users SET email = $2, email_verified_at = now()
+        WHERE id = $1 AND email IS NULL AND NOT EXISTS (SELECT 1 FROM users o WHERE lower(o.email) = $2 AND o.id <> $1)`,
+      [userId, who.email]
+    )
+  }
+}
+
+async function suggestUsername(who) {
+  const base = (who.email && !who.privateEmail ? who.email.split('@')[0] : 'player').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 14) || 'player'
+  for (let i = 0; i < 20; i++) {
+    // a real name first ("jamierivers"); a plain "player" always gets a number
+    const name = i === 0 && base.length >= 2 && base !== 'player' ? base : `${base.slice(0, 14)}${Math.floor(100 + Math.random() * 9900)}`
+    const { rows } = await q('SELECT 1 FROM users WHERE username = $1', [name])
+    if (!rows.length && !isAdmin({ username: name })) return name
+  }
+  return ''
+}
+
+accountRouter.post('/apple', async (req, res) => {
+  if (tooMany(req, 'apple', 30, 15)) return res.status(429).json({ error: 'Too many tries. Wait a few minutes.' })
+  let who
+  try {
+    who = await appleIdentity(req)
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message })
+  }
+  const signIn = (u, created = false) => {
+    setSession(res, u)
+    res.json({ user: { id: u.id, username: u.username }, created })
+  }
+
+  const { rows: known } = await q(
+    'SELECT u.id, u.username FROM apple_accounts a JOIN users u ON u.id = a.user_id WHERE a.sub = $1',
+    [who.sub]
+  )
+  if (known.length) return signIn(known[0])
+
+  // the same confirmed email as an existing account: that's them
+  if (who.email && who.emailVerified) {
+    const { rows: same } = await q(
+      `SELECT u.id, u.username FROM users u WHERE lower(u.email) = $1 AND u.email_verified_at IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM apple_accounts a WHERE a.user_id = u.id)`,
+      [who.email]
+    )
+    if (same.length) {
+      await linkApple(same[0].id, who, req.body?.code)
+      console.log(`apple: linked ${same[0].username} by matching email`)
+      return signIn(same[0])
+    }
+  }
+
+  // new: pick a username first
+  const username = String(req.body?.username || '').trim().toLowerCase().replace(/^@/, '')
+  if (!username) return res.json({ needsUsername: true, suggestion: await suggestUsername(who) })
+  if (!USERNAME.test(username)) return res.status(400).json({ error: 'Username: 2-20 letters, numbers, or _' })
+  if (isAdmin({ username })) return res.status(409).json({ error: 'That username is taken' })
+  const placeholder = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), 10) // never used to sign in
+  let user
+  try {
+    const { rows } = await q(
+      'INSERT INTO users (username, password_hash, has_password) VALUES ($1, $2, false) RETURNING id, username',
+      [username, placeholder]
+    )
+    user = rows[0]
+  } catch (e) {
+    if (String(e).includes('unique') || String(e).includes('duplicate')) return res.status(409).json({ error: 'That username is taken' })
+    throw e
+  }
+  await linkApple(user.id, who, req.body?.code)
+  console.log(`apple: new account ${user.username}`)
+  signIn(user, true)
+})
+
+// Add Apple to my account (from the profile).
+accountRouter.post('/apple/link', requireAuth, async (req, res) => {
+  let who
+  try {
+    who = await appleIdentity(req)
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message })
+  }
+  const { rows: other } = await q('SELECT user_id FROM apple_accounts WHERE sub = $1 AND user_id <> $2', [who.sub, req.user.id])
+  if (other.length) return res.status(409).json({ error: 'That Apple ID is already linked to another account' })
+  await linkApple(req.user.id, who, req.body?.code)
+  res.json({ ok: true })
+})
+
+// Unlink Apple; only when there's a password to sign in with instead.
+accountRouter.delete('/apple/link', requireAuth, async (req, res) => {
+  const { rows } = await q('SELECT has_password FROM users WHERE id = $1', [req.user.id])
+  if (!rows[0]?.has_password) return res.status(400).json({ error: 'Set a password first, so you can still sign in' })
+  await q('DELETE FROM apple_accounts WHERE user_id = $1', [req.user.id])
+  res.json({ ok: true })
 })

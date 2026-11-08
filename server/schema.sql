@@ -13,6 +13,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_after TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
+-- false for accounts made with Sign in with Apple, until they set a password
+ALTER TABLE users ADD COLUMN IF NOT EXISTS has_password BOOLEAN NOT NULL DEFAULT true;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (lower(email));
 
 -- One row per pair, normalized so user_a < user_b.
@@ -194,3 +196,15 @@ CREATE TABLE IF NOT EXISTS account_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_account_tokens_user ON account_tokens (user_id, kind, created_at);
+
+-- Sign in with Apple (server/appleid.js, account.js): the Apple account linked to a player (sub is
+-- Apple's stable id for them), and the refresh token that lets us revoke it if they delete their
+-- account (App Store rule).
+CREATE TABLE IF NOT EXISTS apple_accounts (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  sub TEXT UNIQUE NOT NULL,
+  email TEXT,
+  client_id TEXT,
+  refresh_token TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

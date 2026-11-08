@@ -353,3 +353,185 @@ export function AccountNudge({ me, onOpenProfile }) {
     </div>
   )
 }
+
+// ---------- Sign in with Apple (website) ----------
+// Apple's own script opens Apple's sign-in in a popup and hands back a signed token, which the
+// server checks (server/appleid.js). A new Apple account picks a username in a second step.
+
+let appleConfigCache
+export function useAppleConfig() {
+  const [config, setConfig] = useState(appleConfigCache ?? null)
+  useEffect(() => {
+    if (appleConfigCache !== undefined) return
+    api.get('/auth/apple/config').then((d) => setConfig((appleConfigCache = d.enabled ? d : null)), () => {})
+  }, [])
+  return config
+}
+
+const APPLE_JS = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js'
+let appleScript
+function loadAppleScript() {
+  appleScript ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = APPLE_JS
+    s.onload = () => resolve(window.AppleID)
+    s.onerror = () => {
+      appleScript = null
+      reject(new Error('Couldn’t reach Apple. Check your connection.'))
+    }
+    document.head.appendChild(s)
+  })
+  return appleScript
+}
+
+// Apple's popup: resolves to { identityToken, code, nonce }, or null if they closed it.
+async function askApple(config) {
+  const AppleID = await loadAppleScript()
+  const nonce = crypto.randomUUID()
+  AppleID.auth.init({ clientId: config.clientId, scope: 'name email', redirectURI: config.redirectURI, usePopup: true, nonce })
+  try {
+    const r = await AppleID.auth.signIn()
+    return { identityToken: r.authorization.id_token, code: r.authorization.code, nonce }
+  } catch (err) {
+    if (err?.error === 'popup_closed_by_user' || err?.error === 'user_cancelled_authorize') return null
+    throw new Error('Apple sign-in didn’t finish. Try again.')
+  }
+}
+
+function AppleLogo() {
+  return (
+    <svg viewBox="0 0 17 20" width="15" height="18" aria-hidden="true">
+      <path fill="currentColor" d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.5 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4zM11.5 3c.7-.9 1.2-2 1.1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.2.1 2.3-.6 3-1.5z" />
+    </svg>
+  )
+}
+
+/** "Continue with Apple" on the sign-in page; a new Apple account chooses its username next. */
+export function AppleSignIn({ onAuth, onPicking }) {
+  const config = useAppleConfig()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [pending, setPending] = useState(null) // the Apple sign-in, waiting for a username
+  const [username, setUsername] = useState('')
+
+  if (!config) return null
+
+  const finish = async (body) => {
+    const d = await api.post('/auth/apple', body)
+    if (d.needsUsername) {
+      onPicking?.(true)
+      setPending(body)
+      setUsername(d.suggestion || '')
+      return
+    }
+    onAuth(d.user)
+  }
+
+  const start = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const got = await askApple(config)
+      if (got) await finish(got)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const pick = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await finish({ ...pending, username })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (pending) {
+    return (
+      <form className="card authcard" onSubmit={pick}>
+        <h3 className="sectiontitle">Pick a username</h3>
+        <p className="hint" style={{ margin: 0 }}>It's how friends find you. Letters, numbers and _.</p>
+        <input
+          className="input"
+          placeholder="username"
+          aria-label="Username"
+          autoComplete="username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value.toLowerCase())}
+          autoFocus
+        />
+        {error && <div className="flash err">{error}</div>}
+        <button className="btn coral" disabled={busy || username.trim().length < 2}>{busy ? 'Creating…' : 'Start playing →'}</button>
+      </form>
+    )
+  }
+
+  return (
+    <div className="applesignin">
+      <button type="button" className="btn applebtn" onClick={start} disabled={busy}>
+        <AppleLogo /> {busy ? 'Signing in…' : 'Continue with Apple'}
+      </button>
+      {error && <div className="flash err">{error}</div>}
+      <div className="ordivider"><span>or with a username</span></div>
+    </div>
+  )
+}
+
+/** The profile's Apple card: link Apple to an existing account, or unlink it. */
+export function AppleCard() {
+  const config = useAppleConfig()
+  const [info, setInfo] = useState(null)
+  const [flash, setFlash] = useState(null)
+  const load = () => api.get('/auth/recovery').then(setInfo, () => {})
+  useEffect(() => {
+    load()
+  }, [])
+  if (!config || !info) return null
+
+  const link = async () => {
+    setFlash(null)
+    try {
+      const got = await askApple(config)
+      if (!got) return
+      await api.post('/auth/apple/link', got)
+      setFlash({ kind: 'ok', msg: 'Apple linked ✓ You can sign in with Apple from now on.' })
+      load()
+    } catch (err) {
+      setFlash({ kind: 'err', msg: err.message })
+    }
+  }
+  const unlink = async () => {
+    if (!confirm('Unlink Apple? You’ll sign in with your username and password.')) return
+    try {
+      await api.del('/auth/apple/link')
+      setFlash(null)
+      load()
+    } catch (err) {
+      setFlash({ kind: 'err', msg: err.message })
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="cardhead">
+        <h3 className="sectiontitle"><AppleLogo /> Sign in with Apple</h3>
+        {info.appleLinked
+          ? info.hasPassword && <button className="btn ghost small" onClick={unlink}>Unlink</button>
+          : <button className="btn small applebtn" onClick={link}><AppleLogo /> Link Apple</button>}
+      </div>
+      <p className="hint" style={{ margin: 0 }}>
+        {info.appleLinked
+          ? 'Linked ✓ Sign in with one tap, no password to remember.'
+          : 'Link your Apple ID to sign in with one tap, on the website and the app.'}
+      </p>
+      {flash && <div className={`flash ${flash.kind}`} role="status" style={{ marginTop: 10 }}>{flash.msg}</div>}
+    </div>
+  )
+}

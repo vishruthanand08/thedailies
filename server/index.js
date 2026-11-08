@@ -16,6 +16,7 @@ import { globalRouter } from './global.js'
 import { pushRouter, startReminders } from './push.js'
 import { releaseRouter, macDownload, windowsDownload, windowsUpdateFeed, appcast } from './release.js'
 import { pageWithMeta, metaFor } from './meta.js'
+import { appSiteAssociation } from './applinks.js'
 import { loadRules, backfillPoints } from './points.js'
 import { loadHiddenCategories } from './categories.js'
 
@@ -46,6 +47,8 @@ app.get('/download/mac', macDownload)
 app.get('/download/windows', windowsDownload)
 app.get('/windows-update/latest.yml', windowsUpdateFeed)
 app.get('/appcast.xml', appcast)
+// invite links open the iPhone app (applinks.js)
+app.get(['/.well-known/apple-app-site-association', '/apple-app-site-association'], appSiteAssociation)
 // development only: the Vite dev server asks for a page's link-preview tags here (web/vite.config.js),
 // so an invite link from localhost previews like the live site's
 if (process.env.NODE_ENV !== 'production') {

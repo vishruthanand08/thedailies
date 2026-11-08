@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from './api.js'
 import { inApp } from './native.js'
-import { ForgotPassword, useEmailAvailable } from './Recovery.jsx'
+import { AppleSignIn, ForgotPassword, useEmailAvailable } from './Recovery.jsx'
 
 export default function Auth({ onAuth }) {
   const [mode, setMode] = useState('login') // login | register | forgot
@@ -9,6 +9,7 @@ export default function Auth({ onAuth }) {
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('') // at sign-up, for getting back in; confirmed afterwards
   const emailAvailable = useEmailAvailable()
+  const [pickingName, setPickingName] = useState(false) // new Apple account choosing a username
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -47,7 +48,8 @@ export default function Auth({ onAuth }) {
         <p>One leaderboard for Wordle, Queens, GeoGuessr, and every other daily you're addicted to.</p>
       </div>
 
-      {mode === 'forgot' ? <ForgotPassword initial={username} onBack={() => setMode('login')} /> : (
+      {mode !== 'forgot' && <AppleSignIn onAuth={onAuth} onPicking={setPickingName} />}
+      {pickingName ? null : mode === 'forgot' ? <ForgotPassword initial={username} onBack={() => setMode('login')} /> : (
       <form className="card authcard" onSubmit={submit}>
         <input
           className="input"

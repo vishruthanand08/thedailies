@@ -4,7 +4,7 @@ import { RangeRow, unitFor, useGames, useStats } from './Leaderboards.jsx'
 import Devices, { showDevices } from './Devices.jsx'
 import { inApp } from './native.js'
 import { DesktopAppCard } from './DesktopApp.jsx'
-import { EmailCard } from './Recovery.jsx'
+import { AppleCard, EmailCard } from './Recovery.jsx'
 
 // The You tab: my own stats, plus account things (password, log out, devices).
 export default function Profile({ me, onLogout, onPasswordChanged }) {
@@ -12,6 +12,11 @@ export default function Profile({ me, onLogout, onPasswordChanged }) {
   const { stats, error } = useStats(range)
   const gameById = useGames()
   const [profile, setProfile] = useState(null)
+  // false for an account made with Sign in with Apple, until it sets a password
+  const [hasPassword, setHasPassword] = useState(true)
+  useEffect(() => {
+    api.get('/auth/recovery').then((d) => setHasPassword(d.hasPassword !== false), () => {})
+  }, [])
 
   useEffect(() => {
     api.get('/auth/profile').then(setProfile).catch(() => {})
@@ -113,9 +118,10 @@ export default function Profile({ me, onLogout, onPasswordChanged }) {
 
       <DesktopAppCard />
       <EmailCard />
-      <ChangePassword mustChange={me.mustChangePassword} onChanged={onPasswordChanged} />
+      <AppleCard />
+      <ChangePassword mustChange={me.mustChangePassword} hasPassword={hasPassword} onChanged={() => { setHasPassword(true); onPasswordChanged?.() }} />
       {showDevices && <Devices />}
-      <DeleteAccount onDeleted={onLogout} />
+      <DeleteAccount me={me} hasPassword={hasPassword} onDeleted={onLogout} />
 
       {/* app-only until the app ships (the pages describe the app). _blank: in the app these open
           in Safari, since the app's main view has no back button */}
@@ -128,7 +134,7 @@ export default function Profile({ me, onLogout, onPasswordChanged }) {
   )
 }
 
-function ChangePassword({ mustChange, onChanged }) {
+function ChangePassword({ mustChange, hasPassword, onChanged }) {
   // open already after support's reset: the temporary password goes in the first box
   const [open, setOpen] = useState(Boolean(mustChange))
   const [current, setCurrent] = useState('')
@@ -142,7 +148,7 @@ function ChangePassword({ mustChange, onChanged }) {
     setFlash(null)
     try {
       await api.post('/auth/password', { current, next })
-      setFlash({ kind: 'ok', msg: 'Password changed ✓' })
+      setFlash({ kind: 'ok', msg: hasPassword ? 'Password changed ✓' : 'Password set ✓ You can sign in with it too.' })
       onChanged?.()
       setCurrent('')
       setNext('')
@@ -166,22 +172,26 @@ function ChangePassword({ mustChange, onChanged }) {
               setFlash(null)
             }}
           >
-            Change password
+            {hasPassword ? 'Change password' : 'Set a password'}
           </button>
         )}
       </div>
       {open && (
         <form className="suggestform" onSubmit={submit}>
-          <input
-            className="input"
-            type="password"
-            autoComplete="current-password"
-            placeholder={mustChange ? 'Temporary password' : 'Current password'}
-            aria-label="Current password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            autoFocus
-          />
+          {hasPassword ? (
+            <input
+              className="input"
+              type="password"
+              autoComplete="current-password"
+              placeholder={mustChange ? 'Temporary password' : 'Current password'}
+              aria-label="Current password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              autoFocus
+            />
+          ) : (
+            <p className="hint" style={{ margin: 0 }}>You sign in with Apple. Add a password to sign in with your username too.</p>
+          )}
           <input
             className="input"
             type="password"
@@ -192,7 +202,7 @@ function ChangePassword({ mustChange, onChanged }) {
             onChange={(e) => setNext(e.target.value)}
           />
           <div className="row">
-            <button className="btn coral small" type="submit" disabled={busy || !current || next.length < 6}>
+            <button className="btn coral small" type="submit" disabled={busy || (hasPassword && !current) || next.length < 6}>
               Save
             </button>
             <button className="btn ghost small" type="button" onClick={() => setOpen(false)}>
@@ -207,7 +217,7 @@ function ChangePassword({ mustChange, onChanged }) {
 }
 
 // App Store guideline 5.1.1(v): an account made in the app must be deletable in the app.
-function DeleteAccount({ onDeleted }) {
+function DeleteAccount({ me, hasPassword, onDeleted }) {
   const [open, setOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -218,7 +228,8 @@ function DeleteAccount({ onDeleted }) {
     setBusy(true)
     setError(null)
     try {
-      await api.del('/auth/account', { password })
+      // an Apple-only account has no password: typing the username confirms instead
+      await api.del('/auth/account', hasPassword ? { password } : { confirm: password })
       onDeleted()
     } catch (err) {
       setError(err.message)
@@ -243,10 +254,10 @@ function DeleteAccount({ onDeleted }) {
           </p>
           <input
             className="input"
-            type="password"
-            autoComplete="current-password"
-            placeholder="Your password"
-            aria-label="Your password, to confirm"
+            type={hasPassword ? 'password' : 'text'}
+            autoComplete={hasPassword ? 'current-password' : 'off'}
+            placeholder={hasPassword ? 'Your password' : `Type ${me.username} to confirm`}
+            aria-label={hasPassword ? 'Your password, to confirm' : `Type ${me.username} to confirm`}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoFocus

@@ -1,4 +1,5 @@
 import { q } from './db.js'
+import { APP_STORE_ID } from './applinks.js'
 
 // Link previews (iMessage, WhatsApp, Slack, X…) read <meta> tags from the page's HTML and don't
 // run its JavaScript, so the server writes them into index.html for every page. An invite link
@@ -34,6 +35,8 @@ export async function metaFor(origin, add) {
     '<meta property="og:image:height" content="630" />',
     `<meta property="og:image:alt" content="${escape(name ? `Add @${name} on The Dailies` : 'The Dailies')}" />`,
     '<meta name="twitter:card" content="summary_large_image" />',
+    // Safari on iPhone: "Open" in the app (with this page, so an invite carries over) or "Get" it
+    `<meta name="apple-itunes-app" content="app-id=${APP_STORE_ID}, app-argument=${escape(url)}" />`,
   ].join('\n    ')
   return { title: escape(title), tags }
 }

@@ -22,6 +22,27 @@ function arrange(games, order) {
     .map(([g]) => g)
 }
 
+const HOWTO_KEY = 'dailies.howto'
+const pasteKeys = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘V' : 'Ctrl+V'
+
+// For new players: the three steps, since "paste your result" isn't obvious the first time.
+function HowItWorks({ onClose }) {
+  return (
+    <div className="card howto" role="note" aria-label="How The Dailies works">
+      <div className="howto-head">
+        <h3>How it works</h3>
+        <button className="iconbtn" aria-label="Close how it works" onClick={onClose}>✕</button>
+      </div>
+      <ol>
+        <li><b>Play</b> a game: tap <b>Play</b> on any game below.</li>
+        <li>When you finish, tap the game's own <b>Share</b> or <b>Copy</b> button to copy your result.</li>
+        <li>Come back and press <b>Paste</b> (bottom right) or {pasteKeys}. Your score lands on the board.</li>
+      </ol>
+      <p className="hint">Each result earns up to 100 points. Most points across the day wins the crown 👑</p>
+    </div>
+  )
+}
+
 // Most daily games put out the next puzzle at midnight where the player is.
 function untilLocalMidnight() {
   const now = new Date()
@@ -46,6 +67,22 @@ export default function Today({ me, onOpenDay }) {
   const [playing, setPlaying] = useState(null) // game open in the embedded panel
   const closePanel = useCallback(() => setPlaying(null), [])
   const [backFrom, setBackFrom] = useState(null) // gameId to offer a paste for after a new-tab game
+  // the "How it works" card, until it's closed or the first score is saved (on this browser)
+  const [showHowTo, setShowHowTo] = useState(() => {
+    try {
+      return localStorage.getItem(HOWTO_KEY) !== 'done'
+    } catch {
+      return false
+    }
+  })
+  const finishHowTo = useCallback(() => {
+    setShowHowTo(false)
+    try {
+      localStorage.setItem(HOWTO_KEY, 'done')
+    } catch {
+      // storage unavailable
+    }
+  }, [])
 
   // A game opened in a new tab: when the player comes back, offer to paste its result.
   // Kept in sessionStorage so it survives mobile browsers unloading this tab meanwhile.
@@ -390,6 +427,7 @@ export default function Today({ me, onOpenDay }) {
       const d = await api.post('/submissions', { text: value })
       setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added ✓` })
       clearAway()
+      finishHowTo() // they've got it
       load(null) // today, where the new score is
 
       return true
@@ -444,6 +482,8 @@ export default function Today({ me, onOpenDay }) {
           onDismissBack={clearAway}
         />
       )}
+
+      {showHowTo && isToday && <HowItWorks onClose={finishHowTo} />}
 
       {/* always at the top, even before anyone has played */}
       <div className="card crowncard">
@@ -615,7 +655,7 @@ export default function Today({ me, onOpenDay }) {
 
       <Suggestions />
 
-      {playing && <GamePanel game={playing} onClose={closePanel} onSaved={() => load(null)} />}
+      {playing && <GamePanel game={playing} onClose={closePanel} onSaved={() => { finishHowTo(); load(null) }} />}
     </div>
   )
 }
