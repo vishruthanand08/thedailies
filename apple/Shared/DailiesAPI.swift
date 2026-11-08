@@ -542,12 +542,57 @@ actor DailiesAPI {
         }
     }
 
+    /// Until when to go straight to the fallback address, after the main one couldn't be reached.
+    private var preferFallbackUntil = Date.distantPast
+
+    /// Sends a request to the main address, or to the fallback when the main one is blocked or
+    /// unreachable on this network; after a fallback works it's used first for ten minutes.
     private func perform(_ req: URLRequest) async throws -> (Data, URLResponse) {
+        let server = Server.current
+        guard let fallback = server.fallbackURL, req.url?.host == server.baseURL.host else {
+            return try await send(req)
+        }
+        let viaFallback = rehost(req, to: fallback)
+        if Date() < preferFallbackUntil, let r = try? await session.data(for: viaFallback) { return r }
+        do {
+            let r = try await session.data(for: req)
+            preferFallbackUntil = .distantPast
+            return r
+        } catch let error as URLError where Self.unreachable.contains(error.code) {
+            log.info("main address unreachable (\(error.code.rawValue)); trying the fallback")
+            let r = try await send(viaFallback)
+            preferFallbackUntil = Date().addingTimeInterval(600)
+            return r
+        } catch {
+            throw DailiesError.network("Couldn't reach The Dailies. Check your connection and try again.")
+        }
+    }
+
+    private func send(_ req: URLRequest) async throws -> (Data, URLResponse) {
         do {
             return try await session.data(for: req)
         } catch {
             throw DailiesError.network("Couldn't reach The Dailies. Check your connection and try again.")
         }
+    }
+
+    /// What a blocked or unreachable address looks like: no DNS answer, a refused or dropped
+    /// connection, or a filter's own certificate in the way. Offline isn't on the list.
+    private static let unreachable: Set<URLError.Code> = [
+        .cannotFindHost, .dnsLookupFailed, .cannotConnectToHost, .timedOut, .networkConnectionLost,
+        .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
+        .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot, .clientCertificateRejected,
+    ]
+
+    private func rehost(_ req: URLRequest, to base: URL) -> URLRequest {
+        var copy = req
+        if var parts = req.url.flatMap({ URLComponents(url: $0, resolvingAgainstBaseURL: false) }) {
+            parts.scheme = base.scheme
+            parts.host = base.host
+            parts.port = base.port
+            copy.url = parts.url
+        }
+        return copy
     }
 
     private func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {

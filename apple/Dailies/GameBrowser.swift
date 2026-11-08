@@ -85,6 +85,7 @@ struct GameBrowserView: View {
     // GameBrowser is a live web view running the game
     @State private var browser: GameBrowser?
     @State private var queue = SubmissionQueue.shared
+    @State private var showGuide = false
 
     var body: some View {
         NavigationStack {
@@ -95,6 +96,10 @@ struct GameBrowserView: View {
                     Color.clear
                 }
             }
+            #if os(iOS)
+            // over the game, just above the yellow bar it points to
+            .overlay(alignment: .bottom) { GameGuide(gameName: launch.name, visible: $showGuide) }
+            #endif
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 PasteBar(gameName: launch.name) { queue.enqueue($0) }
             }
@@ -117,7 +122,26 @@ struct GameBrowserView: View {
         }
         .overlay { BannerOverlay(banner: queue.banner) { queue.dismiss($0) } }
         .onAppear {
-            if browser == nil { browser = GameBrowser(launch: launch) }
+            if browser == nil {
+                browser = GameBrowser(launch: launch)
+                #if os(iOS)
+                // the steps over the game, the first few times a game is opened. The view can be set
+                // up more than once as a game opens, so opens within ten seconds count once.
+                let defaults = UserDefaults.standard
+                let shown = defaults.integer(forKey: GameGuide.key)
+                if shown < GameGuide.times {
+                    let last = defaults.double(forKey: GameGuide.key + ".at")
+                    if Date().timeIntervalSince1970 - last > 10 {
+                        defaults.set(shown + 1, forKey: GameGuide.key)
+                        defaults.set(Date().timeIntervalSince1970, forKey: GameGuide.key + ".at")
+                    }
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.6)) // after the game starts loading
+                        withAnimation(.spring(duration: 0.45, bounce: 0.25)) { showGuide = true }
+                    }
+                }
+                #endif
+            }
         }
         .onDisappear {
             browser?.close()
@@ -156,38 +180,7 @@ private struct PasteBar: View {
         .overlay(alignment: .top) { Site.ink.frame(height: Site.border) }
         .environment(\.colorScheme, .light)
         #else
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Finished?").font(.system(.subheadline, design: .rounded, weight: .heavy))
-                Text("Tap Share or Copy in \(gameName), then paste.").font(.footnote).opacity(0.75)
-            }
-            .lineLimit(1)
-            .foregroundStyle(Color("OnAccent"))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Group {
-                #if DEBUG
-                if UserDefaults.standard.bool(forKey: "dailiesScreenshots") {
-                    ScreenshotPasteButton() // see AddScoreSheet
-                } else {
-                    PasteButton(payloadType: String.self) { strings in
-                        guard let text = strings.first else { return }
-                        Task { @MainActor in onPaste(text) }
-                    }
-                }
-                #else
-                PasteButton(payloadType: String.self) { strings in
-                    guard let text = strings.first else { return }
-                    Task { @MainActor in onPaste(text) }
-                }
-                #endif
-            }
-            .labelStyle(.titleAndIcon)
-            .buttonBorderShape(.capsule)
-            .tint(Color("OnAccent"))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color("Sun")) // same yellow bar as the Today tab
+        IPhonePasteBar(gameName: gameName, onPaste: onPaste)
         #endif
     }
 
@@ -203,6 +196,173 @@ private struct PasteBar: View {
 }
 
 #if os(iOS)
+/// Notices when something new is copied while a game is open, without reading the clipboard (so
+/// no "Allow Paste?" prompt): iOS's changeCount goes up on every copy, including one made from the
+/// share sheet's Copy, which happens outside the app and doesn't notify it. Checked twice a second
+/// while the game is on screen and whenever the app comes back.
+@MainActor
+@Observable
+final class ClipboardWatcher {
+    private(set) var changeCount = UIPasteboard.general.changeCount
+    private(set) var hasText = UIPasteboard.general.hasStrings
+    /// Something was copied since the game opened: most likely the result.
+    private(set) var copiedSinceOpen = false
+    @ObservationIgnored private let startCount = UIPasteboard.general.changeCount
+    @ObservationIgnored private var timer: Timer?
+
+    func start() {
+        check()
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.check() }
+        }
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func check() {
+        let count = UIPasteboard.general.changeCount
+        guard count != changeCount || !copiedSinceOpen && count != startCount else {
+            hasText = UIPasteboard.general.hasStrings
+            return
+        }
+        changeCount = count
+        hasText = UIPasteboard.general.hasStrings
+        copiedSinceOpen = count != startCount && hasText
+    }
+
+    /// After a save: back to waiting for the next copy.
+    func saved() { copiedSinceOpen = false }
+}
+
+/// The yellow bar under a game: what to do next, and the system Paste button (which reads the
+/// clipboard without a prompt). Rebuilt on every copy so it never sits greyed out after one, and
+/// it lights up once the result is copied.
+private struct IPhonePasteBar: View {
+    let gameName: String
+    let onPaste: (String) -> Void
+    @State private var watcher = ClipboardWatcher()
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulse = false
+
+    private var ready: Bool { watcher.copiedSinceOpen }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(ready ? "Copied! Tap Paste to save" : "Finished?")
+                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                Text(ready ? "Your \(gameName) result goes on the board." : "Tap Share or Copy in \(gameName), then paste.")
+                    .font(.footnote).opacity(0.75)
+            }
+            .lineLimit(1)
+            .foregroundStyle(Color("OnAccent"))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentTransition(.opacity)
+            Group {
+                #if DEBUG
+                if UserDefaults.standard.bool(forKey: "dailiesScreenshots") {
+                    ScreenshotPasteButton() // see AddScoreSheet
+                } else {
+                    pasteButton
+                }
+                #else
+                pasteButton
+                #endif
+            }
+            .labelStyle(.titleAndIcon)
+            .buttonBorderShape(.capsule)
+            .tint(Color("OnAccent"))
+            .scaleEffect(ready && pulse && !reduceMotion ? 1.08 : 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color("Sun")) // same yellow bar as the Today tab
+        .overlay(alignment: .top) {
+            // a bright edge while there's a result waiting to be saved
+            if ready { Color("OnAccent").frame(height: 3).transition(.opacity) }
+        }
+        .animation(reduceMotion ? nil : .snappy, value: ready)
+        .sensoryFeedback(.success, trigger: ready) { _, now in now }
+        .onAppear {
+            watcher.start()
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
+            }
+        }
+        .onDisappear { watcher.stop() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { watcher.check() } }
+    }
+
+    private var pasteButton: some View {
+        PasteButton(payloadType: String.self) { strings in
+            guard let text = strings.first else { return }
+            Task { @MainActor in
+                watcher.saved()
+                onPaste(text)
+            }
+        }
+        // a fresh button for each copy: the system one doesn't always notice a copy on its own
+        .id(watcher.changeCount)
+    }
+}
+
+/// The three steps, over the bottom of the game the first few times someone opens one, since
+/// "copy your result, then paste it" isn't obvious. "Got it" hides it for good.
+private struct GameGuide: View {
+    let gameName: String
+    @Binding var visible: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    static let key = "dailies.gameGuideShown"
+    static let times = 3
+
+    var body: some View {
+        Group {
+            if visible {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("How to add your score").font(.system(.headline, design: .rounded, weight: .heavy))
+                    step(1, "Play today's \(gameName).")
+                    step(2, "Tap the game's own Share or Copy button.")
+                    step(3, "Tap Paste in the yellow bar below.")
+                    Button {
+                        Haptic.tap()
+                        UserDefaults.standard.set(Self.times, forKey: Self.key) // for good
+                        withAnimation(reduceMotion ? nil : .snappy) { visible = false }
+                    } label: {
+                        Text("Got it")
+                            .font(.system(.subheadline, design: .rounded, weight: .heavy))
+                            .foregroundStyle(Color("OnAccent"))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.pressIn(Color("Sun"), radius: 14))
+                }
+                .foregroundStyle(Color("Ink"))
+                .padding(16)
+                .chunkyCard(Color("Surface"))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func step(_ n: Int, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("\(n)")
+                .font(.system(.footnote, design: .rounded, weight: .heavy))
+                .foregroundStyle(Color("OnAccent"))
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Color("Sun")))
+                .overlay(Circle().strokeBorder(Color("OnAccent"), lineWidth: 1.5))
+            Text(text).font(.subheadline.weight(.semibold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 private struct GameWebView: UIViewRepresentable {
     let webView: WKWebView
     func makeUIView(context: Context) -> WKWebView { webView }

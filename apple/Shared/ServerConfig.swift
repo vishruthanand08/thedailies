@@ -30,6 +30,16 @@ enum Server: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Another address for the same server, for networks whose filters block the main one (a new
+    /// .lol domain gets blocked by some school, office and home filters). The app signs in with a
+    /// device token, not a cookie, so any address works. Links people see stay on baseURL.
+    var fallbackURL: URL? {
+        switch self {
+        case .production: URL(string: "https://app-production-677e.up.railway.app")!
+        case .local: nil
+        }
+    }
+
     var label: String {
         switch self {
         case .production: "thedailies.lol"
