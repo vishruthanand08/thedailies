@@ -11,10 +11,11 @@ import { PUBLIC_URL } from './mail.js'
 
 // Sharing a score: the website and the apps ask for the text (GET /game/:gameId, GET /crown),
 // written here so every client says the same thing, and hand it to the share sheet or clipboard.
-// Each text ends in a link, /?add=<me>&s=<token>: an invite (the friend request is accepted at
-// once, since the sharer sent the link) that also opens the shared game's board. The token is
-// signed (HMAC with JWT_SECRET), so a link only ever shows what its sharer chose to share:
-// `g<submission id>` for a game score, `c<user id>x<yyyymmdd>` for the day's crown.
+// Like other daily games' shares: a line with my place ("🥇 I'm 1st on The Dailies with:"), the
+// game's own share text with its links taken out, and our address. Links shared before
+// 2026-11-10 carried an invite (/?add=<me>&s=<token>, the token signed with JWT_SECRET:
+// `g<submission id>` or `c<user id>x<yyyymmdd>`); those still work, through readShareToken and
+// sharePreview below (the sign-up teaser, link previews and the instant friendship).
 
 const sign = (body) => crypto.createHmac('sha256', JWT_SECRET).update(`share:${body}`).digest('base64url').slice(0, 12)
 
@@ -61,12 +62,32 @@ export async function sharePreview(raw) {
 
 // ---- the text ----
 
-const link = (username, token) => `${PUBLIC_URL}/?add=${encodeURIComponent(username)}&s=${token}`
+const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
-function names(list) {
-  const at = list.map((n) => `@${n}`)
-  if (at.length <= 2) return at.join(' and ')
-  return `${at.slice(0, 2).join(', ')} and ${at.length - 2} other${at.length === 3 ? '' : 's'}`
+function ordinal(n) {
+  const tens = n % 100
+  if (tens >= 11 && tens <= 13) return `${n}th`
+  return `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`
+}
+
+// "🥇 I'm 1st on The Dailies with:" (a medal for the top three), "I was 4th … on Mon, Nov 9 with:"
+function placeLine(rank, date, today) {
+  const medal = MEDALS[rank] ? `${MEDALS[rank]} ` : ''
+  if (date === today) return `${medal}I’m ${ordinal(rank)} on The Dailies with:`
+  return `${medal}I was ${ordinal(rank)} on The Dailies ${when(date, today)} with:`
+}
+
+// A game's share without its links (the game's own address, ref links), so ours is the one link.
+function withoutLinks(text) {
+  return text
+    .replace(/(?:https?:\/\/|www\.)\S+/gi, '')
+    .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\/\S*/gi, '') // lnkd.in/wend
+    .replace(/^[ \t]*(?:[a-z0-9-]+\.)+[a-z]{2,}[ \t]*$/gim, '') // a line that's just chainle.io
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+$/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function when(date, today) {
@@ -74,11 +95,6 @@ function when(date, today) {
   const d = new Date(`${date}T12:00:00Z`)
   return `on ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}`
 }
-
-// the same score always gets the same line, so sharing twice doesn't change the joke
-const pick = (lines, seed) => lines[Math.abs(seed) % lines.length]
-
-const DARES = ['Think you can beat it?', 'Your move 👀', 'Prove me wrong:', 'Bet you can’t beat it:', 'Come get some:']
 
 async function dayBoard(userId, date) {
   const ids = await circleIds(userId)
@@ -110,18 +126,10 @@ shareRouter.get('/game/:gameId', requireAuth, async (req, res) => {
   const mine = entries.find((e) => e.userId === req.user.id)
   if (!mine) return res.status(404).json({ error: `Play ${game.name} first, then share your score.` })
 
-  const day = when(date, today)
-  const beaten = entries.filter((e) => e.rank > mine.rank).map((e) => e.username)
-  const above = entries.filter((e) => e.rank < mine.rank)
-  let line
-  if (beaten.length && !above.length) line = `I beat ${names(beaten)} at ${game.name} ${day} 😤`
-  else if (beaten.length) line = `I beat ${names(beaten)} at ${game.name} ${day}. @${above[above.length - 1].username}, you’re next 👀`
-  else if (entries.length === 1) line = `First one in on ${game.name} ${day} 🏁`
-  else line = `Took an L on ${game.name} ${day} 😅`
-
-  const header = mine.shareText || `${game.emoji} ${game.name} ${mine.display}`
-  const url = link(req.user.username, shareToken(`g${mine.submissionId}`))
-  res.json({ text: `${header}\n\n${line}\n${pick(DARES, mine.submissionId)} ${url}`, url })
+  // the game's own share, links out; a share that was only a link (or a typed-in score) gets a line
+  const own = mine.shareText ? withoutLinks(mine.shareText) : ''
+  const result = own.length > 3 ? own : `${game.emoji} ${game.name} ${mine.display}`
+  res.json({ text: `${placeLine(mine.rank, date, today)}\n${result}\n${PUBLIC_URL}`, url: PUBLIC_URL })
 })
 
 shareRouter.get('/crown', requireAuth, async (req, res) => {
@@ -131,17 +139,16 @@ shareRouter.get('/crown', requireAuth, async (req, res) => {
   const mine = crown.find((c) => c.userId === req.user.id)
   if (!mine) return res.status(404).json({ error: 'Play a game first, then share your crown.' })
 
-  const day = when(date, today)
-  const pts = `${mine.points} pts from ${mine.games} game${mine.games === 1 ? '' : 's'}`
-  const others = crown.filter((c) => c.userId !== req.user.id)
-  let text
-  if (mine.rank === 1 && others.length) {
-    text = `👑 I won The Dailies ${day}: ${pts}, ahead of ${names(others.map((c) => c.username))}.\nCome take my crown:`
-  } else if (mine.rank === 1) {
-    text = `👑 Top of The Dailies ${day} with ${pts}.\nCome take my crown:`
-  } else {
-    text = `I’m #${mine.rank} of ${crown.length} on The Dailies ${day} with ${pts}.\nCatch me if you can:`
-  }
-  const url = link(req.user.username, shareToken(`c${req.user.id}x${date.replaceAll('-', '')}`))
-  res.json({ text: `${text} ${url}`, url })
+  // my games that day, most points first: "🟩 Wordle 3/6"
+  const { rows } = await q(
+    `SELECT game_id, display, points FROM submissions WHERE user_id = $1 AND puzzle_date = $2`,
+    [req.user.id, date]
+  )
+  const games = visibleRows(rows)
+    .filter((r) => gameById[r.game_id])
+    .sort((a, b) => (b.points ?? 0) - (a.points ?? 0))
+    .map((r) => `${gameById[r.game_id].emoji} ${gameById[r.game_id].name} ${r.display}`)
+  const pts = `${Math.round(mine.points)} pts from ${mine.games} game${mine.games === 1 ? '' : 's'}`
+  const text = [placeLine(mine.rank, date, today), pts, ...games, PUBLIC_URL].join('\n')
+  res.json({ text, url: PUBLIC_URL })
 })

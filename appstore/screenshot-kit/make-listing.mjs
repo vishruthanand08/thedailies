@@ -5,8 +5,7 @@
 //   node appstore/screenshot-kit/make-listing.mjs <scratch dir>
 //
 // The scratch dir holds raw/ (Simulator captures: today, saved, board, feed), games.json (from
-// /api/submissions/games), share.json (alex's /api/share/game/wordle) and old-friends.png (the
-// previous Friends slide, reused as is).
+// /api/submissions/games) and share.json (alex's /api/share/game/wordle).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 
 const dir = process.argv[2] || process.cwd()
@@ -82,21 +81,21 @@ const shots = {
   '03-leaderboard': page(SW, SH, caption('See who won <mark>every</mark> game', 'A leaderboard for each game, every day.') +
     phone({ shot: 'board', left: 130, top: 830, width: 1060 })),
 
-  '04-brag': page(SW, SH, caption('<mark>Brag</mark> with one tap', 'Share your score with a link that brings friends to the board.') + `
+  '04-brag': page(SW, SH, caption('<mark>Brag</mark> with one tap', 'Share your place and your score with your friends.') + `
     <div class="bubble me">${esc(share).replace(/\n/g, '<br>').replace(/(https:\/\/\S+)/, '<span class="link">$1</span>')}</div>
-    <div class="preview card"><img src="${icon}"><div><div class="pt">@alex got 3/6 on Wordle. Can you beat it?</div><div class="pu">thedailies.lol</div></div></div>
+    <div class="preview card"><img src="${icon}"><div><div class="pt">The Dailies: beat your friends at every daily game</div><div class="pu">thedailies.lol</div></div></div>
     <div class="bubble them">ok that’s it. rematch tomorrow 😤</div>
     <div class="bubble them two">downloading it now</div>`,
   `.bubble { position: absolute; font-size: 54px; line-height: 1.35; font-weight: 500; padding: 44px 52px; border: 6px solid ${INK}; border-radius: 56px; box-shadow: 14px 14px 0 ${INK}; }
    .me { right: 96px; left: 230px; top: 960px; background: ${YELLOW}; border-bottom-right-radius: 14px; }
    .me .link { font-size: 40px; word-break: break-all; color: ${INK}; text-decoration: underline; font-weight: 600; }
-   .preview { position: absolute; right: 96px; left: 230px; top: 1860px; border-width: 6px; border-radius: 40px; box-shadow: 14px 14px 0 ${INK};
+   .preview { position: absolute; right: 96px; left: 230px; top: 1650px; border-width: 6px; border-radius: 40px; box-shadow: 14px 14px 0 ${INK};
               display: flex; align-items: center; gap: 36px; padding: 32px 40px; }
    .preview img { width: 130px; height: 130px; border-radius: 30px; flex: none; }
    .preview .pt { font-size: 44px; font-weight: 700; line-height: 1.25; }
    .preview .pu { font-size: 36px; color: ${MUTED}; font-weight: 500; margin-top: 6px; }
-   .them { left: 96px; background: #fff; border-bottom-left-radius: 14px; top: 2240px; }
-   .them.two { top: 2470px; }`),
+   .them { left: 96px; background: #fff; border-bottom-left-radius: 14px; top: 2040px; }
+   .them.two { top: 2270px; }`),
 
   '05-feed': page(SW, SH, caption('Cheer on your <mark>friends</mark>', 'Kudos, streaks and personal bests in one feed.') +
     phone({ shot: 'feed', left: 130, top: 830, width: 1060 })),

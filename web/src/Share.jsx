@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
 
-// Share a score or the day's crown as text (server/share.js writes it, with a link that invites
-// people in and opens the game's board). The share sheet where there is one (phones, Safari),
+// Share a score or the day's crown as text (server/share.js writes it: my place, the game's
+// own share and our address). The share sheet where there is one (phones, Safari),
 // otherwise the clipboard. The text is fetched when the button appears, because browsers only
 // open the share sheet or write the clipboard straight after a click.
 export function ShareButton({ path, label = 'Share', className = 'btn small sharebtn' }) {

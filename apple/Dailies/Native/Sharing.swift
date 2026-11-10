@@ -2,8 +2,8 @@
 import SwiftUI
 import UIKit
 
-/// Sharing a score or the day's crown as text (the server writes it, server/share.js: a playful
-/// line and a link that invites people in and opens the game's board), through the share sheet.
+/// Sharing a score or the day's crown as text (the server writes it, server/share.js: my place,
+/// the game's own share and our address), through the share sheet.
 @MainActor
 enum Sharing {
     static func shareGame(_ gameId: String, date: String? = nil) {
@@ -47,7 +47,7 @@ struct ShareButton: View {
 
     var body: some View {
         SmallButton(title: title, icon: "arrow-up-on-square", primary: primary, action: action)
-            .accessibilityHint("Shares your score with a link for friends to join")
+            .accessibilityHint("Shares your place and score with The Dailies link")
     }
 }
 #endif

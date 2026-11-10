@@ -34,7 +34,7 @@ Just play. When you finish a game, your score saves itself and lands on your fri
 • Scores save themselves: play any game in the app and your result is on the board when you finish, with Undo if you didn't mean it
 • One leaderboard for word games, logic puzzles, geography and trivia games
 • A daily crown for whoever scores the most points across every game, plus a crown for each kind of game
-• Brag with one tap: share your score or your crown with a link that brings friends straight to the board
+• Brag with one tap: share your place on the board along with your score, or your whole day
 • A nudge when your friends have played and you haven't, and before your streak runs out
 • All-time leaderboards with your friends, by game or overall
 • A global leaderboard you can join, under your username or a fun name
@@ -122,7 +122,7 @@ the pitch, since App Store search results show only those. Upload in this order.
 | 1 | `01-today.png` | Beat your friends at **every** daily game |
 | 2 | `02-saved.png` | Just play. Your score **saves itself**. |
 | 3 | `03-leaderboard.png` | See who won **every** game |
-| 4 | `04-brag.png` | **Brag** with one tap (the real share text and link preview, as chat bubbles) |
+| 4 | `04-brag.png` | **Brag** with one tap (the real share text and the site's link preview, as chat bubbles) |
 | 5 | `05-feed.png` | Cheer on your **friends** |
 | 6 | `06-reminders.png` | Never break your **streak** (the real notification texts) |
 | 7 | `07-games.png` | **30+** daily games in one place (a graphic of the games, no phone) |
