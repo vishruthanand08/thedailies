@@ -12,7 +12,7 @@ if (process.env.DATABASE_URL) {
   }
 } else {
   const { PGlite } = await import('@electric-sql/pglite')
-  const dir = new URL('../data/pg', import.meta.url).pathname
+  const dir = process.env.PGLITE_DIR || new URL('../data/pg', import.meta.url).pathname // PGLITE_DIR: a copy, for scripts
   fs.mkdirSync(dir, { recursive: true })
   const lite = new PGlite(dir)
   backend = {

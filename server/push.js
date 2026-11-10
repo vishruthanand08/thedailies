@@ -3,8 +3,7 @@ import crypto from 'node:crypto'
 import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
-import { todayISO, hourIn } from './util.js'
-import { hiddenGameIds } from './categories.js'
+import { todayISO } from './util.js'
 
 // Push notifications to the iPhone and Mac apps through Apple's push service (APNs), using a
 // token-based .p8 key. Configure with APNS_KEY (the .p8 file's contents), APNS_KEY_ID and
@@ -19,8 +18,6 @@ export const pushEnabled = Boolean(KEY && KEY_ID && TEAM_ID)
 const HOSTS = process.env.APNS_HOST
   ? { production: process.env.APNS_HOST, sandbox: process.env.APNS_HOST }
   : { production: 'https://api.push.apple.com', sandbox: 'https://api.sandbox.push.apple.com' }
-// hour (0-23, in each player's own time zone) of the evening reminder for anyone who hasn't posted a score today
-const REMINDER_HOUR = Number(process.env.PUSH_REMINDER_HOUR ?? 20)
 
 export const pushRouter = Router()
 pushRouter.use(requireAuth)
@@ -150,44 +147,4 @@ export async function notifyKudos(ownerId, date) {
   })
 }
 
-// ---------- the evening reminder ----------
-
-// Once a day at REMINDER_HOUR in each player's own time zone: everyone with a device who hasn't
-// posted a score on their today. Each player's day is recorded in push_user_reminders, so a
-// restart doesn't send it twice.
-async function remindIfDue() {
-  const { rows: players } = await q(
-    `SELECT DISTINCT d.user_id, u.timezone FROM push_devices d JOIN users u ON u.id = d.user_id`
-  )
-  let sent = 0
-  for (const p of players) {
-    if (hourIn(p.timezone) < REMINDER_HOUR) continue
-    const today = todayISO(p.timezone)
-    const { rows: played } = await q(
-      `SELECT 1 FROM submissions WHERE user_id = $1 AND puzzle_date = $2 AND game_id <> ALL($3::text[]) LIMIT 1`,
-      [p.user_id, today, hiddenGameIds()]
-    )
-    if (played.length) continue
-    const { rows: claimed } = await q(
-      `INSERT INTO push_user_reminders (user_id, puzzle_date) VALUES ($1, $2)
-       ON CONFLICT DO NOTHING RETURNING user_id`,
-      [p.user_id, today]
-    )
-    if (!claimed.length) continue // already reminded today
-    await notify(p.user_id, {
-      title: 'Still time to play',
-      body: 'You haven’t posted a score today. Today’s puzzles reset at midnight.',
-      tab: 'today',
-      collapseId: `reminder-${today}`,
-    })
-    sent += 1
-  }
-  if (sent) console.log(`push: evening reminder sent to ${sent}`)
-}
-
-export function startReminders() {
-  if (!pushEnabled) return
-  const tick = () => remindIfDue().catch((err) => console.warn('push reminder:', err.message))
-  setInterval(tick, 5 * 60 * 1000).unref()
-  tick()
-}
+// Reminders to play are in reminders.js.

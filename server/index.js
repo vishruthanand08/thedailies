@@ -14,7 +14,8 @@ import { adminRouter } from './admin.js'
 import { feedRouter } from './feed.js'
 import { globalRouter } from './global.js'
 import { shareRouter } from './share.js'
-import { pushRouter, startReminders } from './push.js'
+import { pushRouter } from './push.js'
+import { startReminders } from './reminders.js'
 import { releaseRouter, macDownload, windowsDownload, windowsUpdateFeed, appcast } from './release.js'
 import { pageWithMeta, metaFor } from './meta.js'
 import { appSiteAssociation } from './applinks.js'
@@ -27,7 +28,7 @@ await initDb()
 await loadRules()
 await loadHiddenCategories()
 await backfillPoints()
-startReminders() // the evening push, once APNs is configured
+startReminders() // reminders to play (midday and evening), once APNs is configured
 
 const app = express()
 app.use(express.json({ limit: '32kb' }))

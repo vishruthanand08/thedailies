@@ -220,6 +220,7 @@ export async function deleteUser(id) {
   await q('DELETE FROM day_highlights WHERE user_id = $1', [id])
   await q('DELETE FROM push_devices WHERE user_id = $1', [id])
   await q('DELETE FROM push_user_reminders WHERE user_id = $1', [id])
+  await q('DELETE FROM push_midday_nudges WHERE user_id = $1', [id])
   await q('DELETE FROM account_tokens WHERE user_id = $1', [id])
   await q('DELETE FROM global_members WHERE user_id = $1', [id])
   await q('DELETE FROM friend_suggestion_dismissals WHERE user_id = $1 OR other_id = $1', [id])

@@ -184,6 +184,13 @@ CREATE TABLE IF NOT EXISTS push_user_reminders (
   PRIMARY KEY (user_id, puzzle_date)
 );
 
+-- The midday "your friends already played" nudge, at most one per player per day (reminders.js).
+CREATE TABLE IF NOT EXISTS push_midday_nudges (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  puzzle_date DATE NOT NULL,
+  PRIMARY KEY (user_id, puzzle_date)
+);
+
 -- One-time links sent by email: 'verify' an address (email is the address being confirmed) or
 -- 'reset' a password. Only a hash of the token is kept.
 CREATE TABLE IF NOT EXISTS account_tokens (
