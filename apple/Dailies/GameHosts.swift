@@ -9,7 +9,7 @@ enum GameHosts {
         "worldle.teuteuf.fr", "globle-game.com", "travle.earth", "minutecryptic.com", "costcodle.com",
         "fermi.gg", "maptap.gg", "krillion.io", "hbd.gg", "geoguessr.com", "nytimes.com", "linkedin.com",
         "timeguessr.com", "worldguessr.com", "chainle.io", "perceptle.com", "poeltl.nbpa.com",
-        "sports-reference.com", "dailytens.com", "poople.io", "magnitudle.com", "playplain.app", "eraly.net",
+        "sports-reference.com", "dailytens.com", "poople.io", "magnitudle.com", "playplain.app", "eraly.io",
     ]
 
     /// Hosts of the server's games (GET /api/submissions/games), so a game added to the server
@@ -54,7 +54,7 @@ enum GameHosts {
             "sports-reference.com": "Immaculate Grid", "dailytens.com": "Daily Tens",
             "poople.io": "Poople",
             "magnitudle.com": "Size It Up", "playplain.app": "Plain", "playdaily.org": "Noillirk",
-            "dailyholes.com": "Daily Holes", "eraly.net": "Eraly",
+            "dailyholes.com": "Daily Holes", "eraly.io": "Eraly",
         ]
         return byHost.first { host == $0.key || host.hasSuffix("." + $0.key) }?.value ?? host
     }

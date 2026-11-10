@@ -429,27 +429,21 @@ export const GAMES = [
 
   {
     id: 'eraly', category: 'words', name: 'Eraly', emoji: '⏳', color: '#EBD9B9',
-    url: 'https://eraly.net', metricLabel: 'points', better: 'higher',
-    // Verified from a real share 2026-11-10 ("Eraly · Day 17 · 10 Nov 2026\n250/700 · reached 1241 AD ·
-    // ░▓░░▓▒░\nhttps://eraly.net") and eraly.net's own code: seven moments in history, guess each year
-    // for up to 100 points; the bar is one glyph a round (· missed). Day numbers restart every 365
-    // days, so the date comes from the share's own "10 Nov 2026". Endless mode shares "Endless
-    // Expedition" and no day, so it doesn't count. The site refuses framing (SAMEORIGIN).
-    epoch: null, dateTolerance: 1, manual: false,
+    url: 'https://eraly.io', embed: true, metricLabel: 'points', better: 'higher',
+    // Verified from a real share 2026-11-10 ("Eraly #26 · I travelled to 1582 AD\n▰▰▰▰▱▱▱▱▱▱ 295/700\n
+    // 🟦🟨🟥🟧🟧🟥🟧\nhttps://eraly.io") and eraly.io's own code: seven moments in history, guess each
+    // year for 100 (exact), 85, 60, 30 or 10 points; the squares are those bands. #1 was 2026-10-16
+    // (LAUNCH, in the player's own day). Archive plays say "(Archive)", so they don't count; a 🎃
+    // after the number is the Halloween puzzle. No framing headers, and it loads in an iframe.
+    epoch: { date: '2026-10-16', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Eraly\s*·\s*Day\s+\d+\s*·\s*(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/i)
-      if (!m) return null
-      const mi = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase())
-      if (mi === -1) return null
+      const m = text.match(/Eraly\s+#([\d,]+)/i)
+      if (!m || /Eraly\s+#[\d,]+\s*\(Archive\)/i.test(text)) return null
       const s = text.match(/(\d{1,3})\s*\/\s*700/)
       if (!s) return null
       const points = num(s[1])
       if (points > 700) return null
-      return {
-        date: `${m[3]}-${String(mi + 1).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`,
-        metric: points,
-        display: `${points}/700`,
-      }
+      return { puzzleNumber: num(m[1]), metric: points, display: `${points}/700` }
     },
   },
 
@@ -632,8 +626,8 @@ const SCORING = {
   poople: { perfect: 0, par: 4, zero: 15 },
   // entries found out of 10
   dailytens: { perfect: 10, par: 6, zero: 0 },
-  // seven rounds of up to 100; most days land around 250-350, 600+ is a near-perfect run
-  eraly: { perfect: 600, par: 300, zero: 50 },
+  // seven rounds of 10-100; most days land around 250-350, 600+ is a near-perfect run, 70 is every guess far off
+  eraly: { perfect: 600, par: 300, zero: 70 },
   // the average of five 0-100 tests; S is 95+, C (55) a middling day
   perceptle: { perfect: 95, par: 55, zero: 10 },
   // guesses out of 8, a miss is 9
