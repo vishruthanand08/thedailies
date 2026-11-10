@@ -46,7 +46,8 @@ final class WebController {
         // (web/src/native.js), which skips WebKit's paste prompt
         config.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "dailiesClipboard")
         config.userContentController.addUserScript(WKUserScript(
-            source: "window.__dailiesNative = { platform: 'mac', clipboard: true }",
+            // appleSignIn: Apple's sign-in popup opens in the app (SignInPopup), so the site may offer it
+            source: "window.__dailiesNative = { platform: 'mac', clipboard: true, appleSignIn: true }",
             injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         #endif
 
@@ -329,9 +330,74 @@ private final class Bridge: NSObject, WKScriptMessageHandler, WKScriptMessageHan
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
         for action: WKNavigationAction, windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
+        #if os(macOS)
+        // the website's Sign in with Apple: Apple's page has to stay a popup of this page, since
+        // it hands the result back to the window that opened it
+        if action.request.url?.host == "appleid.apple.com" {
+            return SignInPopup.open(configuration: configuration, over: webView.window)
+        }
+        #endif
         // target=_blank links, including the Play links on a site version without the native
         // bridge: same routing as an `open` message
         if let url = action.request.url { owner?.open(url, name: GameHosts.name(for: url)) }
         return nil
     }
 }
+
+#if os(macOS)
+/// Apple's sign-in page in a small window of its own, as the website's popup. WebKit loads it and
+/// keeps it linked to the site, so Apple's script gets the result back; closing it (Apple closes
+/// it when done) tells the site.
+@MainActor
+final class SignInPopup: NSObject, WKUIDelegate, NSWindowDelegate {
+    private static var showing: [SignInPopup] = []
+    private let window: NSWindow
+    private let webView: WKWebView
+    private var closing = false
+
+    static func open(configuration: WKWebViewConfiguration, over parent: NSWindow?) -> WKWebView {
+        let popup = SignInPopup(configuration: configuration, over: parent)
+        showing.append(popup)
+        return popup.webView
+    }
+
+    private init(configuration: WKWebViewConfiguration, over parent: NSWindow?) {
+        let size = NSRect(x: 0, y: 0, width: 520, height: 680)
+        webView = WKWebView(frame: size, configuration: configuration)
+        window = NSWindow(contentRect: size, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        super.init()
+        window.title = "Sign in with Apple"
+        window.contentView = webView
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        webView.uiDelegate = self
+        if let parent {
+            let p = parent.frame
+            window.setFrameOrigin(NSPoint(x: p.midX - size.width / 2, y: p.midY - size.height / 2))
+        } else {
+            window.center()
+        }
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    // Apple's script closes the popup when it's done
+    func webViewDidClose(_ webView: WKWebView) {
+        closing = true
+        window.close()
+    }
+
+    // closed by hand: close the page too, so the site sees the popup go and stops waiting
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !closing else { return true }
+        closing = true
+        webView.evaluateJavaScript("window.close()") { [weak self] _, _ in
+            Task { @MainActor in self?.window.close() }
+        }
+        return false
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        Self.showing.removeAll { $0 === self }
+    }
+}
+#endif

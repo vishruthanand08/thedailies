@@ -11,6 +11,11 @@ export const nativeCapture = inApp && Boolean(window.__dailiesNative?.capture)
 // The Mac app reads the clipboard for the Paste button (no WebKit paste prompt); resolves to
 // the copied text.
 export const nativeClipboard = inApp && Boolean(window.__dailiesNative?.clipboard)
+
+// Sign in with Apple on the website opens Apple's page as a popup that reports back to the site.
+// Apps that send popups to the browser can't do that (the Mac app before 1.7, the Windows app), so
+// in an app the button only shows when the app says it handles the popup.
+export const appleSignInWorks = !inApp || Boolean(window.__dailiesNative?.appleSignIn)
 export function readNativeClipboard() {
   return window.webkit.messageHandlers.dailiesClipboard.postMessage(null)
 }

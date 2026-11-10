@@ -24,9 +24,11 @@ struct DebugMenu: View {
                 }
                 Section("Local server address") {
                     TextField("http://<Mac>.local:5173", text: $localURL)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
                         .keyboardType(.URL)
+                        #endif
+                        .autocorrectionDisabled()
                         .onSubmit {
                             AppGroup.defaults.set(localURL, forKey: "localURL")
                             if server == .local { WebController.shared.load() }

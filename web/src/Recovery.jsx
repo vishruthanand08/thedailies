@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
+import { appleSignInWorks } from './native.js'
 
 // Account recovery on the website (server/account.js): an optional email on the profile, the
 // links emails send (?verify= and ?reset=), Forgot password on the sign-in page, and the nudge
@@ -362,7 +363,7 @@ let appleConfigCache
 export function useAppleConfig() {
   const [config, setConfig] = useState(appleConfigCache ?? null)
   useEffect(() => {
-    if (appleConfigCache !== undefined) return
+    if (appleConfigCache !== undefined || !appleSignInWorks) return
     api.get('/auth/apple/config').then((d) => setConfig((appleConfigCache = d.enabled ? d : null)), () => {})
   }, [])
   return config
