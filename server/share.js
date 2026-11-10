@@ -149,6 +149,8 @@ shareRouter.get('/crown', requireAuth, async (req, res) => {
     .sort((a, b) => (b.points ?? 0) - (a.points ?? 0))
     .map((r) => `${gameById[r.game_id].emoji} ${gameById[r.game_id].name} ${r.display}`)
   const pts = `${Math.round(mine.points)} pts from ${mine.games} game${mine.games === 1 ? '' : 's'}`
-  const text = [placeLine(mine.rank, date, today), pts, ...games, PUBLIC_URL].join('\n')
+  // the top three, then how many more, so a big day stays a short message
+  const shown = games.length > 3 ? [...games.slice(0, 3), `+${games.length - 3} more`] : games
+  const text = [placeLine(mine.rank, date, today), pts, ...shown, PUBLIC_URL].join('\n')
   res.json({ text, url: PUBLIC_URL })
 })
