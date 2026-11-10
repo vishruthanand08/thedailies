@@ -1,6 +1,8 @@
 import Foundation
 
 struct SubmissionResult: Decodable, Equatable {
+    /// The saved score's id (for Undo); optional so older servers still decode.
+    var id: Int? = nil
     let gameId: String
     let gameName: String
     let emoji: String

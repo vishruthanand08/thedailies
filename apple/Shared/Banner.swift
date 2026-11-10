@@ -5,20 +5,35 @@ struct Banner: Identifiable, Equatable {
     let id = UUID()
     let kind: Kind
     let text: String
+    /// A score saved automatically from a game: the banner offers Undo, which deletes it.
+    var undoId: Int? = nil
 }
 
 /// Top-of-screen banner for native submission results; auto-dismisses after 4 s.
 struct BannerOverlay: View {
     let banner: Banner?
     let dismiss: (Banner) -> Void
+    var undo: ((Int) -> Void)? = nil
 
     var body: some View {
         VStack {
             if let banner {
-                Text(banner.text)
+                HStack(spacing: 12) {
+                    Text(banner.text)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let id = banner.undoId, let undo {
+                        Button("Undo") {
+                            undo(id)
+                            dismiss(banner)
+                        }
+                        .font(.system(.subheadline, weight: .heavy))
+                        .underline()
+                        .accessibilityHint("Removes this score from the board")
+                    }
+                }
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(Color(red: 0.086, green: 0.086, blue: 0.18))
-                    .multilineTextAlignment(.leading)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .frame(maxWidth: 420, alignment: .leading)
@@ -32,10 +47,9 @@ struct BannerOverlay: View {
                     .onTapGesture { dismiss(banner) }
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: banner.id) {
-                        try? await Task.sleep(for: .seconds(4))
+                        try? await Task.sleep(for: .seconds(banner.undoId == nil ? 4 : 7))
                         dismiss(banner)
                     }
-                    .accessibilityAddTraits(.isStaticText)
             }
             Spacer()
         }

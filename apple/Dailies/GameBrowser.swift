@@ -1,8 +1,9 @@
 import SwiftUI
 import WebKit
 
-/// One game page in its own WKWebView. Created per sheet/window. The page runs untouched; the
-/// score comes from the paste bar after the player taps the game's own Share or Copy.
+/// One game page in its own WKWebView. Created per sheet/window. `ResultCatcher` saves the score
+/// by itself when the game shares or copies it (and presses the game's Share for the player); the
+/// paste bar is the fallback.
 @MainActor
 @Observable
 final class GameBrowser {
@@ -17,6 +18,9 @@ final class GameBrowser {
         self.launch = launch
         let config = WKWebViewConfiguration()
         config.websiteDataStore = GameHosts.dataStore // default UA, no TheDailiesApp suffix
+        ResultCatcher.install(in: config, autoPress: !Self.alreadyPlayed(launch)) { text in
+            SubmissionQueue.shared.enqueue(text, auto: true)
+        }
 
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = bridge
@@ -30,6 +34,15 @@ final class GameBrowser {
 
     func close() {
         webView.stopLoading()
+        ResultCatcher.uninstall(from: webView)
+        Task { await GameHosts.keepSignIns() }
+    }
+
+    /// The player has today's score for this game already: no need to press its Share again.
+    private static func alreadyPlayed(_ launch: GameLaunch) -> Bool {
+        let today = TodayModel.shared
+        guard today.isToday, let game = today.games.first(where: { $0.playURL == launch.url }) else { return false }
+        return today.myEntry(for: game) != nil
     }
 
     fileprivate func pageLoaded() {
@@ -43,7 +56,8 @@ final class GameBrowser {
                 for c in cookies.sorted(by: { ($0.domain, $0.name) < ($1.domain, $1.name) }) {
                     let hash = String(c.value.utf8.reduce(UInt32(2166136261)) { ($0 ^ UInt32($1)) &* 16777619 } & 0xffff, radix: 16) // FNV-1a, stable across launches
                     let expiry = c.expiresDate.map { "\($0)" } ?? "session"
-                    log.info("game cookie \(c.domain, privacy: .public) \(c.name, privacy: .public) expires \(expiry, privacy: .public) #\(hash, privacy: .public)")
+                    let flags = c.isHTTPOnly ? " httpOnly" : ""
+                    log.info("game cookie \(c.domain, privacy: .public) \(c.name, privacy: .public) expires \(expiry, privacy: .public)\(flags, privacy: .public) #\(hash, privacy: .public)")
                 }
             }
         }
@@ -131,7 +145,10 @@ struct GameBrowserView: View {
                 }
             }
         }
-        .overlay { BannerOverlay(banner: queue.banner) { queue.dismiss($0) } }
+        .overlay { BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) }) }
+        .onChange(of: queue.banner) { _, banner in
+            if banner?.undoId != nil, let browser { ResultCatcher.saved(in: browser.webView) }
+        }
         .onAppear {
             if browser == nil {
                 browser = GameBrowser(launch: launch)
@@ -265,9 +282,9 @@ private struct IPhonePasteBar: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(ready ? "Copied! Tap Paste to save" : "Finished?")
+                Text(ready ? "Copied! Tap Paste to save" : "Your score saves itself")
                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                Text(ready ? "Your \(gameName) result goes on the board." : "Tap Share or Copy in \(gameName), then paste.")
+                Text(ready ? "Your \(gameName) result goes on the board." : "Just play. If it doesn't, tap Share, then Paste.")
                     .font(.footnote).opacity(0.75)
             }
             .lineLimit(1)
@@ -337,8 +354,8 @@ private struct GameGuide: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("How to add your score").font(.system(.headline, design: .rounded, weight: .heavy))
                     step(1, "Play today's \(gameName).")
-                    step(2, "Tap the game's own Share or Copy button.")
-                    step(3, "Tap Paste in the yellow bar below.")
+                    step(2, "When you finish, your score saves itself.")
+                    step(3, "Didn't save? Tap the game's Share, then Paste below.")
                     Button {
                         Haptic.tap()
                         UserDefaults.standard.set(Self.times, forKey: Self.key) // for good

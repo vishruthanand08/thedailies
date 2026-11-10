@@ -22,7 +22,7 @@ struct RootView: View {
             #else
             MacRootView() // the website, its own sign-in page included
             #endif
-            BannerOverlay(banner: queue.banner) { queue.dismiss($0) }
+            BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) })
             #if DEBUG
             // -dailiesScreenshots YES hides it for App Store screenshots
             if !UserDefaults.standard.bool(forKey: "dailiesScreenshots") { debugButton }
@@ -56,6 +56,7 @@ struct RootView: View {
         }
         #endif
         .onChange(of: scenePhase) { _, phase in
+            if phase == .background { keepGameSignIns() } // before iOS quits the app
             guard phase == .active else { return }
             Task { await queue.flush() }
             reloadIfExtensionSaved()
@@ -70,6 +71,19 @@ struct RootView: View {
         #endif
         #if DEBUG
         .sheet(isPresented: $showDebug) { DebugMenu() }
+        #endif
+    }
+
+    /// Saves game sign-ins (GameHosts.keepSignIns) with a little background time to finish in.
+    private func keepGameSignIns() {
+        #if os(iOS)
+        let task = UIApplication.shared.beginBackgroundTask(withName: "keepSignIns")
+        Task {
+            await GameHosts.keepSignIns()
+            UIApplication.shared.endBackgroundTask(task)
+        }
+        #else
+        Task { await GameHosts.keepSignIns() }
         #endif
     }
 

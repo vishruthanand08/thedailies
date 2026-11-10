@@ -2,8 +2,7 @@ import Foundation
 import WebKit
 
 /// The games on the board. Play opens them in the in-app game browser, which works the same
-/// for every game: play, tap the game's Share or Copy, then Paste in the bar at the bottom.
-/// Nothing is injected into the game pages.
+/// for every game: play, and ResultCatcher saves the result (Share then Paste is the fallback).
 enum GameHosts {
     /// Base domains; subdomains (www., login pages) count too.
     static let all: Set<String> = [
@@ -63,6 +62,9 @@ enum GameHosts {
     /// Exact host or a subdomain of a game's host (e.g. a game's login page).
     @MainActor static func isGame(_ host: String?) -> Bool {
         guard let host = host?.lowercased(), !host.isEmpty else { return false }
+        #if DEBUG
+        if host == "127.0.0.1", Server.current == .local { return true } // stand-in game pages for tests
+        #endif
         return all.union(fromServer).contains { host == $0 || host.hasSuffix("." + $0) }
     }
 
@@ -77,6 +79,38 @@ enum GameHosts {
         }()
         return WKWebsiteDataStore(forIdentifier: id)
     }()
+
+    /// Keeps NYT and LinkedIn (and every game's) sign-ins between launches, as Safari does. In an
+    /// app WebKit throws away cookies meant to last "this session" whenever the app quits (iOS
+    /// quits apps all the time) and caps cookies a page's script writes at 7 days. When a game
+    /// closes and when the app goes to the background, game cookies with no expiry date, and the
+    /// known sign-in cookies, are saved again to last 30 days from now. A cookie the app sets isn't
+    /// capped. Every other cookie is left as the site set it.
+    @MainActor static func keepSignIns() async {
+        let store = dataStore.httpCookieStore
+        let until = Date().addingTimeInterval(30 * 86400)
+        var kept = 0
+        for cookie in await store.allCookies() {
+            let domain = cookie.domain.hasPrefix(".") ? String(cookie.domain.dropFirst()) : cookie.domain
+            guard isGame(domain) else { continue }
+            let sessionOnly = cookie.isSessionOnly || cookie.expiresDate == nil
+            let signIn = signInCookies.contains(cookie.name) && (cookie.expiresDate ?? .distantPast) < until
+            guard sessionOnly || signIn, var props = cookie.properties else { continue }
+            props[.expires] = until
+            props.removeValue(forKey: .discard)
+            props.removeValue(forKey: .maximumAge)
+            guard let longer = HTTPCookie(properties: props) else { continue }
+            await store.setCookie(longer)
+            kept += 1
+        }
+        if kept > 0 { log.info("kept \(kept) game cookies for 30 days") }
+    }
+
+    /// The cookies that hold a NYT or LinkedIn sign-in.
+    private static let signInCookies: Set<String> = [
+        "NYT-S", "nyt-auth-method", "nyt-jkidd", "nyt-a",   // NYT
+        "li_at", "liap", "li_rm", "JSESSIONID",            // LinkedIn
+    ]
 }
 
 /// What to open in the game browser. Codable/Hashable so macOS can open it in its own window.
