@@ -428,6 +428,32 @@ export const GAMES = [
   },
 
   {
+    id: 'eraly', category: 'words', name: 'Eraly', emoji: '⏳', color: '#EBD9B9',
+    url: 'https://eraly.net', metricLabel: 'points', better: 'higher',
+    // Verified from a real share 2026-11-10 ("Eraly · Day 17 · 10 Nov 2026\n250/700 · reached 1241 AD ·
+    // ░▓░░▓▒░\nhttps://eraly.net") and eraly.net's own code: seven moments in history, guess each year
+    // for up to 100 points; the bar is one glyph a round (· missed). Day numbers restart every 365
+    // days, so the date comes from the share's own "10 Nov 2026". Endless mode shares "Endless
+    // Expedition" and no day, so it doesn't count. The site refuses framing (SAMEORIGIN).
+    epoch: null, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(/Eraly\s*·\s*Day\s+\d+\s*·\s*(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/i)
+      if (!m) return null
+      const mi = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase())
+      if (mi === -1) return null
+      const s = text.match(/(\d{1,3})\s*\/\s*700/)
+      if (!s) return null
+      const points = num(s[1])
+      if (points > 700) return null
+      return {
+        date: `${m[3]}-${String(mi + 1).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`,
+        metric: points,
+        display: `${points}/700`,
+      }
+    },
+  },
+
+  {
     id: 'costcodle', category: 'words', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
     url: 'https://costcodle.com', embed: true, metricLabel: 'guesses', better: 'lower',
     epoch: null, dateTolerance: null, manual: false,
@@ -606,6 +632,8 @@ const SCORING = {
   poople: { perfect: 0, par: 4, zero: 15 },
   // entries found out of 10
   dailytens: { perfect: 10, par: 6, zero: 0 },
+  // seven rounds of up to 100; most days land around 250-350, 600+ is a near-perfect run
+  eraly: { perfect: 600, par: 300, zero: 50 },
   // the average of five 0-100 tests; S is 95+, C (55) a middling day
   perceptle: { perfect: 95, par: 55, zero: 10 },
   // guesses out of 8, a miss is 9
