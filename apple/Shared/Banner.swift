@@ -7,6 +7,8 @@ struct Banner: Identifiable, Equatable {
     let text: String
     /// A score saved automatically from a game: the banner offers Undo, which deletes it.
     var undoId: Int? = nil
+    /// A saved score: the banner offers Share (the app's Sharing).
+    var shareGameId: String? = nil
 }
 
 /// Top-of-screen banner for native submission results; auto-dismisses after 4 s.
@@ -14,6 +16,7 @@ struct BannerOverlay: View {
     let banner: Banner?
     let dismiss: (Banner) -> Void
     var undo: ((Int) -> Void)? = nil
+    var share: ((String) -> Void)? = nil
 
     var body: some View {
         VStack {
@@ -22,6 +25,15 @@ struct BannerOverlay: View {
                     Text(banner.text)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    if let gameId = banner.shareGameId, let share {
+                        Button("Share") {
+                            share(gameId)
+                            dismiss(banner)
+                        }
+                        .font(.system(.subheadline, weight: .heavy))
+                        .underline()
+                        .accessibilityHint("Shares your score with a link for friends to join")
+                    }
                     if let id = banner.undoId, let undo {
                         Button("Undo") {
                             undo(id)
@@ -47,7 +59,7 @@ struct BannerOverlay: View {
                     .onTapGesture { dismiss(banner) }
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: banner.id) {
-                        try? await Task.sleep(for: .seconds(banner.undoId == nil ? 4 : 7))
+                        try? await Task.sleep(for: .seconds(banner.undoId == nil && banner.shareGameId == nil ? 4 : 8))
                         dismiss(banner)
                     }
             }

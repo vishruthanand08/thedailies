@@ -14,6 +14,10 @@ final class InviteLink {
     var pending: String? = UserDefaults.standard.string(forKey: key) {
         didSet { UserDefaults.standard.set(pending, forKey: Self.key) }
     }
+    /// The `s` token when the link was a shared score (we become friends at once, then the game's board).
+    var pendingShare: String? = UserDefaults.standard.string(forKey: key + ".share") {
+        didSet { UserDefaults.standard.set(pendingShare, forKey: Self.key + ".share") }
+    }
 
     /// Returns true when the URL was an invite.
     @discardableResult
@@ -22,6 +26,7 @@ final class InviteLink {
               let name = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "add" })?.value?
                 .lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "@ ")),
               name.range(of: "^[a-z0-9_]{2,20}$", options: .regularExpression) != nil else { return false }
+        pendingShare = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "s" })?.value
         pending = name
         return true
     }

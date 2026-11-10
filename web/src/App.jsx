@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
+import { useSharePreview } from './Share.jsx'
 import { tellNative } from './native.js'
 import Auth from './Auth.jsx'
 import Today from './Today.jsx'
@@ -23,6 +24,10 @@ export default function App() {
     const p = new URLSearchParams(window.location.search).get('add')
     return p ? p.toLowerCase() : null
   })
+  // ?s=… with it: a score or crown they shared (Share.jsx). Friends at once, then their game's board.
+  const [pendingShare, setPendingShare] = useState(() => new URLSearchParams(window.location.search).get('s'))
+  const sharePreview = useSharePreview(pendingShare)
+  const [focusGame, setFocusGame] = useState(null) // a game's full board to open on Today
 
   useEffect(() => {
     api.get('/auth/me')
@@ -49,8 +54,20 @@ export default function App() {
     if (me !== undefined) tellNative({ type: 'session', user: me ? { id: me.id, username: me.username } : null })
   }, [me])
 
+  // once the invite is through, a shared score's link goes on to Today and that game's board
+  // (the preview may still be loading when the request finishes, hence the effect)
+  const [shareJoined, setShareJoined] = useState(false)
+  useEffect(() => {
+    if (!shareJoined || !sharePreview) return
+    setShareJoined(false)
+    setPendingShare(null)
+    setTab('today')
+    if (sharePreview.kind === 'game') setFocusGame(sharePreview.gameId)
+  }, [shareJoined, sharePreview])
+
   const consumePendingAdd = () => {
     setPendingAdd(null)
+    setShareJoined(true)
     window.history.replaceState(null, '', window.location.pathname)
   }
 
@@ -65,7 +82,7 @@ export default function App() {
     }} />
   }
   if (me === undefined) return <div className="spin">loading…</div>
-  if (me === null) return <><VerifyNotice /><Auth onAuth={setMe} /></>
+  if (me === null) return <><VerifyNotice /><Auth onAuth={setMe} share={sharePreview} /></>
 
   const logout = async () => {
     await api.post('/auth/logout')
@@ -113,9 +130,9 @@ export default function App() {
       <VerifyNotice />
       {tab !== 'you' && tab !== 'admin' && <AccountNudge me={me} onOpenProfile={() => setTab('you')} />}
 
-      {tab === 'today' && <Today me={me} onOpenDay={(focus) => { setFeedFocus(focus); setTab('feed') }} />}
+      {tab === 'today' && <Today me={me} focusGame={focusGame} onFocusDone={() => setFocusGame(null)} onOpenDay={(focus) => { setFeedFocus(focus); setTab('feed') }} />}
       {tab === 'feed' && <Feed me={me} onSeen={() => setUnseen(0)} focus={feedFocus} onFocused={() => setFeedFocus(null)} />}
-      {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} onPendingDone={consumePendingAdd} />}
+      {tab === 'friends' && <Friends me={me} pendingAdd={pendingAdd} pendingShare={pendingShare} onPendingDone={consumePendingAdd} />}
       {tab === 'global' && <Global />}
       {tab === 'you' && <Profile me={me} onLogout={logout} onPasswordChanged={refreshMe} />}
       {tab === 'admin' && me.admin && <Admin />}

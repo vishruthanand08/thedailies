@@ -38,6 +38,14 @@ struct GameDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
+            if mine != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { Haptic.tap(.medium); Sharing.shareGame(game.id, date: model.board?.date) } label: {
+                        HeroIcon("arrow-up-on-square", size: 24).foregroundStyle(Color.ink)
+                    }
+                    .accessibilityLabel("Share your score")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 let favorite = model.prefs.favorites.contains(game.id)
                 Button { Haptic.tap(); model.toggleFavorite(game) } label: {

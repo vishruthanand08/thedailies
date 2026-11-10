@@ -13,6 +13,7 @@ import { suggestionsRouter } from './suggestions.js'
 import { adminRouter } from './admin.js'
 import { feedRouter } from './feed.js'
 import { globalRouter } from './global.js'
+import { shareRouter } from './share.js'
 import { pushRouter, startReminders } from './push.js'
 import { releaseRouter, macDownload, windowsDownload, windowsUpdateFeed, appcast } from './release.js'
 import { pageWithMeta, metaFor } from './meta.js'
@@ -41,6 +42,7 @@ app.use('/api/suggestions', suggestionsRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/feed', feedRouter)
 app.use('/api/global', globalRouter)
+app.use('/api/share', shareRouter) // share texts and links (share.js)
 app.use('/api/push', pushRouter)
 app.use('/api/app', releaseRouter)
 app.get('/download/mac', macDownload)
@@ -52,7 +54,7 @@ app.get(['/.well-known/apple-app-site-association', '/apple-app-site-association
 // development only: the Vite dev server asks for a page's link-preview tags here (web/vite.config.js),
 // so an invite link from localhost previews like the live site's
 if (process.env.NODE_ENV !== 'production') {
-  app.get('/api/dev/meta', async (req, res) => res.json(await metaFor(String(req.query.origin || ''), req.query.add)))
+  app.get('/api/dev/meta', async (req, res) => res.json(await metaFor(String(req.query.origin || ''), req.query.add, req.query.s)))
 }
 
 app.use((err, req, res, next) => {

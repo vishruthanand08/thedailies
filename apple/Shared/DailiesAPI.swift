@@ -388,11 +388,27 @@ actor DailiesAPI {
         try decode(FriendList.self, try await send("/api/friends"))
     }
 
-    /// Sends a request, or accepts theirs if they already asked me (`accepted`).
-    func requestFriend(username: String) async throws -> (accepted: Bool, user: FriendList.Person) {
+    /// Sends a request, or accepts theirs if they already asked me (`accepted`). `share` is the
+    /// token from a score they shared (/?add=them&s=...), which makes us friends at once.
+    func requestFriend(username: String, share: String? = nil) async throws -> (accepted: Bool, user: FriendList.Person) {
         struct Body: Decodable { let accepted: Bool; let user: FriendList.Person }
-        let body = try decode(Body.self, try await send("/api/friends/request", method: "POST", json: ["username": username]))
+        var json: [String: Any] = ["username": username]
+        if let share { json["share"] = share }
+        let body = try decode(Body.self, try await send("/api/friends/request", method: "POST", json: json))
         return (body.accepted, body.user)
+    }
+
+    /// The text to share for a score or the crown (server/share.js), link included.
+    func shareText(path: String) async throws -> String {
+        struct Body: Decodable { let text: String }
+        return try decode(Body.self, try await send(path)).text
+    }
+
+    /// What a shared link is: a game score ("game", with its gameId) or a crown.
+    struct SharePreview: Decodable { let kind: String; let from: String; let gameId: String? }
+    func sharePreview(_ token: String) async throws -> SharePreview {
+        let safe = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        return try decode(SharePreview.self, try await send("/api/share/preview/\(safe)"))
     }
 
     func respondToFriend(userId: Int, accept: Bool) async throws {

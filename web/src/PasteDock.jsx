@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ShareButton } from './Share.jsx'
 import { nativeClipboard, readNativeClipboard } from './native.js'
 
 // Today's floating Paste button, bottom right: one click reads the result the game just copied
@@ -37,7 +38,7 @@ export default function PasteDock({ busy, flash, onDismissFlash, onSubmit, backG
   // a saved score's message goes away on its own; errors stay until the next try
   useEffect(() => {
     if (flash?.kind !== 'ok') return
-    const timer = setTimeout(onDismissFlash, 6000)
+    const timer = setTimeout(onDismissFlash, flash.shareGame ? 12000 : 6000)
     return () => clearTimeout(timer)
   }, [flash, onDismissFlash])
 
@@ -99,6 +100,7 @@ export default function PasteDock({ busy, flash, onDismissFlash, onSubmit, backG
       {flash && (
         <div className={`flash ${flash.kind} pastetoast`} role="status">
           <span>{flash.msg}</span>
+          {flash.shareGame && <ShareButton path={`/share/game/${flash.shareGame}`} />}
           <button className="iconbtn" aria-label="Dismiss" onClick={onDismissFlash}>✕</button>
         </div>
       )}

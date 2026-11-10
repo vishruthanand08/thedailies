@@ -112,6 +112,18 @@ struct GameBrowserView: View {
     @State private var queue = SubmissionQueue.shared
     @State private var showGuide = false
 
+    /// Share on a saved score's banner (iPhone; the Mac's sharing is the website's).
+    private var shareScore: ((String) -> Void)? {
+        #if os(iOS)
+        return { gameId in
+            Haptic.tap(.medium)
+            Sharing.shareGame(gameId)
+        }
+        #else
+        return nil
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -145,7 +157,7 @@ struct GameBrowserView: View {
                 }
             }
         }
-        .overlay { BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) }) }
+        .overlay { BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) }, share: shareScore) }
         .onChange(of: queue.banner) { _, banner in
             if banner?.undoId != nil, let browser { ResultCatcher.saved(in: browser.webView) }
         }

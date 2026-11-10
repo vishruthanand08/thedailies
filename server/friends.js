@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { q } from './db.js'
 import { requireAuth } from './auth.js'
 import { notify } from './push.js'
+import { readShareToken, sharePreview } from './share.js'
 
 export const friendsRouter = Router()
 friendsRouter.use(requireAuth)
@@ -45,6 +46,22 @@ friendsRouter.post('/request', async (req, res) => {
 
   const [a, b] = pair(me, target.id)
   const existing = await q('SELECT * FROM friendships WHERE user_a = $1 AND user_b = $2', [a, b])
+  // from a score they shared (/?add=them&s=...): they sent the link, so it counts as their yes
+  const shared = readShareToken(req.body.share) ? await sharePreview(req.body.share) : null
+  if (shared && shared.userId === target.id && existing.rows[0]?.status !== 'accepted') {
+    if (existing.rows.length) {
+      await q('UPDATE friendships SET status = $3 WHERE user_a = $1 AND user_b = $2', [a, b, 'accepted'])
+    } else {
+      await q('INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES ($1, $2, $3, $4)', [a, b, 'accepted', me])
+    }
+    res.json({ ok: true, accepted: true, user: target })
+    return notify(target.id, {
+      title: 'New friend',
+      body: `${req.user.username} joined you from the score you shared`,
+      tab: 'friends',
+      collapseId: `friend-${me}`,
+    })
+  }
   if (existing.rows.length) {
     const f = existing.rows[0]
     if (f.status === 'accepted') return res.status(409).json({ error: 'Already friends' })

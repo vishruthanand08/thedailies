@@ -22,7 +22,7 @@ struct RootView: View {
             #else
             MacRootView() // the website, its own sign-in page included
             #endif
-            BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) })
+            BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) }, share: shareScore)
             #if DEBUG
             // -dailiesScreenshots YES hides it for App Store screenshots
             if !UserDefaults.standard.bool(forKey: "dailiesScreenshots") { debugButton }
@@ -71,6 +71,18 @@ struct RootView: View {
         #endif
         #if DEBUG
         .sheet(isPresented: $showDebug) { DebugMenu() }
+        #endif
+    }
+
+    /// Share on a saved score's banner (iPhone; the Mac's sharing is the website's).
+    private var shareScore: ((String) -> Void)? {
+        #if os(iOS)
+        return { gameId in
+            Haptic.tap(.medium)
+            Sharing.shareGame(gameId)
+        }
+        #else
+        return nil
         #endif
     }
 

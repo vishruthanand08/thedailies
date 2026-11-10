@@ -64,12 +64,22 @@ struct AppTabs: View {
         // an invite link: send the request (or accept theirs) and show Friends
         .onChange(of: invite.pending, initial: true) { _, name in
             guard let name else { return }
+            let share = invite.pendingShare
             invite.pending = nil
-            guard name != AppSession.shared.username else { return }
-            selection = .friends
+            invite.pendingShare = nil
+            // a shared score: friends at once, then that game's board on Today
             Task {
-                let result = await FriendsModel.shared.add(username: name)
-                SubmissionQueue.shared.show(result.ok ? .ok : .err, result.message)
+                var shared: DailiesAPI.SharePreview?
+                if let share { shared = try? await DailiesAPI.shared.sharePreview(share) }
+                if name != AppSession.shared.username {
+                    if shared == nil { selection = .friends }
+                    let result = await FriendsModel.shared.add(username: name, share: share)
+                    SubmissionQueue.shared.show(result.ok ? .ok : .err, result.message)
+                }
+                if let shared {
+                    selection = .today
+                    if let gameId = shared.gameId { TodayModel.shared.focusGame = gameId }
+                }
             }
         }
         // a tapped notification opens its tab ("you" opens the profile)

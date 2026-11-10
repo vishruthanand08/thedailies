@@ -64,9 +64,9 @@ final class SubmissionQueue {
                 persist()
                 if item.auto == true, let id = result.id {
                     savedText[id] = item.text
-                    banner = Banner(kind: .ok, text: result.savedText, undoId: id)
+                    banner = Banner(kind: .ok, text: result.savedText, undoId: id, shareGameId: result.gameId)
                 } else {
-                    show(.ok, result.savedText)
+                    banner = Banner(kind: .ok, text: result.savedText, shareGameId: result.gameId)
                 }
                 onSaved?()
             } catch let error as DailiesError {

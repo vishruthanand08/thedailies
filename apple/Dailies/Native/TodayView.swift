@@ -61,6 +61,9 @@ struct TodayView: View {
             if path.isEmpty, let id = UserDefaults.standard.string(forKey: "dailiesGame") { path = [id] }
             #endif
         }
+        // a shared score's link: that game's board, once the games are in
+        .onChange(of: model.focusGame, initial: true) { openFocusGame() }
+        .onChange(of: model.games.count) { openFocusGame() }
         .sensoryFeedback(.selection, trigger: model.date)
         .sensoryFeedback(.selection, trigger: model.crownScope) // Overall / a category's standings
         .sensoryFeedback(trigger: queue.banner) { _, banner in
@@ -237,6 +240,13 @@ struct TodayView: View {
         .modifier(CategoryMoves(group: group, model: model))
     }
 
+    private func openFocusGame() {
+        guard let id = model.focusGame, model.games.contains(where: { $0.id == id }) else { return }
+        model.focusGame = nil
+        if !model.isToday { Task { await model.load() } }
+        path = [id]
+    }
+
     // MARK: game rows
 
     /// Played today (or looking back at a day): the game's leaderboard. Not played yet: the game.
@@ -264,6 +274,9 @@ struct TodayView: View {
         // no long-press menu: press and hold is how a game is dragged to a new place. Swiping
         // left offers Leaderboard (and Play or Delete score); VoiceOver gets the same as actions.
         .accessibilityAction(named: "Leaderboard") { path.append(game.id) }
+        .accessibilityAction(named: "Share score") {
+            if mine != nil { Sharing.shareGame(game.id, date: model.board?.date) }
+        }
         .swipeActions(edge: .leading) {
             Button { Haptic.tap(); model.toggleFavorite(game) } label: {
                 Label(favorite ? "Unfavorite" : "Favorite", image: favorite ? "hero-star" : "hero-star-fill")
@@ -276,6 +289,10 @@ struct TodayView: View {
                     Button(role: .destructive) { Haptic.warning(); Task { await model.delete(mine) } } label: {
                         Label("Delete score", image: "hero-trash")
                     }
+                    Button { Haptic.tap(.medium); Sharing.shareGame(game.id, date: model.board?.date) } label: {
+                        Label("Share", image: "hero-arrow-up-on-square")
+                    }
+                    .tint(Color.sun)
                 } else {
                     Button { Haptic.tap(); model.play(game) } label: { Label("Play", image: "hero-play-fill") }
                         .tint(Color.ink)
@@ -393,11 +410,20 @@ private struct CrownCard: View {
             }
 
             let hint = model.isToday ? "Swipe right for earlier days" : "Swipe left to come back to today"
-            Label(hint,
-                  hero: model.isToday ? "chevron-double-left" : "chevron-double-right", size: 14)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.onAccent.opacity(0.6))
-                .oneLine()
+            HStack(spacing: 8) {
+                Label(hint,
+                      hero: model.isToday ? "chevron-double-left" : "chevron-double-right", size: 14)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.onAccent.opacity(0.6))
+                    .oneLine()
+                // share my place on the day (Brag when it's first)
+                if let board = model.board, board.crown.contains(where: { $0.username == model.me }) {
+                    Spacer(minLength: 0)
+                    let first = board.crown.first?.username == model.me
+                    ShareButton(title: first ? "Brag" : "Share") { Sharing.shareCrown(date: board.date) }
+                        .accessibilityLabel(first ? "Brag about your crown" : "Share your place")
+                }
+            }
         }
         .padding(14)
         .chunkyCard(.sun)

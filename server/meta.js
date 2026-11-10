@@ -1,5 +1,6 @@
 import { q } from './db.js'
 import { APP_STORE_ID } from './applinks.js'
+import { sharePreview } from './share.js'
 
 // Link previews (iMessage, WhatsApp, Slack, X…) read <meta> tags from the page's HTML and don't
 // run its JavaScript, so the server writes them into index.html for every page. An invite link
@@ -15,14 +16,23 @@ async function inviter(raw) {
   return rows[0]?.username ?? null
 }
 
-/** The tags for a page at `origin` (`add` is the invite's username, if any). */
-export async function metaFor(origin, add) {
+/** The tags for a page at `origin` (`add` is the invite's username, `s` a shared score, if any). */
+export async function metaFor(origin, add, s) {
   const name = await inviter(add).catch(() => null)
-  const title = name ? `Add @${name} on The Dailies` : 'The Dailies: beat your friends at every daily game'
-  const description = name
+  const shared = name ? await sharePreview(s).catch(() => null) : null
+  const fromThem = shared && shared.from === name ? shared : null
+  let title = name ? `Add @${name} on The Dailies` : 'The Dailies: beat your friends at every daily game'
+  let description = name
     ? `@${name} wants to be friends on The Dailies. Tap to add them and compare scores on Wordle, Connections, Queens and more.`
     : DESCRIPTION
-  const url = name ? `${origin}/?add=${name}` : `${origin}/`
+  if (fromThem?.kind === 'game') {
+    title = `@${name} got ${fromThem.display} on ${fromThem.gameName}. Can you beat it?`
+    description = `See how everyone did on ${fromThem.gameName} and take @${name} on. The Dailies is one leaderboard for every daily game.`
+  } else if (fromThem?.kind === 'crown') {
+    title = `@${name} is on the board at The Dailies 👑`
+    description = `Wordle, Connections, Queens and more, all on one leaderboard. Tap to take @${name} on.`
+  }
+  const url = name ? `${origin}/?add=${name}${fromThem ? `&s=${encodeURIComponent(s)}` : ''}` : `${origin}/`
   const tags = [
     `<meta name="description" content="${escape(description)}" />`,
     '<meta property="og:site_name" content="The Dailies" />',
@@ -33,7 +43,7 @@ export async function metaFor(origin, add) {
     `<meta property="og:image" content="${escape(`${origin}/og.png`)}" />`,
     '<meta property="og:image:width" content="1200" />',
     '<meta property="og:image:height" content="630" />',
-    `<meta property="og:image:alt" content="${escape(name ? `Add @${name} on The Dailies` : 'The Dailies')}" />`,
+    `<meta property="og:image:alt" content="${escape(name ? title : 'The Dailies')}" />`,
     '<meta name="twitter:card" content="summary_large_image" />',
     // Safari on iPhone: "Open" in the app (with this page, so an invite carries over) or "Get" it
     `<meta name="apple-itunes-app" content="app-id=${APP_STORE_ID}, app-argument=${escape(url)}" />`,
@@ -50,5 +60,5 @@ const SITE = 'https://www.thedailies.lol'
 
 export async function pageWithMeta(html, req) {
   const origin = process.env.NODE_ENV === 'production' ? SITE : `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`
-  return withMeta(html, await metaFor(origin, req.query.add))
+  return withMeta(html, await metaFor(origin, req.query.add, req.query.s))
 }

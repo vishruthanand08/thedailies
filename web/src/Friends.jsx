@@ -5,7 +5,7 @@ import Leaderboards from './Leaderboards.jsx'
 // survives StrictMode's double-mount so an invite only fires one request
 let inviteHandledFor = null
 
-export default function Friends({ me, pendingAdd, onPendingDone }) {
+export default function Friends({ me, pendingAdd, pendingShare, onPendingDone }) {
   const [data, setData] = useState(null)
   const [name, setName] = useState('')
   const [flash, setFlash] = useState(null)
@@ -30,7 +30,7 @@ export default function Friends({ me, pendingAdd, onPendingDone }) {
         onPendingDone?.()
         return
       }
-      api.post('/friends/request', { username: pendingAdd })
+      api.post('/friends/request', { username: pendingAdd, share: pendingShare || undefined })
         .then((d) => {
           setFlash({
             kind: 'ok',

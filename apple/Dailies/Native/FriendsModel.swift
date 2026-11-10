@@ -78,11 +78,11 @@ final class FriendsModel {
     }
 
     /// The message to show under the field (nil when it went through).
-    func add(username: String) async -> (ok: Bool, message: String) {
+    func add(username: String, share: String? = nil) async -> (ok: Bool, message: String) {
         let name = username.trimmingCharacters(in: .whitespaces).lowercased()
         guard !name.isEmpty else { return (false, "") }
         do {
-            let r = try await DailiesAPI.shared.requestFriend(username: name)
+            let r = try await DailiesAPI.shared.requestFriend(username: name, share: share)
             if r.accepted { justAdded = r.user }
             await load()
             return (true, r.accepted ? "You and \(r.user.username) are now friends" : "Request sent to \(r.user.username)")

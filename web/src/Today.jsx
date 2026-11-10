@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from './api.js'
+import { ShareButton } from './Share.jsx'
 import { inApp, nativeCapture, tellNative } from './native.js'
 import GamePanel from './GamePanel.jsx'
 import PasteDock from './PasteDock.jsx'
@@ -57,7 +58,7 @@ function prettyDate(iso, today) {
   })
 }
 
-export default function Today({ me, onOpenDay }) {
+export default function Today({ me, onOpenDay, focusGame, onFocusDone }) {
   const [games, setGames] = useState([])
   const [board, setBoard] = useState(null)
   const [date, setDate] = useState(null) // null until first load
@@ -425,7 +426,7 @@ export default function Today({ me, onOpenDay }) {
     setFlash(null)
     try {
       const d = await api.post('/submissions', { text: value })
-      setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added ✓` })
+      setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added ✓`, shareGame: d.submission.gameId })
       clearAway()
       finishHowTo() // they've got it
       load(null) // today, where the new score is
@@ -443,7 +444,7 @@ export default function Today({ me, onOpenDay }) {
     setFlash(null)
     try {
       const d = await api.post('/submissions', { gameId, value })
-      setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added (manual)` })
+      setFlash({ kind: 'ok', msg: `${d.submission.emoji} ${d.submission.gameName} — ${d.submission.display} added (manual)`, shareGame: d.submission.gameId })
       load(date)
     } catch (err) {
       setFlash({ kind: 'err', msg: err.message })
@@ -483,6 +484,18 @@ export default function Today({ me, onOpenDay }) {
         />
       )}
 
+      {/* from a shared score's link: that game's full board */}
+      {focusGame && board && games.some((g) => g.id === focusGame) && (
+        <BoardPanel
+          game={games.find((g) => g.id === focusGame)}
+          entries={boardsByGame[focusGame] ?? []}
+          me={me} isToday={isToday} date={board.date}
+          onClose={onFocusDone}
+          onOpenDay={(e) => onOpenDay({ userId: e.userId, date, submissionId: e.submissionId })}
+          onPlay={() => onFocusDone()}
+        />
+      )}
+
       {showHowTo && isToday && <HowItWorks onClose={finishHowTo} />}
 
       {/* always at the top, even before anyone has played */}
@@ -501,6 +514,9 @@ export default function Today({ me, onOpenDay }) {
               </button>
             ))}
           </div>}
+          {board.crown.some((c) => c.userId === me.id) && (
+            <ShareButton path={`/share/crown?date=${board.date}`} label={board.crown[0]?.userId === me.id ? 'Brag' : 'Share'} />
+          )}
         </div>
         {board.crown.length === 0 ? (
           <p className="hint crownempty">
@@ -632,6 +648,7 @@ export default function Today({ me, onOpenDay }) {
                     entries={boardsByGame[g.id] ?? []}
                     me={me}
                     isToday={isToday}
+                    date={board.date}
                     favorite={favSet.has(g.id)}
                     dragging={draggingKey === `${group.id}:${g.id}`}
                     onFavorite={toggleFavorite}
@@ -681,7 +698,7 @@ function MoreToggle({ open, hidden, total, onToggle, label }) {
 }
 
 // A played game's full board: everyone's result with what they pasted (the iPhone app's game page).
-function BoardPanel({ game, entries, me, isToday, onClose, onOpenDay, onPlay }) {
+function BoardPanel({ game, entries, me, isToday, date, onClose, onOpenDay, onPlay }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -712,6 +729,11 @@ function BoardPanel({ game, entries, me, isToday, onClose, onOpenDay, onPlay }) 
           <a className="btn boardplay" href={game.url} target="_blank" rel="noreferrer" onClick={(e) => onPlay(e)}>
             Open {game.name} ↗
           </a>
+        )}
+        {entries.some((e) => e.userId === me.id) && (
+          <div className="boardshare">
+            <ShareButton path={`/share/game/${game.id}${date ? `?date=${date}` : ''}`} label="Share my score" />
+          </div>
         )}
         <ol className="boardfull">
           {entries.map((e) => {
@@ -770,7 +792,7 @@ function NextDrop() {
 }
 
 function GameTile({
-  game, entries, me, isToday, favorite, dragging,
+  game, entries, me, isToday, date, favorite, dragging,
   onFavorite, onDragStart, onNudge, onRemove, onManual, onPlay, onLeave, onOpenDay,
 }) {
   const [manualOpen, setManualOpen] = useState(false)
@@ -988,7 +1010,7 @@ function GameTile({
       </>)}
       {detail && (
         <BoardPanel
-          game={game} entries={entries} me={me} isToday={isToday}
+          game={game} entries={entries} me={me} isToday={isToday} date={date}
           onClose={() => setDetail(false)}
           onOpenDay={onOpenDay}
           onPlay={(e) => {

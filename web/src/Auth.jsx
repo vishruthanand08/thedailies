@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { api } from './api.js'
 import { inApp } from './native.js'
 import { AppleSignIn, ForgotPassword, useEmailAvailable } from './Recovery.jsx'
+import { ShareTeaser } from './Share.jsx'
 
-export default function Auth({ onAuth }) {
-  const [mode, setMode] = useState('login') // login | register | forgot
+export default function Auth({ onAuth, share }) {
+  // from a shared score's link most people are new, so sign-up first
+  const [mode, setMode] = useState(() => (new URLSearchParams(window.location.search).get('s') ? 'register' : 'login')) // login | register | forgot
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('') // at sign-up, for getting back in; confirmed afterwards
@@ -47,6 +49,8 @@ export default function Auth({ onAuth }) {
         </h1>
         <p>One leaderboard for Wordle, Queens, GeoGuessr, and every other daily you're addicted to.</p>
       </div>
+
+      <ShareTeaser preview={share} />
 
       {mode !== 'forgot' && <AppleSignIn onAuth={onAuth} onPicking={setPickingName} />}
       {pickingName ? null : mode === 'forgot' ? <ForgotPassword initial={username} onBack={() => setMode('login')} /> : (

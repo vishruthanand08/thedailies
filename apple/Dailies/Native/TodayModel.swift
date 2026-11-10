@@ -15,6 +15,8 @@ final class TodayModel {
     var crownScope = "all"
     private(set) var loading = false
     private(set) var error: String?
+    /// A game whose board to open (from a shared score's link); TodayView opens it once games load.
+    var focusGame: String?
     /// The date being viewed; nil means the server's today.
     private(set) var date: String?
     /// Boards already seen or fetched ahead, so swiping to a neighbouring day is instant.
