@@ -5,6 +5,8 @@
 // the links can be followed.
 const KEY = process.env.RESEND_API_KEY
 const FROM = process.env.MAIL_FROM || 'The Dailies <hello@thedailies.lol>'
+// Mail can only come from the verified domain, but replies go to the support inbox people already use.
+const REPLY_TO = process.env.MAIL_REPLY_TO || 'thedailiessupport@gmail.com'
 const PROD = process.env.NODE_ENV === 'production'
 
 export const mailEnabled = Boolean(KEY) || !PROD
@@ -23,7 +25,7 @@ export async function sendMail({ to, subject, text }) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [to], subject, text }),
+      body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject, text }),
     })
     if (!res.ok) {
       console.warn(`mail: Resend said ${res.status}: ${(await res.text()).slice(0, 300)}`)
