@@ -88,7 +88,7 @@ async function favorites(userId, today) {
   return rows.filter((r) => r.days >= need && gameById[r.game_id]).map((r) => r.game_id)
 }
 
-/** The most played games over the last month, for the "your games are waiting" reminder. */
+/** The most played games over the last month, for the "today's Wordle is ready" reminder. */
 async function mostPlayed(userId, today, limit = 3) {
   const { rows } = await q(
     `SELECT game_id, count(*)::int AS n FROM submissions
@@ -152,12 +152,10 @@ export async function eveningFor(userId, today) {
       body: 'Still time to take the crown. Puzzles reset at midnight.',
     })
   }
-  const mine = gameNames(await mostPlayed(userId, today))
-  if (mine.length) {
-    options.push({
-      title: `${list(mine)} ${mine.length === 1 ? 'is' : 'are'} waiting`,
-      body: 'You haven’t played today. Puzzles reset at midnight.',
-    })
+  // one game they like, named as today's puzzle, so it reads as a reminder and not a report
+  const [game] = gameNames(await mostPlayed(userId, today, 1))
+  if (game) {
+    options.push({ title: `Today’s ${game} is ready`, body: 'Don’t forget to play before midnight.' })
   }
   if (streak >= 1) {
     options.push({ title: `Make it ${streak + 1} days in a row`, body: 'Play a game before midnight to keep your streak going 🔥' })
@@ -170,13 +168,9 @@ export async function eveningFor(userId, today) {
 
 /** The evening reminder for someone who played but skipped a favorite, or null. */
 export async function skippedFor(userId, today, played) {
-  const skipped = gameNames((await favorites(userId, today)).filter((id) => !played.has(id)).slice(0, 3))
-  if (!skipped.length) return null
-  const one = skipped.length === 1
-  return {
-    title: `You haven’t done ${list(skipped)} today`,
-    body: one ? 'You usually do. It resets at midnight.' : 'You usually do. They reset at midnight.',
-  }
+  const [game] = gameNames((await favorites(userId, today)).filter((id) => !played.has(id)))
+  if (!game) return null
+  return { title: `Don’t forget to play ${game} today`, body: 'Still time before it resets at midnight.' }
 }
 
 async function claim(table, userId, today) {
