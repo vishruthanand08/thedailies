@@ -53,6 +53,7 @@ struct DebugMenu: View {
 ///   -dailiesTestWordle YES      submit today's Wordle once a device token is in the keychain
 ///   -dailiesOpenGame <url>      open that game through the normal Play routing after launch
 ///   -dailiesGameEval "<js>"     run once in the game browser after its first page load
+///   -dailiesGameCookies YES     log the game store's cookies (names, expiry, value hash) on each game page load
 ///   -dailiesScreenshots YES     hide the debug gear (App Store screenshots)
 ///   -dailiesTab feed|friends|global|you  start on that tab, or with the profile open (native iOS UI)
 ///   -dailiesGame <gameId>       open that game's screen on Today (native iOS UI)

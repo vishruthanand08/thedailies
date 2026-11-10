@@ -36,6 +36,17 @@ final class GameBrowser {
         canGoBack = webView.canGoBack
         log.info("game page loaded: \(self.webView.url?.host ?? "?", privacy: .public)")
         #if DEBUG
+        // -dailiesGameCookies YES: log the game store's cookies (names, expiry and a short hash of
+        // the value, never the value) to check logins survive a relaunch
+        if UserDefaults.standard.bool(forKey: "dailiesGameCookies") {
+            GameHosts.dataStore.httpCookieStore.getAllCookies { cookies in
+                for c in cookies.sorted(by: { ($0.domain, $0.name) < ($1.domain, $1.name) }) {
+                    let hash = String(c.value.utf8.reduce(UInt32(2166136261)) { ($0 ^ UInt32($1)) &* 16777619 } & 0xffff, radix: 16) // FNV-1a, stable across launches
+                    let expiry = c.expiresDate.map { "\($0)" } ?? "session"
+                    log.info("game cookie \(c.domain, privacy: .public) \(c.name, privacy: .public) expires \(expiry, privacy: .public) #\(hash, privacy: .public)")
+                }
+            }
+        }
         // -dailiesGameEval "<js>": run once after the first game page load (scripted Simulator tests)
         if !evalDone, let js = UserDefaults.standard.string(forKey: "dailiesGameEval") {
             evalDone = true

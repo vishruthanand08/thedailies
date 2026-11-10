@@ -115,7 +115,19 @@ final class TodayModel {
         }
     }
 
-    func reload() async { await load(date: date) }
+    /// Refreshes what's showing. Viewing today follows the server's today, so the first open of a
+    /// new day shows the new day, not the one the app was left on.
+    func reload() async { await load(date: isToday ? nil : date) }
+
+    /// Forgets the last account's boards, so the next sign-in starts on its own today.
+    func signedOut() {
+        board = nil
+        date = nil
+        cache = [:]
+        prefs = Prefs()
+        crownScope = "all"
+        error = nil
+    }
 
     /// Shows the day `days` away: instantly from the cache when it's there (then refreshes it
     /// quietly), otherwise after loading it.

@@ -62,6 +62,12 @@ struct RootView: View {
             // a new day may have started, or friends posted while the app was away
             if session.username != nil { Task { await TodayModel.shared.reload() } }
         }
+        #if os(iOS)
+        // midnight with the app open: move Today on to the new day (like the website does)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            if session.username != nil { Task { await TodayModel.shared.reload() } }
+        }
+        #endif
         #if DEBUG
         .sheet(isPresented: $showDebug) { DebugMenu() }
         #endif

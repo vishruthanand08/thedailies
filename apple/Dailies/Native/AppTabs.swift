@@ -83,6 +83,7 @@ struct AppTabs: View {
             push.openTab = nil
         }
         .onDisappear {
+            TodayModel.shared.signedOut()
             feed.signedOut()
             FriendsModel.shared.signedOut()
             YouModel.shared.signedOut()
