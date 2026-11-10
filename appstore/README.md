@@ -23,29 +23,42 @@ gitignored; the previous set is in `screenshots/old-2026-10-27/`. How they're ma
 
 ### Promotional text (170 max, editable any time)
 
-Your daily puzzle habit, now a friendly competition. Paste your result, climb the board, keep your streak.
+New: just play and your score saves itself. Brag with one tap, get a nudge when friends have played, and take the daily crown. Free, no ads.
 
 ### Description
 
-The Dailies turns the daily games you already play into a friendly competition.
+The Dailies turns the daily puzzles you already play into a friendly competition.
 
-Play your daily puzzles right inside the app, tap the game's Share button, then tap Paste. The Dailies reads
-your score, checks it's today's puzzle, and puts you on a leaderboard with your friends.
+Just play. When you finish a game, your score saves itself and lands on your friends' leaderboard. See who won every game today, take the daily crown, keep your streak alive and cheer friends on in the feed.
 
-• One board for all your dailies: word games, logic puzzles, geography games and more
-• Games grouped by kind: word games, logic puzzles, geography and more
-• A daily crown for whoever does best across every game that day, plus a winner for each kind of game
+• Scores save themselves: play any game in the app and your result is on the board when you finish, with Undo if you didn't mean it
+• One leaderboard for word games, logic puzzles, geography and trivia games
+• A daily crown for whoever scores the most points across every game, plus a crown for each kind of game
+• Brag with one tap: share your score or your crown with a link that brings friends straight to the board
+• A nudge when your friends have played and you haven't, and before your streak runs out
 • All-time leaderboards with your friends, by game or overall
-• Your own stats: streaks, wins, averages and personal bests
-• Pin your favorite games to the top and arrange the rest however you like
-• Share straight from a game's share sheet on iPhone
-• Invite friends with a link
+• A global leaderboard you can join, under your username or a fun name
+• Your stats: streaks, wins, averages and personal bests
+• A feed of your friends' days, with kudos and PB tags
+• Stay signed in to your game accounts between plays
+• Pin your favorite games and arrange the rest however you like
+• Sign in with Apple, and add an email to get back in if you forget your password
+• On Mac: the same boards, with keyboard shortcuts for days and pasting
 
-No ads. No tracking. Your scores are only visible to the friends you accept.
+No ads. No tracking. Your scores are only visible to the friends you accept, unless you choose to join the global leaderboard.
 
-### Keywords (100 max, comma separated, no spaces after commas, no trademarks)
+WORKS WITH
+The Dailies reads the share text from popular daily games, including Wordle, Connections, Strands and The Mini from NYT Games; LinkedIn's Queens, Tango, Zip, Crossclimb, Pinpoint and Mini Sudoku; Worldle, Globle, Travle, GeoGuessr and TimeGuessr; Minute Cryptic; and more. You play each game on its publisher's own website.
 
-daily,puzzle,leaderboard,friends,word,crossword,geography,streak,score,brain,logic,compete,challenge
+The Dailies is an independent app and is not affiliated with, endorsed by, or sponsored by The New York Times Company, LinkedIn, or any other game publisher. Game names are trademarks of their respective owners.
+
+### Subtitle and keywords
+
+The name ("Dailies: Puzzle Leaderboard") and subtitle are searched as well as the keywords, so the
+keywords never repeat their words (dailies, puzzle, leaderboard, daily, word, games, friends).
+
+- Subtitle (30 max): `Daily word games with friends`
+- Keywords (100 max, comma separated, no spaces): `crossword,trivia,geography,streak,score,brain,logic,compete,challenge,group,stats,quiz,sudoku,rank`
 
 Keep game brand names (Wordle, NYT, LinkedIn, Queens, etc.) out of the name, subtitle, keywords and
 screenshots' captions. Mentioning compatibility in the description later is generally fine, but not needed.
@@ -82,10 +95,11 @@ Expect a 13+ rating.
 - **Notes for the reviewer** (paste as is):
 
 > The Dailies is a leaderboard for daily puzzle games played with friends. Tap Play on any game to open that
-> game's own website in an in-app browser. The page is shown unmodified: we don't inject scripts or change it.
-> When finished, the player taps the game's own Share or Copy button and then our Paste button at the bottom;
-> the app reads only that pasted text to record the score. On iPhone, the share extension does the same from
-> a game's share sheet.
+> game's own website in an in-app browser. To save the player's score, the in-app browser reads the result the
+> game itself shares when the player finishes (the same text the game's Share or Copy button produces, which the
+> app also presses once the game shows it). Nothing else on the page is read or changed. If that doesn't work,
+> the player taps the game's Share button and then our Paste button. On iPhone, the share extension does the same
+> from a game's share sheet.
 >
 > Demo account: <username> / <password>. It has two friends and scores for today, so the Today, Friends and
 > You tabs show real data.
@@ -105,11 +119,27 @@ the pitch, since App Store search results show only those. Upload in this order.
 | # | File | Caption |
 |---|---|---|
 | 1 | `01-today.png` | Beat your friends at **every** daily game |
-| 2 | `02-paste.png` | Play, then **paste**. That's it. |
+| 2 | `02-saved.png` | Just play. Your score **saves itself**. |
 | 3 | `03-leaderboard.png` | See who won **every** game |
-| 4 | `04-feed.png` | Cheer on your **friends** |
-| 5 | `05-games.png` | **30+** daily games in one place (a graphic of the games, no phone) |
-| 6 | `06-friends.png` | Add friends with **one link** |
+| 4 | `04-brag.png` | **Brag** with one tap (the real share text and link preview, as chat bubbles) |
+| 5 | `05-feed.png` | Cheer on your **friends** |
+| 6 | `06-reminders.png` | Never break your **streak** (the real notification texts) |
+| 7 | `07-games.png` | **30+** daily games in one place (a graphic of the games, no phone) |
+| 8 | `08-friends.png` | Add friends with **one link** (from the 2026-11-04 set) |
+
+**Header and search results (creative assets, App Store on iOS 27+):** `creative/header-3840x1646.png`
+(21:9: the name and "Every daily game. One leaderboard." in the middle third, which every device shows;
+phones and game tiles toward the edges) and `creative/search-3840x2560.png` (3:2: "Beat your friends at
+your daily puzzles" over the crown, a score saving itself and a game's board). Without a search results
+asset, search shows the first three screenshots, so those carry the pitch too.
+
+**Remaking the 1.7 set:** `make-listing.mjs` + `render.sh` (see the top of each). Demo data goes in its own
+database (`PGLITE_DIR=<scratch>/shotsdb`, a server on port 3002 with `ADMIN_USERNAMES=nobody` and
+`PUBLIC_URL=https://www.thedailies.lol`), so the dev database is never touched; the app is launched with
+`-dailiesLocalURL http://localhost:3002`. The Saved banner is real: `-dailiesOpenGame https://chainle.io`
+with `-dailiesGameEval` writing today's Chainle share to the clipboard, which ResultCatcher catches (open the
+game three times first so the guide card is gone, and give the demo account a confirmed email so Add an
+email doesn't show).
 
 **Mac (2880×1800):** `01-today` Every daily game, **one window** · `02-play` Play right **in the app** ·
 `03-feed` Cheer on your **friends** · `04-friends` Add friends with **one link**.
