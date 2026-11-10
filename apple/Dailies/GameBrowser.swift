@@ -287,7 +287,6 @@ private struct IPhonePasteBar: View {
     @State private var watcher = ClipboardWatcher()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
 
     private var ready: Bool { watcher.copiedSinceOpen }
 
@@ -317,7 +316,11 @@ private struct IPhonePasteBar: View {
             .labelStyle(.titleAndIcon)
             .buttonBorderShape(.capsule)
             .tint(Color("OnAccent"))
-            .scaleEffect(ready && pulse && !reduceMotion ? 1.08 : 1)
+            // a gentle pulse while a copied result waits. Its animation stays on this button: a
+            // repeating withAnimation in onAppear also caught the toolbar, which bobbed with it.
+            .phaseAnimator(ready && !reduceMotion ? [1.0, 1.08] : [1.0]) { button, scale in
+                button.scaleEffect(scale)
+            } animation: { _ in .easeInOut(duration: 0.7) }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -330,9 +333,6 @@ private struct IPhonePasteBar: View {
         .sensoryFeedback(.success, trigger: ready) { _, now in now }
         .onAppear {
             watcher.start()
-            if !reduceMotion {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
-            }
         }
         .onDisappear { watcher.stop() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { watcher.check() } }
