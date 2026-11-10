@@ -6,6 +6,7 @@ import WebKit
 struct DebugMenu: View {
     @Environment(\.dismiss) private var dismiss
     @State private var server = Server.current
+    @State private var localURL = Server.localURL.absoluteString
 
     var body: some View {
         NavigationStack {
@@ -20,6 +21,16 @@ struct DebugMenu: View {
                         Server.current = new
                         WebController.shared.load()
                     }
+                }
+                Section("Local server address") {
+                    TextField("http://<Mac>.local:5173", text: $localURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .onSubmit {
+                            AppGroup.defaults.set(localURL, forKey: "localURL")
+                            if server == .local { WebController.shared.load() }
+                        }
                 }
                 Section("Device token") {
                     if let t = Keychain.load() {

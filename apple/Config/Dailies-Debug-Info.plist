@@ -4,6 +4,9 @@
 <dict>
 	<!-- Debug builds only: lets the app reach the local dev server over http://localhost.
 	     Release builds use the generated Info.plist with no ATS exception. -->
+	<!-- a phone reaching the dev server on the Mac over Wi-Fi -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Debug builds reach the development server on your Mac over Wi-Fi.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

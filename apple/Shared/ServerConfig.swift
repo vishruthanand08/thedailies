@@ -26,8 +26,22 @@ enum Server: String, CaseIterable, Identifiable {
     var baseURL: URL {
         switch self {
         case .production: URL(string: "https://www.thedailies.lol")!
-        case .local: URL(string: "http://localhost:5173")!
+        case .local: Self.localURL
         }
+    }
+
+    /// Debug: where the local dev server is. localhost in the Simulator; a phone needs the Mac's
+    /// name on the Wi-Fi (http://<Mac>.local:5173), passed once as `-dailiesLocalURL <url>` or typed
+    /// in the debug menu, and kept.
+    static var localURL: URL {
+        #if DEBUG
+        if let arg = UserDefaults.standard.string(forKey: "dailiesLocalURL"), let url = URL(string: arg) {
+            AppGroup.defaults.set(arg, forKey: "localURL")
+            return url
+        }
+        if let saved = AppGroup.defaults.string(forKey: "localURL"), let url = URL(string: saved) { return url }
+        #endif
+        return URL(string: "http://localhost:5173")!
     }
 
     /// Another address for the same server, for networks whose filters block the main one (a new
@@ -43,7 +57,7 @@ enum Server: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .production: "thedailies.lol"
-        case .local: "Local dev server (localhost:5173)"
+        case .local: "Local dev server (\(Self.localURL.host ?? "localhost"):\(Self.localURL.port ?? 80))"
         }
     }
 
@@ -55,6 +69,7 @@ enum Server: String, CaseIterable, Identifiable {
         get {
             #if DEBUG
             if let arg = UserDefaults.standard.string(forKey: "dailiesServer"), let s = Server(rawValue: arg) {
+                AppGroup.defaults.set(s.rawValue, forKey: key) // kept for launches from the home screen
                 return s
             }
             return AppGroup.defaults.string(forKey: key).flatMap(Server.init(rawValue:)) ?? .production

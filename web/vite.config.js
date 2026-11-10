@@ -22,6 +22,8 @@ const previewTags = {
 export default defineConfig({
   plugins: [react(), previewTags],
   server: {
+    // `npm run dev:lan` lets a phone on the same Wi-Fi reach this Mac by its .local name
+    allowedHosts: ['.local'],
     proxy: { '/api': 'http://localhost:3001', '/download': 'http://localhost:3001', '/appcast.xml': 'http://localhost:3001' },
   },
 })

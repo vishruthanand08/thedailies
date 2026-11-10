@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,magenta \"PORT=3001 node --watch server/index.js\" \"npm --prefix web run dev\"",
+    "dev:lan": "concurrently -k -n api,web -c blue,magenta \"PORT=3001 PUBLIC_URL=http://$(scutil --get LocalHostName).local:5173 node --watch server/index.js\" \"npm --prefix web run dev -- --host\"",
     "build": "npm --prefix web install && npm --prefix web run build",
     "start": "node server/index.js",
     "test": "node --test server/parsers.test.mjs"
