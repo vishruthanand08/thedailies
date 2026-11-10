@@ -73,8 +73,9 @@ Data used to track you: **No**. Data linked to you, all for **App Functionality*
 | User Content | Gameplay Content | scores and pasted share text |
 | User Content | Other User Content | game suggestions |
 | Other Data | Other Data Types | the device name of signed-in app devices |
+| Contact Info | Email Address | account recovery (optional; Sign in with Apple's email too) |
 
-Not collected: contact info, location, health, financial, browsing history, purchases, diagnostics, ads data.
+Not collected: name, phone, location, health, financial, browsing history, purchases, diagnostics, ads data.
 These match `apple/Dailies/PrivacyInfo.xcprivacy`.
 
 ## Age rating questionnaire
