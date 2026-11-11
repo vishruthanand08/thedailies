@@ -94,7 +94,8 @@ enum ResultCatcher {
       if (typeof navigator.share === 'function') {
         const share = navigator.share.bind(navigator)
         navigator.share = function (data) {
-          if (data) send(String(data.text || data.title || ''), 'share')
+          // the text and the link: some games' result is only the link (The Mini's ?d=…&t=…)
+          if (data) send([data.text, data.url].filter(Boolean).join('\n') || String(data.title || ''), 'share')
           return tapped() ? share(data) : Promise.resolve()
         }
       }

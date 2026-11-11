@@ -219,7 +219,7 @@ private struct PasteBar: View {
 @Observable
 final class ClipboardWatcher {
     private(set) var changeCount = UIPasteboard.general.changeCount
-    private(set) var hasText = UIPasteboard.general.hasStrings
+    private(set) var hasText = ClipboardWatcher.hasResult
     /// Something was copied since the game opened: most likely the result.
     private(set) var copiedSinceOpen = false
     @ObservationIgnored private let startCount = UIPasteboard.general.changeCount
@@ -241,16 +241,19 @@ final class ClipboardWatcher {
     func check() {
         let count = UIPasteboard.general.changeCount
         guard count != changeCount || !copiedSinceOpen && count != startCount else {
-            hasText = UIPasteboard.general.hasStrings
+            hasText = Self.hasResult
             return
         }
         changeCount = count
-        hasText = UIPasteboard.general.hasStrings
+        hasText = Self.hasResult
         copiedSinceOpen = count != startCount && hasText
     }
 
     /// After a save: back to waiting for the next copy.
     func saved() { copiedSinceOpen = false }
+
+    /// Text or a link: a share sheet's Copy of a link-only result (The Mini) is a URL, not text.
+    static var hasResult: Bool { UIPasteboard.general.hasStrings || UIPasteboard.general.hasURLs }
 }
 
 /// The yellow bar under a game: what to do next, and the system Paste button (which reads the
@@ -314,12 +317,9 @@ private struct IPhonePasteBar: View {
     }
 
     private var pasteButton: some View {
-        PasteButton(payloadType: String.self) { strings in
-            guard let text = strings.first else { return }
-            Task { @MainActor in
-                watcher.saved()
-                onPaste(text)
-            }
+        ResultPasteButton { text in
+            watcher.saved()
+            onPaste(text)
         }
         // a fresh button for each copy: the system one doesn't always notice a copy on its own
         .id(watcher.changeCount)

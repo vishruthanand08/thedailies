@@ -1,5 +1,6 @@
 #if os(iOS) // the Mac app shows the website instead (MacRootView)
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Opened from the + in the tab bar: paste the result a game just copied (system PasteButton,
 /// so there's no "Allow Paste?" prompt), or type or paste it into the box.
@@ -100,13 +101,10 @@ struct AddScoreSheet: View {
     }
 
     private var pasteButton: some View {
-        PasteButton(payloadType: String.self) { strings in
-            guard let text = strings.first else { return }
-            Task { @MainActor in
-                Haptic.tap(.medium) // success or error follows when it's saved (TodayView)
-                SubmissionQueue.shared.enqueue(text)
-                dismiss()
-            }
+        ResultPasteButton { text in
+            Haptic.tap(.medium) // success or error follows when it's saved (TodayView)
+            SubmissionQueue.shared.enqueue(text)
+            dismiss()
         }
     }
 
@@ -114,6 +112,40 @@ struct AddScoreSheet: View {
         Haptic.tap(.medium)
         SubmissionQueue.shared.enqueue(text)
         dismiss()
+    }
+}
+
+/// The system Paste button (no "Allow Paste?" prompt) for a copied result: text, or a link, since
+/// a share sheet's Copy of a link-only result (The Mini's) puts a URL on the clipboard, which a
+/// text-only button greys out for.
+struct ResultPasteButton: View {
+    let onText: @MainActor (String) -> Void
+
+    var body: some View {
+        PasteButton(supportedContentTypes: [.plainText, .url]) { providers in
+            Task { @MainActor in
+                if let text = await Self.text(from: providers) { onText(text) }
+            }
+        }
+    }
+
+    private static func text(from providers: [NSItemProvider]) async -> String? {
+        for provider in providers {
+            for type in [UTType.plainText, .url] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                let text: String? = await withCheckedContinuation { done in
+                    provider.loadItem(forTypeIdentifier: type.identifier, options: nil) { item, _ in
+                        switch item {
+                        case let s as String: done.resume(returning: s)
+                        case let u as URL: done.resume(returning: u.absoluteString)
+                        case let d as Data: done.resume(returning: String(data: d, encoding: .utf8))
+                        default: done.resume(returning: nil)
+                        }
+                    }
+                }
+                if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return text }
+            }
+        }
+        return nil
     }
 }
 
