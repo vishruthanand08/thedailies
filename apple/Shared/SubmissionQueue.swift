@@ -17,7 +17,7 @@ final class SubmissionQueue {
         let text: String
         let addedAt: Date
         /// Caught from the game page by itself (ResultCatcher), not pasted: text that isn't a
-        /// result, or a score already on the board, is dropped quietly, and the banner offers Undo.
+        /// result, or a score already on the board, is dropped quietly.
         var auto: Bool? = nil
     }
 
@@ -32,13 +32,9 @@ final class SubmissionQueue {
         pending = data.flatMap { try? JSONDecoder().decode([Pending].self, from: $0) } ?? []
     }
 
-    /// Results the player undid: never caught again this launch.
-    @ObservationIgnored private var undone: Set<String> = []
-    @ObservationIgnored private var savedText: [Int: String] = [:]
-
     func enqueue(_ raw: String, auto: Bool = false) {
         let text = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(4000))
-        guard !text.isEmpty, !(auto && undone.contains(text)) else { return }
+        guard !text.isEmpty else { return }
         let now = Date()
         recent = recent.filter { now.timeIntervalSince($0.value) < Self.dedupeWindow }
         // games often call share and copy back to back with the same text
@@ -62,12 +58,10 @@ final class SubmissionQueue {
                 let result = try await DailiesAPI.shared.submit(text: item.text)
                 pending.removeFirst()
                 persist()
-                if item.auto == true, let id = result.id {
-                    savedText[id] = item.text
-                    banner = Banner(kind: .ok, text: result.savedText, undoId: id, shareGameId: result.gameId)
-                } else {
-                    banner = Banner(kind: .ok, text: result.savedText, shareGameId: result.gameId)
-                }
+                // a score caught from a game is a quick note (the game closes under it); a pasted one
+                // offers Share
+                banner = Banner(kind: .ok, text: result.savedText, saved: true,
+                                shareGameId: item.auto == true ? nil : result.gameId)
                 onSaved?()
             } catch let error as DailiesError {
                 switch error {
@@ -95,22 +89,6 @@ final class SubmissionQueue {
         case .duplicate: return true
         case .rejected(let message): return message.hasPrefix("Couldn't recognize")
         default: return false
-        }
-    }
-
-    /// Undo on an automatic save's banner: deletes the score.
-    func undo(_ id: Int) {
-        if let text = savedText.removeValue(forKey: id) { undone.insert(text) }
-        Task {
-            do {
-                try await DailiesAPI.shared.deleteSubmission(id: id)
-                show(.ok, "Score removed.")
-                onSaved?()
-            } catch let error as DailiesError {
-                show(.err, error.message)
-            } catch {
-                show(.err, "Couldn't remove that score.")
-            }
         }
     }
 

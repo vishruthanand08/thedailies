@@ -22,7 +22,7 @@ struct RootView: View {
             #else
             MacRootView() // the website, its own sign-in page included
             #endif
-            BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) }, share: shareScore)
+            BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, share: shareScore)
             #if DEBUG
             // -dailiesScreenshots YES hides it for App Store screenshots
             if !UserDefaults.standard.bool(forKey: "dailiesScreenshots") { debugButton }

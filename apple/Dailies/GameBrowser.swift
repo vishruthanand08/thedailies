@@ -111,17 +111,6 @@ struct GameBrowserView: View {
     @State private var browser: GameBrowser?
     @State private var queue = SubmissionQueue.shared
 
-    /// Share on a saved score's banner (iPhone; the Mac's sharing is the website's).
-    private var shareScore: ((String) -> Void)? {
-        #if os(iOS)
-        return { gameId in
-            Haptic.tap(.medium)
-            Sharing.shareGame(gameId)
-        }
-        #else
-        return nil
-        #endif
-    }
 
     var body: some View {
         NavigationStack {
@@ -152,9 +141,17 @@ struct GameBrowserView: View {
                 }
             }
         }
-        .overlay { BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }, undo: { queue.undo($0) }, share: shareScore) }
+        // no buttons over the game: they'd sit on top of Done
+        .overlay { BannerOverlay(banner: queue.banner, dismiss: { queue.dismiss($0) }) }
         .onChange(of: queue.banner) { _, banner in
-            if banner?.undoId != nil, let browser { ResultCatcher.saved(in: browser.webView) }
+            // a score is in (caught by itself or pasted): show it a moment, then back to Today, so
+            // nobody is left on the game wondering what to do next
+            guard let banner, banner.saved else { return }
+            if let browser { ResultCatcher.saved(in: browser.webView) }
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                if queue.banner?.id == banner.id || queue.banner == nil { dismiss() }
+            }
         }
         .onAppear {
             if browser == nil {

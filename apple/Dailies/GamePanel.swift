@@ -15,6 +15,7 @@ struct GamePanel: View {
     @State private var browser: GameBrowser?
     @State private var flash: Flash?
     @State private var busy = false
+    @State private var queue = SubmissionQueue.shared
 
     struct Flash: Equatable {
         let ok: Bool
@@ -38,6 +39,21 @@ struct GamePanel: View {
         .onDisappear {
             browser?.close()
             browser = nil
+        }
+        // a score the game shared by itself (ResultCatcher): show it here, then back to the board,
+        // as after Paste result
+        .onChange(of: queue.banner) { _, banner in
+            guard let banner else { return }
+            queue.dismiss(banner) // the panel says it; there's no banner over the Mac page
+            if banner.saved, let browser { ResultCatcher.saved(in: browser.webView) }
+            let note = Flash(ok: banner.kind == .ok, text: banner.text)
+            flash = note
+            guard banner.saved else { return }
+            WebController.shared.reloadBoard()
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                if flash == note { close() }
+            }
         }
     }
 

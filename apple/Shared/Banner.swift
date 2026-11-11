@@ -5,17 +5,17 @@ struct Banner: Identifiable, Equatable {
     let id = UUID()
     let kind: Kind
     let text: String
-    /// A score saved automatically from a game: the banner offers Undo, which deletes it.
-    var undoId: Int? = nil
-    /// A saved score: the banner offers Share (the app's Sharing).
+    /// A score that was just saved (pasted or caught from a game). The game window closes on it.
+    var saved = false
+    /// A saved score: the banner offers Share (the app's Sharing), except over a game.
     var shareGameId: String? = nil
 }
 
-/// Top-of-screen banner for native submission results; auto-dismisses after 4 s.
+/// Top-of-screen banner for native submission results. It goes by itself: a saved score after
+/// 2 s (the game window closes under it), other messages after 4 s, 6 s when it offers Share.
 struct BannerOverlay: View {
     let banner: Banner?
     let dismiss: (Banner) -> Void
-    var undo: ((Int) -> Void)? = nil
     var share: ((String) -> Void)? = nil
 
     var body: some View {
@@ -32,16 +32,7 @@ struct BannerOverlay: View {
                         }
                         .font(.system(.subheadline, weight: .heavy))
                         .underline()
-                        .accessibilityHint("Shares your score with a link for friends to join")
-                    }
-                    if let id = banner.undoId, let undo {
-                        Button("Undo") {
-                            undo(id)
-                            dismiss(banner)
-                        }
-                        .font(.system(.subheadline, weight: .heavy))
-                        .underline()
-                        .accessibilityHint("Removes this score from the board")
+                        .accessibilityHint("Shares your place and score")
                     }
                 }
                     .font(.system(.subheadline, weight: .semibold))
@@ -59,7 +50,8 @@ struct BannerOverlay: View {
                     .onTapGesture { dismiss(banner) }
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: banner.id) {
-                        try? await Task.sleep(for: .seconds(banner.undoId == nil && banner.shareGameId == nil ? 4 : 8))
+                        let showsShare = banner.shareGameId != nil && share != nil
+                        try? await Task.sleep(for: .seconds(showsShare ? 6 : banner.saved ? 2 : 4))
                         dismiss(banner)
                     }
             }
