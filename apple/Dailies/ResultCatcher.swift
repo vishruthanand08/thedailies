@@ -9,9 +9,10 @@ import WebKit
 ///    to the app, which posts it like a paste (`SubmissionQueue.enqueue(_, auto: true)`): the server
 ///    decides whether it's a result, and anything that isn't (a copied link) is dropped quietly.
 /// 2. Presses the game's own Share or Copy button once it appears (a button labelled just "Share",
-///    "Share results", "Copy", ... that has stayed on screen for a moment): once per page, and not
-///    at all once the player has touched the page, once a score is saved, or when the player
-///    already has one for today.
+///    "Share results", "Copy", ... that has stayed on screen for a moment), so the score is in
+///    without the player tapping anything: each button once, up to four a page (a Share that opens
+///    the game's own menu, then the menu's Share), paused while the player is tapping, and none
+///    once a score is saved or when the player already has one for today.
 ///
 /// Safe by default, so a mistake here can't stop anyone playing: only the script's own press is
 /// held back (the 2 s after it: no share sheet, clipboard untouched, the page just hears sharing
@@ -148,24 +149,29 @@ enum ResultCatcher {
         const s = getComputedStyle(el)
         return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.2 && s.pointerEvents !== 'none'
       }
-      // One press a page, and none once the player has touched it: pressing again (say a menu's own
-      // Share after the first press opened it) fights the player's taps.
-      let touched = false
+      // Presses wait while the player is tapping (playing means touching the page, so a touch only
+      // pauses it), so they never fight the player. Each button once, at most four a page: enough
+      // for a game whose Share opens its own menu with another Share inside (NYT), and the presses
+      // stop as soon as a score is saved.
+      let lastTouch = 0
       for (const type of ['pointerdown', 'touchstart', 'keydown']) {
-        window.addEventListener(type, (e) => { if (e.isTrusted) touched = true }, true)
+        window.addEventListener(type, (e) => { if (e.isTrusted) lastTouch = Date.now() }, true)
       }
       const firstSeen = new WeakMap()
+      const pressed = new WeakSet()
       let presses = 0
       const started = Date.now()
       const timer = setInterval(() => {
-        if (saved || touched || presses >= 1 || Date.now() - started > 45 * 60 * 1000) return clearInterval(timer)
+        if (saved || presses >= 4 || Date.now() - started > 45 * 60 * 1000) return clearInterval(timer)
+        if (Date.now() - lastTouch < 1500) return // the player is mid-tap
         if (document.hidden) return
         const now = Date.now()
         for (const el of document.querySelectorAll('button, [role="button"], a')) {
-          if (!LABEL.test(labelOf(el)) || !onScreen(el)) continue
+          if (pressed.has(el) || !LABEL.test(labelOf(el)) || !onScreen(el)) continue
           const seen = firstSeen.get(el)
           if (!seen) { firstSeen.set(el, now); continue }
           if (now - seen < 800) continue // let the results finish animating in
+          pressed.add(el)
           presses++
           ourPressAt = Date.now()
           quietly(() => el.click())
