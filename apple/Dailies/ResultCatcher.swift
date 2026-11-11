@@ -9,12 +9,14 @@ import WebKit
 ///    to the app, which posts it like a paste (`SubmissionQueue.enqueue(_, auto: true)`): the server
 ///    decides whether it's a result, and anything that isn't (a copied link) is dropped quietly.
 /// 2. Presses the game's own Share or Copy button once it appears (a button labelled just "Share",
-///    "Share results", "Copy", ... that has stayed on screen for a moment), at most three presses
-///    per page and none once a score is saved or when the player already has one for today.
+///    "Share results", "Copy", ... that has stayed on screen for a moment): once per page, and not
+///    at all once the player has touched the page, once a score is saved, or when the player
+///    already has one for today.
 ///
-/// The game itself isn't changed: when the player taps Share themselves, the share sheet and the
-/// clipboard work as usual. The script's own press isn't a tap, so it never opens the share sheet
-/// or touches the clipboard; the page just hears that sharing worked.
+/// Safe by default, so a mistake here can't stop anyone playing: only the script's own press is
+/// held back (the 2 s after it: no share sheet, clipboard untouched, the page just hears sharing
+/// worked); every other share or copy, the player's included, goes through exactly as in Safari,
+/// and any error in a hook is swallowed before the real call.
 enum ResultCatcher {
     static let handlerName = "dailiesResult"
 
@@ -48,8 +50,8 @@ enum ResultCatcher {
         }
     }
 
-    // Plain ES2017, no dependencies. Every hook passes the call through when the player really
-    // tapped (navigator.userActivation), so the page behaves exactly as in Safari.
+    // Plain ES2017, no dependencies. Every hook passes the call through unless it comes straight
+    // after the script's own press, so the page behaves exactly as in Safari.
     private static let script = #"""
     (() => {
       if (window.__dailiesCatcher) return
@@ -57,7 +59,11 @@ enum ResultCatcher {
       const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dailiesResult
       if (!handler) return
 
-      const tapped = () => { try { return !!(navigator.userActivation && navigator.userActivation.isActive) } catch (e) { return false } }
+      // Only the app's own press (part 2) is held back, and only just after it: everything else, a
+      // player's tap included (some games share after a fetch, when the tap no longer counts as
+      // recent), goes through to the real share sheet or clipboard, so a mistake here can't block it.
+      let ourPressAt = 0
+      const ours = () => Date.now() - ourPressAt < 2000
       const sentRecently = new Map()
       const send = (text, how) => {
         if (typeof text !== 'string') return
@@ -68,14 +74,15 @@ enum ResultCatcher {
         sentRecently.set(text, now)
         try { handler.postMessage({ text, how }) } catch (e) {}
       }
+      const quietly = (f) => { try { f() } catch (e) {} }
 
       // 1. Catch the result whenever the page shares or copies it
       const clip = navigator.clipboard
       if (clip && typeof clip.writeText === 'function') {
         const writeText = clip.writeText.bind(clip)
         clip.writeText = function (t) {
-          send(String(t), 'writeText')
-          return tapped() ? writeText(t) : Promise.resolve()
+          quietly(() => send(String(t), 'writeText'))
+          return ours() ? Promise.resolve() : writeText(t)
         }
       }
       if (clip && typeof clip.write === 'function') {
@@ -88,15 +95,15 @@ enum ResultCatcher {
               }
             }
           } catch (e) {}
-          return tapped() ? write(items) : Promise.resolve()
+          return ours() ? Promise.resolve() : write(items)
         }
       }
       if (typeof navigator.share === 'function') {
         const share = navigator.share.bind(navigator)
         navigator.share = function (data) {
           // the text and the link: some games' result is only the link (The Mini's ?d=…&t=…)
-          if (data) send([data.text, data.url].filter(Boolean).join('\n') || String(data.title || ''), 'share')
-          return tapped() ? share(data) : Promise.resolve()
+          quietly(() => { if (data) send([data.text, data.url].filter(Boolean).join('\n') || String(data.title || ''), 'share') })
+          return ours() ? Promise.resolve() : share(data)
         }
       }
       const selected = () => {
@@ -109,14 +116,14 @@ enum ResultCatcher {
       }
       const execCommand = document.execCommand
       document.execCommand = function (command) {
-        if (String(command).toLowerCase() === 'copy') send(selected(), 'execCommand')
+        quietly(() => { if (String(command).toLowerCase() === 'copy') send(selected(), 'execCommand') })
         return execCommand.apply(this, arguments)
       }
       let inCopy = false
       window.addEventListener('copy', () => {
         inCopy = true
         setTimeout(() => { inCopy = false }, 0)
-        send(selected(), 'copy')
+        quietly(() => send(selected(), 'copy'))
       }, true)
       const setData = DataTransfer.prototype.setData
       DataTransfer.prototype.setData = function (type, value) {
@@ -141,22 +148,27 @@ enum ResultCatcher {
         const s = getComputedStyle(el)
         return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.2 && s.pointerEvents !== 'none'
       }
+      // One press a page, and none once the player has touched it: pressing again (say a menu's own
+      // Share after the first press opened it) fights the player's taps.
+      let touched = false
+      for (const type of ['pointerdown', 'touchstart', 'keydown']) {
+        window.addEventListener(type, (e) => { if (e.isTrusted) touched = true }, true)
+      }
       const firstSeen = new WeakMap()
-      const pressed = new WeakSet()
       let presses = 0
       const started = Date.now()
       const timer = setInterval(() => {
-        if (saved || presses >= 3 || Date.now() - started > 45 * 60 * 1000) return clearInterval(timer)
+        if (saved || touched || presses >= 1 || Date.now() - started > 45 * 60 * 1000) return clearInterval(timer)
         if (document.hidden) return
         const now = Date.now()
         for (const el of document.querySelectorAll('button, [role="button"], a')) {
-          if (pressed.has(el) || !LABEL.test(labelOf(el)) || !onScreen(el)) continue
+          if (!LABEL.test(labelOf(el)) || !onScreen(el)) continue
           const seen = firstSeen.get(el)
           if (!seen) { firstSeen.set(el, now); continue }
           if (now - seen < 800) continue // let the results finish animating in
-          pressed.add(el)
           presses++
-          el.click()
+          ourPressAt = Date.now()
+          quietly(() => el.click())
           return
         }
       }, 500)

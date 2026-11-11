@@ -263,6 +263,7 @@ private struct IPhonePasteBar: View {
     let gameName: String
     let onPaste: (String) -> Void
     @State private var watcher = ClipboardWatcher()
+    @State private var adding = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -314,15 +315,39 @@ private struct IPhonePasteBar: View {
         }
         .onDisappear { watcher.stop() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { watcher.check() } }
+        // nothing to paste: the Add score sheet, to paste or type the result there
+        .sheet(isPresented: $adding) { AddScoreSheet() }
     }
 
-    private var pasteButton: some View {
-        ResultPasteButton { text in
-            watcher.saved()
-            onPaste(text)
+    /// Never greyed out, so a copy the system button can't see can't strand anyone: the system
+    /// button (no prompt) when the clipboard holds text or a link, otherwise a plain Paste that reads
+    /// the clipboard itself (iOS asks "Allow Paste?") and opens Add score when it's empty.
+    @ViewBuilder private var pasteButton: some View {
+        if watcher.hasText {
+            ResultPasteButton { text in
+                watcher.saved()
+                onPaste(text)
+            }
+            // a fresh button for each copy: the system one doesn't always notice a copy on its own
+            .id(watcher.changeCount)
+        } else {
+            Button {
+                let board = UIPasteboard.general
+                if let text = board.string ?? board.url?.absoluteString,
+                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    watcher.saved()
+                    onPaste(text)
+                } else {
+                    adding = true
+                }
+            } label: {
+                Label("Paste", hero: "clipboard-document", size: 16)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 36)
+            }
+            .buttonStyle(.borderedProminent)
         }
-        // a fresh button for each copy: the system one doesn't always notice a copy on its own
-        .id(watcher.changeCount)
     }
 }
 
