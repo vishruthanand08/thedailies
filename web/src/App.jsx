@@ -10,6 +10,7 @@ import Profile from './Profile.jsx'
 import Global from './Global.jsx'
 import Admin from './Admin.jsx'
 import { DesktopAppPrompt } from './DesktopApp.jsx'
+import { AppBanner } from './AppBanner.jsx'
 import { AccountNudge, ResetPassword, VerifyNotice, resetTokenInUrl } from './Recovery.jsx'
 
 export default function App() {
@@ -82,7 +83,7 @@ export default function App() {
     }} />
   }
   if (me === undefined) return <div className="spin">loading…</div>
-  if (me === null) return <><VerifyNotice /><Auth onAuth={setMe} share={sharePreview} /></>
+  if (me === null) return <><AppBanner /><VerifyNotice /><Auth onAuth={setMe} share={sharePreview} /></>
 
   const logout = async () => {
     await api.post('/auth/logout')
@@ -91,6 +92,7 @@ export default function App() {
 
   return (
     <div className="container">
+      <AppBanner />
       <header className="header">
         <div className="logo">
           <span className="pill">The</span>

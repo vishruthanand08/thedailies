@@ -1,3 +1,4 @@
+import { AppStoreLink } from './AppBanner.jsx'
 import { useState } from 'react'
 import { api } from './api.js'
 import { inApp } from './native.js'
@@ -105,6 +106,7 @@ export default function Auth({ onAuth, share }) {
           <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> ·{' '}
           <a href="/support" target="_blank" rel="noreferrer">Support</a>
         </div>}
+        <AppStoreLink />
       </form>
       )}
     </div>
