@@ -44,6 +44,10 @@ final class OnboardingState {
     private func key(_ username: String) -> String { "dailies.onboarded.\(username)" }
 
     func checkAfterSignIn(_ username: String) async {
+        #if DEBUG
+        // -dailiesOnboarding <page>: show it (at that page) every launch, to check it
+        if UserDefaults.standard.object(forKey: "dailiesOnboarding") != nil { showing = true; return }
+        #endif
         guard !UserDefaults.standard.bool(forKey: key(username)) else { return }
         guard let iso = try? await DailiesAPI.shared.profileCreatedAt(), let joined = Self.date(iso) else { return }
         UserDefaults.standard.set(true, forKey: key(username)) // once, whatever happens next
@@ -63,7 +67,11 @@ struct OnboardingView: View {
     var goToFriends: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if DEBUG
+    @State private var page = UserDefaults.standard.integer(forKey: "dailiesOnboarding")
+    #else
     @State private var page = 0
+    #endif
     private let pages = 3
 
     var body: some View {
@@ -82,8 +90,8 @@ struct OnboardingView: View {
                 OnboardPage(title: "All your daily games",
                             text: "Wordle, Connections, Queens, geography games and more. Play them right here.") { gamesArt }
                     .tag(0)
-                OnboardPage(title: "Play, copy, paste",
-                            text: "Finish a game, tap its Share or Copy, then tap Paste. Your score lands on the board.") { pasteArt }
+                OnboardPage(title: "Just play",
+                            text: "Play a game here and your score saves itself when you finish. It lands on the board with your friends'.") { pasteArt }
                     .tag(1)
                 OnboardPage(title: "Beat your friends",
                             text: "Every score earns up to 100 points. The most points across the day takes the crown.") { crownArt }
@@ -154,7 +162,7 @@ struct OnboardingView: View {
 
     private var pasteArt: some View {
         VStack(spacing: 12) {
-            ForEach(Array(["Finish today's puzzle", "Tap Share or Copy", "Tap Paste"].enumerated()), id: \.offset) { i, step in
+            ForEach(Array(["Open today's puzzle", "Play it", "It's on the board"].enumerated()), id: \.offset) { i, step in
                 HStack(spacing: 12) {
                     Text("\(i + 1)")
                         .font(.brand(.subheadline, .heavy))
@@ -165,19 +173,16 @@ struct OnboardingView: View {
                     Text(step).font(.brand(.headline, .bold)).foregroundStyle(Color.ink).oneLine()
                 }
             }
-            HStack {
-                Text("Copied! Tap Paste to save").font(.brand(.subheadline, .heavy)).oneLine()
-                Label("Paste", hero: "clipboard-document", size: 16)
-                    .font(.brand(.subheadline, .heavy))
-                    .padding(.horizontal, 14).frame(minHeight: 36)
-                    .background(Capsule().fill(Color.surface))
-                    .overlay(Capsule().strokeBorder(Color.onAccent, lineWidth: 1.5))
-                    .fixedSize()
+            // the banner a saved score shows
+            HStack(spacing: 8) {
+                Text("🟩 Wordle 3/6 saved").font(.brand(.subheadline, .heavy)).oneLine()
+                HeroIcon("check", size: 18)
             }
-            .foregroundStyle(Color.onAccent)
+            .foregroundStyle(Color.ink)
             .padding(12)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.sun))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.onAccent, lineWidth: 2))
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.positive))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.ink, lineWidth: 2))
         }
         .padding(20)
         .chunkyCard(.surface)

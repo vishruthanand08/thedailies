@@ -74,6 +74,7 @@ struct DebugMenu: View {
 ///   -dailiesAddSheet YES        open the Add a score sheet (native iOS UI)
 ///   -dailiesSignIn "<user> <password>"  sign in with a local test account (local server only)
 ///   -dailiesSignOut YES         start signed out
+///   -dailiesOnboarding <page>   show the new-player intro at that page (0-2) on every launch
 @MainActor
 enum DebugHooks {
     private static var evalDone = false

@@ -110,7 +110,6 @@ struct GameBrowserView: View {
     // GameBrowser is a live web view running the game
     @State private var browser: GameBrowser?
     @State private var queue = SubmissionQueue.shared
-    @State private var showGuide = false
 
     /// Share on a saved score's banner (iPhone; the Mac's sharing is the website's).
     private var shareScore: ((String) -> Void)? {
@@ -133,10 +132,6 @@ struct GameBrowserView: View {
                     Color.clear
                 }
             }
-            #if os(iOS)
-            // over the game, just above the yellow bar it points to
-            .overlay(alignment: .bottom) { GameGuide(gameName: launch.name, visible: $showGuide) }
-            #endif
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 PasteBar(gameName: launch.name) { queue.enqueue($0) }
             }
@@ -164,23 +159,6 @@ struct GameBrowserView: View {
         .onAppear {
             if browser == nil {
                 browser = GameBrowser(launch: launch)
-                #if os(iOS)
-                // the steps over the game, the first few times a game is opened. The view can be set
-                // up more than once as a game opens, so opens within ten seconds count once.
-                let defaults = UserDefaults.standard
-                let shown = defaults.integer(forKey: GameGuide.key)
-                if shown < GameGuide.times {
-                    let last = defaults.double(forKey: GameGuide.key + ".at")
-                    if Date().timeIntervalSince1970 - last > 10 {
-                        defaults.set(shown + 1, forKey: GameGuide.key)
-                        defaults.set(Date().timeIntervalSince1970, forKey: GameGuide.key + ".at")
-                    }
-                    Task {
-                        try? await Task.sleep(for: .seconds(0.6)) // after the game starts loading
-                        withAnimation(.spring(duration: 0.45, bounce: 0.25)) { showGuide = true }
-                    }
-                }
-                #endif
             }
         }
         .onDisappear {
@@ -295,7 +273,7 @@ private struct IPhonePasteBar: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(ready ? "Copied! Tap Paste to save" : "Your score saves itself")
                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                Text(ready ? "Your \(gameName) result goes on the board." : "Just play. If it doesn't, tap Share, then Paste.")
+                Text(ready ? "Your \(gameName) result goes on the board." : "Just play. It goes on the board when you finish.")
                     .font(.footnote).opacity(0.75)
             }
             .lineLimit(1)
@@ -348,58 +326,6 @@ private struct IPhonePasteBar: View {
         }
         // a fresh button for each copy: the system one doesn't always notice a copy on its own
         .id(watcher.changeCount)
-    }
-}
-
-/// The three steps, over the bottom of the game the first few times someone opens one, since
-/// "copy your result, then paste it" isn't obvious. "Got it" hides it for good.
-private struct GameGuide: View {
-    let gameName: String
-    @Binding var visible: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    static let key = "dailies.gameGuideShown"
-    static let times = 3
-
-    var body: some View {
-        Group {
-            if visible {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("How to add your score").font(.system(.headline, design: .rounded, weight: .heavy))
-                    step(1, "Play today's \(gameName).")
-                    step(2, "When you finish, your score saves itself.")
-                    step(3, "Didn't save? Tap the game's Share, then Paste below.")
-                    Button {
-                        Haptic.tap()
-                        UserDefaults.standard.set(Self.times, forKey: Self.key) // for good
-                        withAnimation(reduceMotion ? nil : .snappy) { visible = false }
-                    } label: {
-                        Text("Got it")
-                            .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                            .foregroundStyle(Color("OnAccent"))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.pressIn(Color("Sun"), radius: 14))
-                }
-                .foregroundStyle(Color("Ink"))
-                .padding(16)
-                .chunkyCard(Color("Surface"))
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-    }
-
-    private func step(_ n: Int, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("\(n)")
-                .font(.system(.footnote, design: .rounded, weight: .heavy))
-                .foregroundStyle(Color("OnAccent"))
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(Color("Sun")))
-                .overlay(Circle().strokeBorder(Color("OnAccent"), lineWidth: 1.5))
-            Text(text).font(.subheadline.weight(.semibold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-        }
     }
 }
 
