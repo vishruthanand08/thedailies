@@ -43,7 +43,8 @@ export function AppBanner() {
       <img src="/apple-touch-icon.png" alt="" className="appbanner-icon" />
       <div className="appbanner-text">
         <b>{ios ? 'The Dailies app' : 'The Dailies is on iPhone'}</b>
-        <span>Just play. Your score saves itself.</span>
+        {/* 1.6 on the App Store still pastes; "Your score saves itself" once 1.7 is out */}
+        <span>Every daily game, one leaderboard. Free.</span>
       </div>
       <a className="btn small appbanner-get" href={APP_STORE_URL} target="_blank" rel="noreferrer">
         {ios ? 'Get' : 'Get the app'}
