@@ -422,8 +422,9 @@ export const GAMES = [
     // It refuses framing (X-Frame-Options: DENY), so Play opens a new tab on the website.
     epoch: { date: '2026-10-18', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      // the meters are in the player's locale: "6,120 m", "6.120 m", "6 120 m"
-      const m = text.match(new RegExp(`^\\s*Plain\\s+#(\\d+)\\s*[—–-]\\s*(?:✈️?\\s*)?(${INT})\\s*m\\b`))
+      // "Plain #26 ✈️ 4,158 m" (since 2026-11-12; a "—" before the plane until then), the meters in
+      // the player's locale: "6,120 m", "6.120 m", "6 120 m"
+      const m = text.match(new RegExp(`^\\s*Plain\\s+#(\\d+)\\s*[—–-]?\\s*(?:✈️?\\s*)?(${INT})\\s*m\\b`))
       if (!m) return null
       const meters = localInt(m[2])
       return { puzzleNumber: num(m[1]), metric: meters, display: `${meters.toLocaleString('en-US')} m` }

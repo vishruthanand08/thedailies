@@ -41,6 +41,7 @@ const SAMPLES = [
   ['Noillirk: The Daily Climb | No. 46 - 12 km\n\n🟩', 'noillirk', 12000, '2026-11-11'],
   ['Noillirk: The Daily Climb | No. 46 - 6 763m', 'noillirk', 6763, '2026-11-11'],
   ['Plain #25 — ✈️ 6.120 m\n🟢', 'plain', 6120, '2026-11-11'],
+  ['Plain #26 ✈️ 4,158 m\n🟥🎯🟩🟧🟥🟧🟧\nTop 31% today\nCan you beat me? 👇\nhttps://playplain.app/c/AZEVJA', 'plain', 4158, '2026-11-12'],
   ['Plain #25 — ✈️ 6 120 m', 'plain', 6120, '2026-11-11'],
   ['Wordle 1.971 4/6\n\n🟩', 'wordle', 4, '2026-11-11'],
   ['Wordle 1 971 X/6*', 'wordle', 7, '2026-11-11'],
