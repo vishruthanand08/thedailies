@@ -107,17 +107,25 @@ enum ResultCatcher {
           return ours() ? Promise.resolve() : share(data)
         }
       }
+      // what a copy copies: the selection in a text field (focused or not: NYT selects one that
+      // isn't), else the page's selection
       const selected = () => {
-        const el = document.activeElement
-        if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && typeof el.selectionStart === 'number') {
-          const t = el.value.slice(el.selectionStart, el.selectionEnd)
-          if (t) return t
+        const fields = [document.activeElement].concat(Array.from(document.querySelectorAll('input, textarea')))
+        for (const el of fields) {
+          if (!el || (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT')) continue
+          try {
+            if (typeof el.selectionStart === 'number' && el.selectionEnd > el.selectionStart) {
+              return el.value.slice(el.selectionStart, el.selectionEnd)
+            }
+          } catch (e) {} // inputs like checkboxes throw on selectionStart
         }
         return String(window.getSelection ? window.getSelection() : '')
       }
       const execCommand = document.execCommand
       document.execCommand = function (command) {
-        quietly(() => { if (String(command).toLowerCase() === 'copy') send(selected(), 'execCommand') })
+        let copy = false
+        quietly(() => { copy = String(command).toLowerCase() === 'copy'; if (copy) send(selected(), 'execCommand') })
+        if (copy && ours()) return true
         return execCommand.apply(this, arguments)
       }
       let inCopy = false
@@ -136,23 +144,60 @@ enum ResultCatcher {
       let saved = false
       window.__dailiesSaved = () => { saved = true }
       if (!window.__dailiesAutoPress) return
-      const LABEL = /^(share|share (your |my |the )?(results?|score|stats|grid)|copy|copy (your |my |the )?(results?|score|grid)|copy to clipboard)!?$/i
-      const labelOf = (el) => (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim()
-      const onScreen = (el) => {
-        if (el.disabled || el.closest('[aria-hidden="true"], header, nav, footer')) return false
+      // A button's hidden label and its visible text are checked separately: Poeltl's says "Share
+      // Today's Game" to screen readers and "Share" on screen, Plain's "Challenge friends: share your
+      // result" and "Challenge friends".
+      const LABEL = new RegExp('^(' + [
+        "share( (your|my|the|today'?s|today’s))?( (results?|score|stats|grid|game))?", 'share (your|my) card',
+        'share with friends', 'challenge (friends|them back)',
+        'copy( (your|my|the|share|spoiler-free))?( (results?|score|grid|text))?( for sharing)?',
+        'copy to clipboard',
+      ].join('|') + ')[!.]?$', 'i')
+      // spaces collapsed, icons and emoji around the words dropped ("📤 Share", "Copy ✓")
+      const clean = (s) => (s || '').replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}!.]+$/gu, '')
+      const host = location.hostname
+      // A step some games need before their Share shows up, or a menu item that is the result there
+      const extra = (el, text) =>
+        // Immaculate Grid: below 9/9 the summary offers Keep Guessing, and Share only appears after this
+        (/sports-reference\.com$/.test(host) && /-no-thanks$/.test(el.getAttribute('data-testid') || '')) ||
+        // GeoGuessr: a "Share your result" card opens its share dialog (Copy result, Share)
+        (/geoguessr\.com$/.test(host) && el.getAttribute('aria-haspopup') === 'dialog' && /^share your result/i.test(text)) ||
+        // NYT's own share menu, when the iPhone share sheet isn't offered: The Mini's result is the link
+        (/nytimes\.com$/.test(host) && /^copy link$/i.test(clean(el.getAttribute('aria-label'))))
+      const wanted = (el) => {
+        const text = clean(el.textContent)
+        if (text.length > 80 && !extra(el, text)) return false
+        return LABEL.test(clean(el.getAttribute('aria-label'))) || LABEL.test(text) || extra(el, text)
+      }
+      // Below the fold is fine (a long results column puts Share at the bottom, and a click doesn't
+      // need it on screen); hidden, disabled, off to the side or a link away is not.
+      const pressable = (el) => {
+        if (el.disabled || el.closest('[aria-hidden="true"], [inert], header, nav, footer')) return false
         if (el.tagName === 'A') {
           const href = el.getAttribute('href')
           if (href && href !== '#' && !/^javascript:/i.test(href)) return false // a link away, not a button
         }
         const r = el.getBoundingClientRect()
-        if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.right < 0 || r.top > innerHeight || r.left > innerWidth) return false
+        if (r.width < 8 || r.height < 8 || r.right < 0 || r.left > innerWidth) return false
         const s = getComputedStyle(el)
         return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.2 && s.pointerEvents !== 'none'
       }
+      // Buttons, plus plain text styled to be tapped (Poople's "Copy results" is a <span>), unless
+      // it sits inside a button, which is pressed itself.
+      const candidates = () => {
+        const out = Array.from(document.querySelectorAll('button, [role="button"], a'))
+        for (const el of document.querySelectorAll('span, div, p, li, label')) {
+          if (el.childElementCount > 0 || el.closest('button, [role="button"], a')) continue
+          if (!LABEL.test(clean(el.textContent))) continue
+          if (getComputedStyle(el).cursor === 'pointer') out.push(el)
+        }
+        return out
+      }
       // Presses wait while the player is tapping (playing means touching the page, so a touch only
-      // pauses it), so they never fight the player. Each button once, at most four a page: enough
-      // for a game whose Share opens its own menu with another Share inside (NYT), and the presses
-      // stop as soon as a score is saved.
+      // pauses it), so they never fight the player; buttons are still noticed meanwhile, so the
+      // press comes as soon as the pause ends. Each button once, at most four a page: enough for a
+      // step first (Immaculate Grid) or a Share that opens the game's own menu with another Share
+      // inside (NYT, GeoGuessr), and the presses stop as soon as a score is saved.
       let lastTouch = 0
       for (const type of ['pointerdown', 'touchstart', 'keydown']) {
         window.addEventListener(type, (e) => { if (e.isTrusted) lastTouch = Date.now() }, true)
@@ -163,20 +208,22 @@ enum ResultCatcher {
       const started = Date.now()
       const timer = setInterval(() => {
         if (saved || presses >= 4 || Date.now() - started > 45 * 60 * 1000) return clearInterval(timer)
-        if (Date.now() - lastTouch < 1500) return // the player is mid-tap
         if (document.hidden) return
         const now = Date.now()
-        for (const el of document.querySelectorAll('button, [role="button"], a')) {
-          if (pressed.has(el) || !LABEL.test(labelOf(el)) || !onScreen(el)) continue
-          const seen = firstSeen.get(el)
-          if (!seen) { firstSeen.set(el, now); continue }
-          if (now - seen < 800) continue // let the results finish animating in
-          pressed.add(el)
-          presses++
-          ourPressAt = Date.now()
-          quietly(() => el.click())
-          return
-        }
+        const paused = now - lastTouch < 1500 // the player is mid-tap
+        try {
+          for (const el of candidates()) {
+            if (pressed.has(el) || !wanted(el) || !pressable(el)) continue
+            const seen = firstSeen.get(el)
+            if (!seen) { firstSeen.set(el, now); continue }
+            if (paused || now - seen < 600) continue // let the results finish animating in
+            pressed.add(el)
+            presses++
+            ourPressAt = Date.now()
+            quietly(() => el.click())
+            return
+          }
+        } catch (e) {}
       }, 500)
     })()
     """#

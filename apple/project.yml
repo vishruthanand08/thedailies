@@ -20,7 +20,7 @@ settings:
     DEVELOPMENT_TEAM: "${DAILIES_TEAM}"
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "1.7"
-    CURRENT_PROJECT_VERSION: "11" # bump for every upload to App Store Connect
+    CURRENT_PROJECT_VERSION: "12" # bump for every upload to App Store Connect
     # HTTPS only, no custom encryption: skips the export-compliance question on each upload
     INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES

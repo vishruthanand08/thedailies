@@ -6,7 +6,8 @@ import { clockToSeconds, secondsToClock, dateForPuzzle } from './util.js'
 // derive a date from the puzzle number, so no staleness check).
 // `manual`: game also accepts a typed-in score (stored as unverified).
 // `embed`: the site can be played in an iframe on thedailies.lol (checked 2026-10-26; NYT, LinkedIn,
-// Krillion, EthnoGuessr and GeoGuessr refuse framing, and Worldle/Travle ask not to be framed).
+// Krillion, EthnoGuessr, GeoGuessr, Plain and Perceptle refuse framing, and Worldle/Travle/Noillirk ask
+// not to be framed).
 // `category`: one of CATEGORIES (the Today page groups games by it, and each has its own daily
 // crown and all-time standings).
 // `paid`: { what, deals: [{ label, url|null }] } for games behind a subscription; the tile shows a $
@@ -31,8 +32,32 @@ function yearlessDate(monthName, day) {
   return `${year}-${String(mi + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+// GeoGuessr's share date: "2026/11/11" or "2026-11-11", or "11/11/2026" / "11.11.2026" in US or UK
+// order. When both orders make a date, the one nearest today (US Eastern) wins.
+function geoDate(s) {
+  let m = s.match(/(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})/)
+  if (m) return isoDate(m[1], m[2], m[3])
+  m = s.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/)
+  if (!m) return null
+  const options = [isoDate(m[3], m[1], m[2]), isoDate(m[3], m[2], m[1])].filter(Boolean)
+  const today = Date.parse(new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }))
+  options.sort((a, b) => Math.abs(Date.parse(a) - today) - Math.abs(Date.parse(b) - today))
+  return options[0] ?? null
+}
+function isoDate(y, mo, d) {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
 function num(s) {
   return parseInt(String(s).replace(/,/g, ''), 10)
+}
+
+// A whole number written in any locale's style: "1,971", "1.971", "1 971" (a no-break or narrow
+// space too) or "1'971". Games format their numbers with the player's device locale.
+const INT = String.raw`\d{1,3}(?:[,.'\u00A0\u202F ]\d{3})+|\d+`
+function localInt(s) {
+  return parseInt(String(s).replace(/\D/g, ''), 10)
 }
 
 const SQUARES = new Set(['🟨', '🟩', '🟦', '🟪'])
@@ -92,7 +117,10 @@ function immaculateGrid({ id, name, emoji, color, url, mens, epoch }) {
       if (m[1] !== emoji) return null
       const label = m[2] ?? ''
       if (/women/i.test(label) || mens !== /men/i.test(label)) return null
-      const correct = num(m[4])
+      // The header's N/9 also counts answers found later in Keep Guessing, which the grid shows as
+      // ⬜️, so when the grid is there its 🟩 are the score.
+      const cells = Array.from(text).filter((c) => c === '🟩' || c === '⬜')
+      const correct = cells.length === 9 ? cells.filter((c) => c === '🟩').length : num(m[4])
       const r = text.match(/Rarity:\s*([\d,]+)/i)
       const rarity = r ? Math.min(900, num(r[1])) : 900
       return {
@@ -110,11 +138,12 @@ export const GAMES = [
     url: 'https://worldle.teuteuf.fr', metricLabel: 'guesses', better: 'lower',
     epoch: { date: '2022-01-22', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/#Worldle\s+#([\d,]+)\s*(?:\((\d{2})\.(\d{2})\.(\d{4})\))?\s+([1-6X])\/6/i)
+      // 😛 instead of the guesses: a lifesaver was used, so it counts as a miss
+      const m = text.match(new RegExp(`#Worldle\\s+#(${INT})\\s*(?:\\((\\d{2})\\.(\\d{2})\\.(\\d{4})\\))?\\s+([1-6X]|😛)\\s*\\/\\s*6`, 'iu'))
       if (!m) return null
-      const guesses = m[5].toUpperCase() === 'X' ? 7 : num(m[5])
+      const miss = !/^[1-6]$/.test(m[5])
       const date = m[2] ? `${m[4]}-${m[3]}-${m[2]}` : null
-      return { puzzleNumber: num(m[1]), date, metric: guesses, display: m[5].toUpperCase() === 'X' ? 'X/6' : `${m[5]}/6` }
+      return { puzzleNumber: localInt(m[1]), date, metric: miss ? 7 : num(m[5]), display: `${m[5].toUpperCase()}/6` }
     },
   },
   {
@@ -122,10 +151,11 @@ export const GAMES = [
     url: 'https://www.nytimes.com/games/wordle', metricLabel: 'guesses', better: 'lower',
     epoch: { date: '2021-06-19', first: 0 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/(?:^|\s)Wordle\s+([\d,]+)\s+([1-6X])\/6(\*)?/i)
+      // the number is in the device's style: "1,971", "1.971", "1 971", "1'971"
+      const m = text.match(new RegExp(`(?:^|\\s)Wordle\\s+#?(${INT})\\s+([1-6X])\\s*\\/\\s*6(\\*)?`, 'i'))
       if (!m) return null
       const guesses = m[2].toUpperCase() === 'X' ? 7 : num(m[2])
-      return { puzzleNumber: num(m[1]), metric: guesses, display: `${m[2].toUpperCase()}/6${m[3] || ''}` }
+      return { puzzleNumber: localInt(m[1]), metric: guesses, display: `${m[2].toUpperCase()}/6${m[3] || ''}` }
     },
   },
   {
@@ -218,6 +248,13 @@ export const GAMES = [
     parse(text) {
       const m = text.match(/(?:^|\n)\s*Pinpoint\s+#([\d,]+)/i)
       if (!m) return null
+      // box format: "🤔 🤔 📌 ⬜ ⬜ (3/5)", or (X/5) for a miss
+      const box = text.match(/\(\s*([1-5X])\s*\/\s*5\s*\)/i)
+      if (box) {
+        if (box[1].toUpperCase() === 'X') return { puzzleNumber: num(m[1]), metric: 6, display: 'Missed' }
+        const guesses = num(box[1])
+        return { puzzleNumber: num(m[1]), metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
+      }
       const g = text.match(/(\d+)\s*guess/i)
       if (g) {
         const guesses = num(g[1])
@@ -262,9 +299,18 @@ export const GAMES = [
   {
     id: 'geoguessr', category: 'geography', name: 'GeoGuessr Daily', emoji: '🌍', color: '#B8E0C8',
     url: 'https://www.geoguessr.com/daily-challenges', metricLabel: 'points', better: 'higher',
-    note: 'GeoGuessr has no official share text — tap “+ score”, or paste GGShare extension text.',
-    epoch: null, dateTolerance: null, manual: true,
+    // From geoguessr.com's code (2026-11-11), its own share: "GeoGuessr Daily · 11/11/2026 · 18,234 🥈",
+    // a row of squares per round (with "Show round details", "3,612 pts · …" under each), "Now it's
+    // your turn! 👇", "www.geoguessr.com/dc/<code>". The date and number follow the account's
+    // locale (11/11/2026 US or UK order, 2026/11/11); Platinum is "🌟 25,000 🌟". Older pastes came
+    // from the GGShare extension ("Total: 18,234").
+    epoch: null, dateTolerance: 1, manual: true,
     parse(text) {
+      const d = text.match(new RegExp(`GeoGuessr Daily\\s*[·•]\\s*([^·•\\n]+?)\\s*[·•]\\s*(?:🌟\\s*)?(${INT})`, 'u'))
+      if (d) {
+        const pts = Math.min(25000, localInt(d[2]))
+        return { date: geoDate(d[1]), metric: pts, display: `${pts.toLocaleString('en-US')} pts` }
+      }
       if (!/geoguessr/i.test(text)) return null
       const m = text.match(/total:?\s*([\d,]+)/i) || text.match(/([\d,]{3,6})\s*(?:points|pts)/i)
       if (!m) return null
@@ -292,19 +338,25 @@ export const GAMES = [
   {
     id: 'travle', category: 'geography', name: 'Travle', emoji: '🧭', color: '#F2C7A7',
     url: 'https://travle.earth', metricLabel: 'extra guesses', better: 'lower',
-    epoch: null, dateTolerance: null, manual: false,
+    // From travle.earth's code (2026-11-11): "#travle #1428 (hard mode) +2 (Perfect)", tags in any
+    // order after the number, "(3 away)" for a miss. The main game's #1 was 2022-12-15; regional
+    // variants (#travle_usa, #travle_gbr, …) are numbered from their own launches, so they get no
+    // date check.
+    epoch: { date: '2022-12-15', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      // covers regional variants too: #travle_usa, #travle_gb, ...
-      const m = text.match(/#travle(?:_[a-z]+)?\s+#([\d,]+)(?:\s+\+(\d+))?/i)
+      const m = text.match(/#travle(_[a-z]+)?\s+#([\d,]+)([^\n]*)/i)
       if (!m) return null
-      if (m[2] != null) {
-        const extra = num(m[2])
-        const perfect = /perfect/i.test(text)
-        return { puzzleNumber: num(m[1]), metric: extra, display: perfect ? 'Perfect' : `+${extra}` }
+      const puzzleNumber = m[1] ? undefined : num(m[2])
+      const tail = m[3]
+      const plus = tail.match(/\+(\d+)/)
+      if (plus) {
+        const extra = num(plus[1])
+        const perfect = /perfect/i.test(tail)
+        return { puzzleNumber, metric: extra, display: perfect ? 'Perfect' : `+${extra}` }
       }
-      const away = text.match(/\((\d+)\s*away\)/i)
+      const away = tail.match(/\((\d+)\s*away\)/i)
       const dist = away ? num(away[1]) : 1
-      return { puzzleNumber: num(m[1]), metric: 20 + dist, display: 'DNF' }
+      return { puzzleNumber, metric: 20 + dist, display: 'DNF' }
     },
   },
 
@@ -326,7 +378,7 @@ export const GAMES = [
 
   {
     id: 'perceptle', category: 'words', name: 'Perceptle', emoji: '👁️', color: '#E2D9F6',
-    url: 'https://perceptle.com', embed: true, metricLabel: 'points', better: 'higher',
+    url: 'https://perceptle.com', metricLabel: 'points', better: 'higher',
     // Verified from a real share 2026-10-28: "Perceptle #103 - F (31)\n🔢 0  🎯 1  📐 45  🥁 10  ✂️ 100\n
     // https://perceptle.com". From perceptle.com's own code: five tests each 0-100, the score is
     // their average (grades S 95+, A 85+, B 70+, C 55+, D 40+, F), #1 was 2026-07-18, and Fridays
@@ -370,9 +422,10 @@ export const GAMES = [
     // It refuses framing (X-Frame-Options: DENY), so Play opens a new tab on the website.
     epoch: { date: '2026-10-18', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/^\s*Plain\s+#(\d+)\s*[—–-]\s*(?:✈️?\s*)?([\d,]+)\s*m\b/)
+      // the meters are in the player's locale: "6,120 m", "6.120 m", "6 120 m"
+      const m = text.match(new RegExp(`^\\s*Plain\\s+#(\\d+)\\s*[—–-]\\s*(?:✈️?\\s*)?(${INT})\\s*m\\b`))
       if (!m) return null
-      const meters = num(m[2])
+      const meters = localInt(m[2])
       return { puzzleNumber: num(m[1]), metric: meters, display: `${meters.toLocaleString('en-US')} m` }
     },
   },
@@ -387,9 +440,10 @@ export const GAMES = [
     // a "Play on the official site" card, so Play opens a new tab on the website.
     epoch: { date: '2026-09-27', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/^\s*Noillirk(?::\s*The\s+Daily\s+Climb\s*\|\s*No\.\s*|\s+daily\s+#)(\d+)\s*[—–-]\s*([\d,]+)\s*m\b/i)
+      // 10,000 m and up is shared rounded to km ("12 km"), and numbers are in the player's locale
+      const m = text.match(new RegExp(`^\\s*Noillirk(?::\\s*The\\s+Daily\\s+Climb\\s*\\|\\s*No\\.\\s*|\\s+daily\\s+#)(\\d+)\\s*[—–-]\\s*(${INT})\\s*(km|m)\\b`, 'i'))
       if (!m) return null
-      const meters = num(m[2])
+      const meters = localInt(m[2]) * (m[3].toLowerCase() === 'km' ? 1000 : 1)
       return { puzzleNumber: num(m[1]), metric: meters, display: `${meters.toLocaleString('en-US')} m` }
     },
   },
@@ -451,9 +505,13 @@ export const GAMES = [
   {
     id: 'costcodle', category: 'words', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
     url: 'https://costcodle.com', embed: true, metricLabel: 'guesses', better: 'lower',
-    epoch: null, dateTolerance: null, manual: false,
+    // From costcodle.com's own code (2026-11-11): since V2 (2026-11-10) the guess-the-price game is
+    // "Classic" ("Costcodle Classic #1149 3/6", rows of ⬆️/⬇️/✅, "Play now at https://www.costcodle.com")
+    // and the default tab is a new mode, "Costcodle Checkout #N", which isn't this game. Numbers run
+    // daily: 2023-09-21 is #2. Older shares had no "Classic".
+    epoch: { date: '2023-09-20', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Costcodle\s+#([\d,]+)\s+([1-6X])\/6/i)
+      const m = text.match(/Costcodle\s+(?:Classic\s+)?#\s*([\d,]+)\s+([1-6X])\s*\/\s*6/i)
       if (!m) return null
       const guesses = m[2].toUpperCase() === 'X' ? 7 : num(m[2])
       return { puzzleNumber: num(m[1]), metric: guesses, display: `${m[2].toUpperCase()}/6` }
@@ -467,10 +525,11 @@ export const GAMES = [
     parse(text) {
       if (!/fermi/i.test(text)) return null
       const n = text.match(/No\.?\s*0*(\d+)/i)
-      // the overall score line, not the per-question multiples
-      const s = text.match(/([\d.]+)\s*[x×]\s*score/i) || [...text.matchAll(/([\d.]+)\s*[x×]/gi)].pop()
+      // the overall score line ("1.19× score · top 3%"), never a per-question multiple; 1,000× and up
+      // has a thousands comma
+      const s = text.match(/([\d.,]+)\s*[x×]\s*score/i)
       if (!s) return null
-      const mult = parseFloat(s[1])
+      const mult = parseFloat(s[1].replace(/,/g, ''))
       if (Number.isNaN(mult)) return null
       return { puzzleNumber: n ? num(n[1]) : undefined, metric: mult, display: `${mult}×` }
     },
@@ -478,40 +537,33 @@ export const GAMES = [
   {
     id: 'maptap', category: 'geography', name: 'MapTap', emoji: '📍', color: '#F7D9B8',
     url: 'https://maptap.gg', embed: true, metricLabel: 'points', better: 'higher',
-    // Verified live 2026-10-26: "www.maptap.gg October 26\n75🤗 69😁 ...\nFinal score: 457"
+    // Verified live 2026-10-26: "www.maptap.gg October 26\n75🤗 69😁 ...\nFinal score: 457". From
+    // maptap.gg's code (2026-11-11) the first word is "www.maptap.gg", "https://maptap.gg" or "MapTap"
+    // (link hidden). Only the daily starts that way: a player's map ("<title> by <author>", a
+    // /m/<id> link) and best-of rounds ("?bestof=") have no date line and don't count.
     epoch: null, dateTolerance: 1, manual: true,
     parse(text) {
-      if (!/maptap/i.test(text)) return null
-      const m = text.match(/final score:?\s*([\d,]+)/i) || text.match(/([\d,]+)\s*\/\s*1,?000/) || text.match(/score:?\s*([\d,]+)/i)
+      const h = text.match(/(?:^|\n)\s*(?:(?:https?:\/\/)?(?:www\.)?maptap\.gg|MapTap)\s+([A-Za-z]{3,9})\.?\s+(\d{1,2})(?!\d)/i)
+      if (!h || /maptap\.gg\/m\/|bestof=/i.test(text)) return null
+      const m = text.match(/final score:?\s*([\d,]+)/i)
       if (!m) return null
       const pts = num(m[1])
-      // share date has no year ("October 26") — assume the current year
-      let date = parseLongDate(text)
-      if (!date) {
-        const md = text.match(/([A-Za-z]{3,9})\.?\s+(\d{1,2})(?!\d)/)
-        if (md) date = yearlessDate(md[1], md[2])
-      }
-      return { date, metric: pts, display: `${pts.toLocaleString()} pts` }
+      // the date has no year ("October 26"): assume the current year
+      return { date: yearlessDate(h[1], h[2]), metric: pts, display: `${pts.toLocaleString()} pts` }
     },
   },
   {
     id: 'krillion', category: 'words', name: 'Krillion', emoji: '🐳', color: '#B8D4F0',
     url: 'https://krillion.io', metricLabel: 'score', better: 'higher',
-    // Verified live 2026-10-26: "Krillion #103 🦐\n365\n\n🏮🦑🫧🐟🦑🦑🦑"
+    // Verified live 2026-10-26: "Krillion #103 🦐\n365\n\n🏮🦑🫧🐟🦑🦑🦑"; by 2026-11-11 krillion.io's
+    // code puts it on one line, "Krillion #119 🦐 365  🏮🦑…" (then "  https://krillion.io" if the
+    // player keeps the link on). The score comes right after the number and the shrimp. Archive
+    // ("Krillion ⟲ #") and unlimited ("Krillion ∞ #") plays don't match.
     epoch: { date: '2026-07-16', first: 1 }, dateTolerance: 1, manual: true,
     parse(text) {
-      const m = text.match(/Krillion\s+#([\d,]+)/i)
-      if (!m) {
-        if (!/krillion/i.test(text)) return null
-        const loose = text.match(/([\d,]+)\s*(?:m\b|meters|pts|points)/i)
-        if (!loose) return null
-        const v = num(loose[1])
-        return { metric: v, display: `${v.toLocaleString()}` }
-      }
-      // score is the standalone number line, not the dive number
-      const s = text.match(/^\s*([\d,]+)\s*$/m)
-      if (!s) return null
-      const v = num(s[1])
+      const m = text.match(/Krillion\s+#([\d,]+)\s*(?:🦐)?\s*([\d,]+)(?![\d,])/iu)
+      if (!m) return null
+      const v = num(m[2])
       return { puzzleNumber: num(m[1]), metric: v, display: `${v.toLocaleString()}` }
     },
   },
@@ -538,8 +590,11 @@ export const GAMES = [
       const m = text.match(/([\d,]+)\s*\/\s*15,?000/) || text.match(/([\d,]+)\s*\/\s*([\d,]+)/)
       if (!m) return null
       const pts = num(m[1])
+      // the date is in the device's style: "Nov 11" (US) or "11 Nov" (UK and most others)
       const md = text.match(/Daily Score\s*[·•-]?\s*([A-Za-z]{3,9})\.?\s+(\d{1,2})(?!\d)/i)
-      return { date: md ? yearlessDate(md[1], md[2]) : null, metric: pts, display: `${pts.toLocaleString()} pts` }
+      const dm = !md && text.match(/Daily Score\s*[·•-]?\s*(\d{1,2})\.?\s+([A-Za-z]{3,9})\b/i)
+      const date = md ? yearlessDate(md[1], md[2]) : dm ? yearlessDate(dm[2], dm[1]) : null
+      return { date, metric: pts, display: `${pts.toLocaleString()} pts` }
     },
   },
   immaculateGrid({
@@ -562,7 +617,7 @@ export const GAMES = [
     // Guess the NBA player in 8; X is a miss (→ 9). Puzzle numbers run daily: #1707 on 2026-10-28.
     epoch: { date: '2022-02-25', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Poeltl\s+#([\d,]+)\s*\|\s*([1-8X])\s*\/\s*8/i)
+      const m = text.match(/Poeltl\s+#?\s*([\d,]+)\s*\|\s*([1-8X])\s*\/\s*8/i)
       if (!m) return null
       const miss = m[2].toUpperCase() === 'X'
       return { puzzleNumber: num(m[1]), metric: miss ? 9 : num(m[2]), display: `${m[2].toUpperCase()}/8` }
@@ -577,7 +632,7 @@ export const GAMES = [
     // course's par ("E" for level). Practice and Wild Three shares have no "Round #", so don't count.
     epoch: { date: '2026-01-01', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Daily Holes\s*[—–-]\s*Round\s*#(\d+)[^\n]*\n[^\n]*·\s*([+\-−]?\d+|E)\s*\((\d+)\)/i)
+      const m = text.match(/Daily Holes\s*[—–-]\s*Round\s*#(\d+)[\s\S]*?·\s*([+\-−]?\d+|E)\s*\((\d+)\)/i)
       if (!m) return null
       const toPar = /^e$/i.test(m[2]) ? 0 : Number(m[2].replace('−', '-'))
       const shown = toPar > 0 ? `+${toPar}` : toPar === 0 ? 'E' : String(toPar)
@@ -594,15 +649,11 @@ export const GAMES = [
     epoch: null, dateTolerance: null, manual: true,
     parse(text) {
       if (!/ethnoguessr/i.test(text)) return null
+      // only the average: any other number in the text is the best round (or a different game)
       const avg = text.match(/average of ([\d,]+)/i)
-      if (avg) {
-        const pts = num(avg[1])
-        return { metric: pts, display: `${pts.toLocaleString()} avg` }
-      }
-      const nums = [...text.matchAll(/([\d,]{3,7})/g)].map((m) => num(m[1])).filter((v) => v > 0)
-      if (!nums.length) return null
-      const pts = Math.max(...nums)
-      return { metric: pts, display: `${pts.toLocaleString()} pts` }
+      if (!avg) return null
+      const pts = num(avg[1])
+      return { metric: pts, display: `${pts.toLocaleString()} avg` }
     },
   },
 ]
