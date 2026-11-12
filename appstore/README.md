@@ -31,7 +31,7 @@ The Dailies turns the daily puzzles you already play into a friendly competition
 
 Just play. When you finish a game, your score saves itself and lands on your friends' leaderboard. See who won every game today, take the daily crown, keep your streak alive and cheer friends on in the feed.
 
-• Scores save themselves: play any game in the app and your result is on the board when you finish, with Undo if you didn't mean it
+• Scores save themselves: play any game in the app and your result is on the board when you finish, and you’re straight back to your friends
 • One leaderboard for word games, logic puzzles, geography and trivia games
 • A daily crown for whoever scores the most points across every game, plus a crown for each kind of game
 • Brag with one tap: share your place on the board along with your score, or your whole day
