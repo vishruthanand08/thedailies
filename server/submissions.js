@@ -11,9 +11,15 @@ import { todayISO, daysApart, isValidISODate, secondsToClock } from './util.js'
 export const submissionsRouter = Router()
 submissionsRouter.use(requireAuth)
 
+// 0 = Sunday … 6 = Saturday, for a YYYY-MM-DD day
+const weekday = (iso) => new Date(`${iso}T12:00:00Z`).getUTCDay()
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
 submissionsRouter.get('/games', (req, res) => {
+  // a bonus puzzle only on its day of the week (the player's own today)
+  const day = weekday(todayISO(req.user.tz))
   res.json({
-    games: visibleGames().map(({ id, category, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
+    games: visibleGames().filter((g) => g.bonusDay == null || g.bonusDay === day).map(({ id, category, name, emoji, color, url, metricLabel, better, manual, note, embed, paid }) => ({
       id, category, name, emoji, color, url, metricLabel, better, manual, note, embed: !!embed, paid: paid ?? null,
     })),
     categories: visibleCategories(),
@@ -65,13 +71,21 @@ submissionsRouter.post('/', async (req, res) => {
     if (derived && game.dateTolerance != null) {
       if (daysApart(derived, today) > game.dateTolerance) {
         return res.status(400).json({
-          error: `That looks like ${/^the /i.test(game.name) ? '' : 'the '}${game.name} from ${derived}, not today's. Only today's puzzle counts.`,
+          error: game.bonusDay != null
+            ? `That looks like the ${game.name} from ${derived}. Only this week's bonus puzzle counts.`
+            : `That looks like ${/^the /i.test(game.name) ? '' : 'the '}${game.name} from ${derived}, not today's. Only today's puzzle counts.`,
         })
       }
       puzzleDate = derived <= today ? derived : today
     }
-    // A weekly puzzle (Wordle in 1) counts on the day it's played, once per puzzle
-    if (game.weekly) puzzleDate = today
+    // A bonus puzzle (Wordle in 1, Connections 3x3) counts on its day of the week only, for the
+    // board of the day it's played
+    if (game.bonusDay != null) {
+      if (weekday(today) !== game.bonusDay) {
+        return res.status(400).json({ error: `${game.name} is on The Dailies on ${DAY_NAMES[game.bonusDay]}s, so that score wasn’t saved.` })
+      }
+      puzzleDate = today
+    }
     gameId = game.id
     metric = parsed.metric
     display = parsed.display
@@ -101,15 +115,6 @@ submissionsRouter.post('/', async (req, res) => {
     'SELECT id FROM submissions WHERE user_id = $1 AND game_id = $2 AND puzzle_date = $3',
     [req.user.id, gameId, puzzleDate]
   )
-  if (gameById[gameId].weekly && puzzleNumber != null && !dupe.rows.length) {
-    const week = await q(
-      'SELECT id FROM submissions WHERE user_id = $1 AND game_id = $2 AND puzzle_number = $3',
-      [req.user.id, gameId, puzzleNumber]
-    )
-    if (week.rows.length) {
-      return res.status(409).json({ error: `You already have a score for this week's ${gameById[gameId].name}. A new one comes out each week.` })
-    }
-  }
   if (dupe.rows.length) {
     return res.status(409).json({
       error: `You already have a ${gameById[gameId].name} score today. Delete it from the board first if you need to fix it.`,

@@ -171,6 +171,22 @@ function immaculateGrid({ id, name, emoji, color, url, mens, epoch }) {
   }
 }
 
+const BONUS_PAID = {
+  what: 'Bonus puzzles are part of an NYT Games subscription (a few are free).',
+  deals: [
+    { label: 'Free if your school or workplace has an NYT pass (sign in with that email)', url: 'https://www.nytimes.com/passes' },
+    { label: 'Intro offers, or split an All Access Family plan with up to 3 friends', url: 'https://www.nytimes.com/subscription/games' },
+  ],
+}
+// An NYT bonus puzzle's share: its title, then "Bonus <Month D, YYYY>" (the week's drop date) close by
+function bonusShare(text, title) {
+  const head = text.match(new RegExp(title, 'i'))
+  if (!head) return null
+  const rest = text.slice(head.index + head[0].length)
+  const date = parseLongDate(rest.slice(0, 50))
+  return date ? { date, rest } : null
+}
+
 export const GAMES = [
   {
     id: 'worldle', category: 'geography', name: 'Worldle', emoji: '🗺️', color: '#AFE3C0',
@@ -188,39 +204,55 @@ export const GAMES = [
       return { puzzleNumber: n.number, date, metric: miss ? 7 : num(s.got), display: `${s.got.toUpperCase()}/6` }
     },
   },
+  // NYT's weekly bonus puzzles (a new set every Wednesday, played from the Bonus Puzzles hub, part of
+  // an NYT Games subscription). Each is on The Dailies one day a week (`bonusDay`), and only that
+  // week's puzzle counts. Shares read "<title>\nBonus November 11, 2026\n\n…".
   {
     id: 'wordleinone', category: 'nyt', name: 'Wordle in 1', emoji: '1️⃣', color: '#D3EBC6',
     url: 'https://www.nytimes.com/games/bonus/hub', metricLabel: 'time', better: 'lower',
-    // From a real share (2026-11-16) and nytimes.com's code: one of NYT's weekly bonus puzzles,
-    // played from the Bonus Puzzles hub. Several Wordles, each to be solved in one guess from the
-    // clues; a square per word (🟩 solved, 💡 revealed) and the total time when the timer is on:
-    // "Wordle in 1\nBonus November 11, 2026\n\n🟩🟩🟩🟩🟩 0:26". `weekly`: it counts on the day
-    // it's played, once per puzzle (puzzleNumber is the puzzle's date as yyyymmdd).
-    // Ranked by words revealed, then time: each 💡 adds an hour; no timer counts as the slowest.
-    weekly: true, epoch: null, dateTolerance: 7, manual: false,
-    paid: {
-      what: 'Bonus puzzles are part of an NYT Games subscription (a few are free).',
-      deals: [
-        { label: 'Free if your school or workplace has an NYT pass (sign in with that email)', url: 'https://www.nytimes.com/passes' },
-        { label: 'Intro offers, or split an All Access Family plan with up to 3 friends', url: 'https://www.nytimes.com/subscription/games' },
-      ],
-    },
+    // From a real share (2026-11-16) and nytimes.com's code: several Wordles, each to be solved in
+    // one guess from the clues; a square per word (🟩 solved, 💡 revealed) and the total time when
+    // the timer is on ("🟩🟩🟩🟩🟩 0:26"). Ranked by words revealed, then time: each 💡 adds an hour,
+    // and no timer counts as the slowest.
+    bonusDay: 2, epoch: null, dateTolerance: 6, manual: false, paid: BONUS_PAID,
     parse(text) {
-      const head = text.match(/Wordle\s+in\s+(?:1|one)\b/i)
-      if (!head) return null
-      const rest = text.slice(head.index + head[0].length)
-      const date = parseLongDate(rest.slice(0, 50))
-      if (!date) return null
-      const solved = (rest.match(/🟩/gu) ?? []).length
-      const revealed = (rest.match(/💡/gu) ?? []).length
+      const b = bonusShare(text, 'Wordle\\s+in\\s+(?:1|one)\\b')
+      if (!b) return null
+      const solved = (b.rest.match(/🟩/gu) ?? []).length
+      const revealed = (b.rest.match(/💡/gu) ?? []).length
       if (solved + revealed === 0) return null
-      const t = rest.match(/(\d+:\d{2}(?::\d{2})?)/)
+      const t = b.rest.match(/(\d+:\d{2}(?::\d{2})?)/)
       const secs = t ? clockToSeconds(t[1]) : null
       return {
-        date,
-        puzzleNumber: Number(date.replace(/-/g, '')),
+        date: b.date,
         metric: revealed * 3600 + (secs ?? 3599),
         display: `${solved}/${solved + revealed}${secs != null ? ` · ${secondsToClock(secs)}` : ''}`,
+      }
+    },
+  },
+  {
+    id: 'connections3x3', category: 'nyt', name: 'Connections 3x3', emoji: '🟨', color: '#F1E2A6',
+    url: 'https://www.nytimes.com/games/bonus/hub', metricLabel: 'mistakes', better: 'lower',
+    // From a real share (2026-11-16) and nytimes.com's code: Connections with three groups of three,
+    // a row of three squares per guess ("Connections 3x3\nBonus September 2, 2026\n\n🟨🟨🟨\n🟪🟪🟪\n🟦🟦🟦").
+    bonusDay: 4, epoch: null, dateTolerance: 6, manual: false, paid: BONUS_PAID,
+    parse(text) {
+      const b = bonusShare(text, 'Connections\\s*3\\s*[x×]\\s*3')
+      if (!b) return null
+      let solved = 0
+      let mistakes = 0
+      for (const line of b.rest.split('\n')) {
+        const cells = Array.from(line.trim()).filter((ch) => SQUARES.has(ch))
+        if (cells.length !== 3) continue
+        if (cells.every((c) => c === cells[0])) solved++
+        else mistakes++
+      }
+      if (solved + mistakes === 0) return null
+      const failed = solved < 3
+      return {
+        date: b.date,
+        metric: failed ? 4 : mistakes,
+        display: failed ? 'Failed' : `${mistakes} mistake${mistakes === 1 ? '' : 's'}`,
       }
     },
   },
@@ -831,6 +863,7 @@ const SCORING = {
   mini: { perfect: 20, par: 45, zero: 180 },
   // total seconds for the week's words (+1 h per word revealed); a real run was 0:26
   wordleinone: { perfect: 15, par: 60, zero: 600 },
+  connections3x3: { perfect: 0, par: 1, zero: 3, failAt: 4 },
   queens: { perfect: 5, par: 30, zero: 180 },
   tango: { perfect: 13, par: 30, zero: 180 },
   zip: { perfect: 3, par: 10, zero: 120 },
