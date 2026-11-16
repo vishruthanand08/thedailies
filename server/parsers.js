@@ -69,10 +69,14 @@ function localInt(s) {
 //
 // numbered(text, name): the puzzle number after the name (no digits in between), and the text
 // after it, where the score is; null when the name or number isn't there.
-function numbered(text, name, gap = 60) {
-  const m = text.match(new RegExp(`${name}[^\\d]{0,${gap}}?(?:#|\\bNo\\.?|\\bNº)\\s*(\\d[\\d,]*)`, 'iu'))
+// `bare`: the number may stand alone ("Wordle 1,971", "Immaculate Grid 1319"), in the device's
+// number style.
+function numbered(text, name, gap = 60, { bare = false } = {}) {
+  const mark = bare ? '(?:#|\\bNo\\.?|\\bNº)?' : '(?:#|\\bNo\\.?|\\bNº)'
+  const digits = bare ? `(${INT})` : '(\\d[\\d,]*)'
+  const m = text.match(new RegExp(`${name}[^\\d]{0,${gap}}?${mark}\\s*${digits}`, 'iu'))
   if (!m) return null
-  return { number: num(m[1]), rest: text.slice(m.index + m[0].length) }
+  return { number: localInt(m[1]), rest: text.slice(m.index + m[0].length) }
 }
 // The first distance in the text, in meters: "5,478 m", "6 120m", "12 km"
 function meters(text) {
@@ -101,20 +105,20 @@ function linkedinGame(id, name, emoji, color, url, epochDate, kind) {
     dateTolerance: 3, // our LinkedIn epoch constants are best-effort
     manual: false,
     parse(text) {
-      const re = new RegExp(`(?:^|\\n)\\s*${name}\\s+#([\\d,]+)\\s*(?:\\|\\s*([^\\n]*))?`, 'i')
-      const m = text.match(re)
-      if (!m) return null
-      const rest = m[2] || text
+      // "Queens #925 | 0:50 👑", "Mini Sudoku #457 | 1:20 ✏️": the name (spaces optional), the
+      // number, then the first time (or "N guesses") anywhere after it
+      const n = numbered(text, `\\b${name.replace(/\s+/g, '\\s*')}\\b`, 10)
+      if (!n) return null
       if (kind === 'guesses') {
-        const g = rest.match(/(\d+)\s*guess/i) || text.match(/(\d+)\s*guess/i)
+        const g = n.rest.match(/(\d+)\s*guess/i)
         if (!g) return null
         const guesses = num(g[1])
-        return { puzzleNumber: num(m[1]), metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
+        return { puzzleNumber: n.number, metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
       }
-      const t = rest.match(/(\d+:\d{2}(?::\d{2})?)/) || text.match(/(\d+:\d{2}(?::\d{2})?)/)
+      const t = n.rest.match(/(\d+:\d{2}(?::\d{2})?)/)
       if (!t) return null
       const secs = clockToSeconds(t[1])
-      return { puzzleNumber: num(m[1]), metric: secs, display: secondsToClock(secs) }
+      return { puzzleNumber: n.number, metric: secs, display: secondsToClock(secs) }
     },
   }
 }
@@ -141,12 +145,17 @@ function immaculateGrid({ id, name, emoji, color, url, mens, epoch }) {
     id, category: 'sports', name, emoji, color, url, metricLabel: 'grid points', better: 'higher',
     epoch: { date: epoch, first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/(⚾|🏈|🏀)\uFE0F?\s*Immaculate Grid\s*(\((?:Men|Women)['’]?s\))?\s*#?(\d+)\s+(\d)\s*\/\s*9/i)
-      if (!m) return null
-      // the emoji says which sport (baseball and football titles are otherwise the same)
-      if (m[1] !== emoji) return null
-      const label = m[2] ?? ''
+      // "⚾️ Immaculate Grid 1319 6/9:"; the emoji says which sport (baseball and football titles
+      // are otherwise the same), "(Men's)" / "(Women's)" which basketball
+      const h = text.match(/(⚾|🏈|🏀|🏒)\uFE0F?[^\n]{0,6}?Immaculate Grid/iu)
+      if (!h || h[1] !== emoji) return null
+      const n = numbered(text.slice(h.index), 'Immaculate Grid', 20, { bare: true })
+      if (!n) return null
+      const label = text.slice(h.index, h.index + 40).match(/\((Men|Women)['’]?s\)/i)?.[1] ?? ''
       if (/women/i.test(label) || mens !== /men/i.test(label)) return null
+      const s = outOf(n.rest, '9')
+      if (!s || !/^\d$/.test(s.got)) return null
+      const m = [null, null, null, n.number, s.got]
       // The header's N/9 also counts answers found later in Keep Guessing, which the grid shows as
       // ⬜️, so when the grid is there its 🟩 are the score.
       const cells = Array.from(text).filter((c) => c === '🟩' || c === '⬜')
@@ -184,11 +193,13 @@ export const GAMES = [
     url: 'https://www.nytimes.com/games/wordle', metricLabel: 'guesses', better: 'lower',
     epoch: { date: '2021-06-19', first: 0 }, dateTolerance: 1, manual: false,
     parse(text) {
-      // the number is in the device's style: "1,971", "1.971", "1 971", "1'971"
-      const m = text.match(new RegExp(`(?:^|\\s)Wordle\\s+#?(${INT})\\s+([1-6X])\\s*\\/\\s*6(\\*)?`, 'i'))
-      if (!m) return null
-      const guesses = m[2].toUpperCase() === 'X' ? 7 : num(m[2])
-      return { puzzleNumber: localInt(m[1]), metric: guesses, display: `${m[2].toUpperCase()}/6${m[3] || ''}` }
+      // "Wordle 1,971 4/6*": the number in the device's style ("1.971", "1 971", "1'971")
+      const n = numbered(text, '\\bWordle\\b', 10, { bare: true })
+      if (!n) return null
+      const s = n.rest.match(/^[^\n\d]{0,10}?([1-6X])\s*\/\s*6(\*)?/i)
+      if (!s) return null
+      const guesses = s[1].toUpperCase() === 'X' ? 7 : num(s[1])
+      return { puzzleNumber: n.number, metric: guesses, display: `${s[1].toUpperCase()}/6${s[2] || ''}` }
     },
   },
   {
@@ -196,19 +207,21 @@ export const GAMES = [
     url: 'https://www.nytimes.com/games/connections', metricLabel: 'mistakes', better: 'lower',
     epoch: { date: '2023-06-12', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Connections\s*\n\s*Puzzle\s+#([\d,]+)/i)
-      if (!m) return null
+      // "Connections\nPuzzle #1249" (or on one line), then one row of four squares per guess
+      const n = numbered(text, '\\bConnections\\b', 20)
+      if (!n) return null
       let solved = 0
       let mistakes = 0
-      for (const line of text.split('\n')) {
+      for (const line of n.rest.split('\n')) {
         const cells = Array.from(line.trim()).filter((ch) => SQUARES.has(ch))
         if (cells.length !== 4) continue
         if (cells.every((c) => c === cells[0])) solved++
         else mistakes++
       }
+      if (solved + mistakes === 0) return null
       const failed = solved < 4
       return {
-        puzzleNumber: num(m[1]),
+        puzzleNumber: n.number,
         metric: failed ? 5 : mistakes,
         display: failed ? 'Failed' : `${mistakes} mistake${mistakes === 1 ? '' : 's'}`,
       }
@@ -221,11 +234,11 @@ export const GAMES = [
     // (🔵 theme word, 🟡 spangram, 💡 a hint used). Fewer hints is better.
     epoch: { date: '2024-03-04', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/(?:^|\n)\s*Strands\s+#([\d,]+)/i)
-      if (!m) return null
-      const hints = Array.from(text).filter((ch) => ch === '💡').length
+      const n = numbered(text, '\\bStrands\\b', 10)
+      if (!n) return null
+      const hints = Array.from(n.rest).filter((ch) => ch === '💡').length
       return {
-        puzzleNumber: num(m[1]),
+        puzzleNumber: n.number,
         metric: hints,
         display: hints === 0 ? 'No hints' : `${hints} hint${hints === 1 ? '' : 's'}`,
       }
@@ -279,28 +292,30 @@ export const GAMES = [
   {
     ...linkedinGame('pinpoint', 'Pinpoint', '📌', '#D4E6F7', 'https://www.linkedin.com/games/pinpoint', '2024-05-01', 'guesses'),
     parse(text) {
-      const m = text.match(/(?:^|\n)\s*Pinpoint\s+#([\d,]+)/i)
-      if (!m) return null
+      const n = numbered(text, '\\bPinpoint\\b', 10)
+      if (!n) return null
+      const m = [null, n.number]
+      const rest = n.rest
       // box format: "🤔 🤔 📌 ⬜ ⬜ (3/5)", or (X/5) for a miss
-      const box = text.match(/\(\s*([1-5X])\s*\/\s*5\s*\)/i)
+      const box = rest.match(/\(\s*([1-5X])\s*\/\s*5\s*\)/i)
       if (box) {
-        if (box[1].toUpperCase() === 'X') return { puzzleNumber: num(m[1]), metric: 6, display: 'Missed' }
+        if (box[1].toUpperCase() === 'X') return { puzzleNumber: m[1], metric: 6, display: 'Missed' }
         const guesses = num(box[1])
-        return { puzzleNumber: num(m[1]), metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
+        return { puzzleNumber: m[1], metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
       }
-      const g = text.match(/(\d+)\s*guess/i)
+      const g = rest.match(/(\d+)\s*guess/i)
       if (g) {
         const guesses = num(g[1])
-        return { puzzleNumber: num(m[1]), metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
+        return { puzzleNumber: m[1], metric: guesses, display: `${guesses} guess${guesses === 1 ? '' : 'es'}` }
       }
       // Fallback: position of 📌 among the five boxes ("📌 ⬜ ⬜ ⬜ ⬜")
-      const row = text.split('\n').find((l) => l.includes('📌'))
+      const row = rest.split('\n').find((l) => l.includes('📌'))
       if (row) {
         const cells = Array.from(row.trim()).filter((c) => c === '📌' || c === '⬜' || c === '🟦')
         const idx = cells.indexOf('📌')
-        if (idx !== -1) return { puzzleNumber: num(m[1]), metric: idx + 1, display: `${idx + 1} guess${idx === 0 ? '' : 'es'}` }
+        if (idx !== -1) return { puzzleNumber: m[1], metric: idx + 1, display: `${idx + 1} guess${idx === 0 ? '' : 'es'}` }
       }
-      return { puzzleNumber: num(m[1]), metric: 6, display: 'Missed' }
+      return { puzzleNumber: m[1], metric: 6, display: 'Missed' }
     },
   },
 
@@ -312,17 +327,24 @@ export const GAMES = [
     // everyone on a given day, so ranking by hints is equivalent to ranking vs par.
     epoch: null, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Minute Cryptic\s*[-–—]\s*(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})/i)
-      if (!m) return null
-      const mi = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase())
+      // "Minute Cryptic - 26 October, 2026" (or "October 26, 2026"), then "N hints" somewhere after
+      const head = text.match(/Minute Cryptic(?!\s*Mini)/i)
+      if (!head) return null
+      const rest = text.slice(head.index + head[0].length)
+      const top = rest.slice(0, 40)
+      const dm = top.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9}),?\s+(\d{4})/)
+      const md = !dm && top.match(/([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/)
+      const d = dm ? { day: dm[1], month: dm[2], year: dm[3] } : md ? { day: md[2], month: md[1], year: md[3] } : null
+      if (!d) return null
+      const mi = MONTHS.indexOf(d.month.slice(0, 3).toLowerCase())
       if (mi === -1) return null
-      const h = text.match(/(\d+)\s*hints?\b/i)
+      const h = rest.match(/(\d+)\s*hints?\b/i)
       if (!h) return null
       const hints = num(h[1])
-      const par = text.match(/(\d+)\s+(under|over)\s+(?:the\s+)?(?:community\s+)?par/i) || text.match(/\b(at|on)\s+(?:the\s+)?(?:community\s+)?par/i)
+      const par = rest.match(/(\d+)\s+(under|over)\s+(?:the\s+)?(?:community\s+)?par/i) || rest.match(/\b(at|on)\s+(?:the\s+)?(?:community\s+)?par/i)
       const vsPar = !par ? '' : par[1] === 'at' || par[1] === 'on' ? ' · par' : ` · ${par[2].toLowerCase() === 'under' ? '−' : '+'}${par[1]} par`
       return {
-        date: `${m[3]}-${String(mi + 1).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`,
+        date: `${d.year}-${String(mi + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`,
         metric: hints,
         display: `${hints} hint${hints === 1 ? '' : 's'}${vsPar}`,
       }
@@ -339,10 +361,17 @@ export const GAMES = [
     // from the GGShare extension ("Total: 18,234").
     epoch: null, dateTolerance: 1, manual: true,
     parse(text) {
-      const d = text.match(new RegExp(`GeoGuessr Daily\\s*[·•]\\s*([^·•\\n]+?)\\s*[·•]\\s*(?:🌟\\s*)?(${INT})`, 'u'))
-      if (d) {
-        const pts = Math.min(25000, localInt(d[2]))
-        return { date: geoDate(d[1]), metric: pts, display: `${pts.toLocaleString('en-US')} pts` }
+      // "GeoGuessr Daily · 11/11/2026 · 18,234 🥈": the date near the name, then the first number
+      // after the date is the total, whatever separators sit between
+      const head = text.match(/GeoGuessr\s+Daily/i)
+      if (head) {
+        const rest = text.slice(head.index + head[0].length)
+        const d = rest.slice(0, 30).match(/\d{4}[/.-]\d{1,2}[/.-]\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{4}/)
+        const total = d && firstInt(rest.slice(d.index + d[0].length))
+        if (total != null) {
+          const pts = Math.min(25000, total)
+          return { date: geoDate(d[0]), metric: pts, display: `${pts.toLocaleString('en-US')} pts` }
+        }
       }
       if (!/geoguessr/i.test(text)) return null
       const m = text.match(/total:?\s*([\d,]+)/i) || text.match(/([\d,]{3,6})\s*(?:points|pts)/i)
@@ -377,7 +406,7 @@ export const GAMES = [
     // date check.
     epoch: { date: '2022-12-15', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/#travle(_[a-z]+)?\s+#([\d,]+)([^\n]*)/i)
+      const m = text.match(/#?travle(_[a-z]+)?[^\d\n]{0,10}?#\s*([\d,]+)([^\n]*)/i)
       if (!m) return null
       const puzzleNumber = m[1] ? undefined : num(m[2])
       const tail = m[3]
@@ -522,12 +551,12 @@ export const GAMES = [
     // #905 on 2026-10-28. Archive plays link to /archive/<date>, so they don't count for today.
     epoch: { date: '2024-05-07', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/DailyTens\s+#([\d,]+)/i)
-      if (!m || /dailytens\.com\/archive\//i.test(text)) return null
-      const found = (text.match(/🏆/g) ?? []).length
-      const missed = (text.match(/❌/g) ?? []).length
+      const n = numbered(text, 'Daily\\s*Tens', 10)
+      if (!n || /dailytens\.com\/archive\//i.test(text)) return null
+      const found = (n.rest.match(/🏆/g) ?? []).length
+      const missed = (n.rest.match(/❌/g) ?? []).length
       if (found + missed !== 10) return null
-      return { puzzleNumber: num(m[1]), metric: found, display: `${found}/10` }
+      return { puzzleNumber: n.number, metric: found, display: `${found}/10` }
     },
   },
 
@@ -693,11 +722,15 @@ export const GAMES = [
     // course's par ("E" for level). Practice and Wild Three shares have no "Round #", so don't count.
     epoch: { date: '2026-01-01', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Daily Holes\s*[—–-]\s*Round\s*#(\d+)[\s\S]*?·\s*([+\-−]?\d+|E)\s*\((\d+)\)/i)
+      // "Daily Holes — Round #315 · ON FIRE\nBriarwood Links · +2 (38)": practice and Wild Three
+      // shares have no round number
+      const n = numbered(text, 'Daily Holes', 30)
+      if (!n) return null
+      const m = n.rest.match(/([+\-−]?\d+|\bE)\s*\((\d+)\)/i)
       if (!m) return null
-      const toPar = /^e$/i.test(m[2]) ? 0 : Number(m[2].replace('−', '-'))
+      const toPar = /^e$/i.test(m[1]) ? 0 : Number(m[1].replace('−', '-'))
       const shown = toPar > 0 ? `+${toPar}` : toPar === 0 ? 'E' : String(toPar)
-      return { puzzleNumber: num(m[1]), metric: toPar, display: `${shown} (${m[3]})` }
+      return { puzzleNumber: n.number, metric: toPar, display: `${shown} (${m[2]})` }
     },
   },
 
