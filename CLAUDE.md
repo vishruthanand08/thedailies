@@ -59,7 +59,8 @@ Debug builds accept launch arguments for scripted Simulator runs: `-dailiesServe
 - `epoch: { date, first }`: the date of puzzle `#first`, used to derive the puzzle's date from its number. If it is `null`, the date can only come from text embedded in the share.
 - `dateTolerance`: the number of days the derived date may differ from today. If no date can be derived, the staleness check is skipped.
 - `manual`: also accept a typed-in score.
-- `paid`: `{ what, deals: [{ label, url|null }] }` for games behind a subscription (currently only The Mini). The tile shows a `$` badge that lists the deals.
+- `paid`: `{ what, deals: [{ label, url|null }] }` for games behind a subscription (The Mini, Wordle in 1).
+- `weekly`: a puzzle that comes out once a week (Wordle in 1, an NYT bonus puzzle): `dateTolerance: 7`, it counts on the day it's played (`puzzle_date` is today) and only once per puzzle (`puzzleNumber` is the puzzle's date as yyyymmdd, checked in `submissions.js`), and the play reminders never name it. The tile shows a `$` badge that lists the deals.
 - `scoring` (from the `SCORING` map below `GAMES`): `{ perfect, par, zero, failAt? }` in the game's metric (times in seconds). Every game needs one.
 - `category`: one of `CATEGORIES` (NYT Games, LinkedIn, Geography, Words & Trivia, Sports). Today groups games by it (players collapse and reorder groups; saved in `user_prefs.category_order`/`collapsed`), and `buildBoards` returns a crown per category (`categoryCrowns`). `/stats` returns per-category standings too.
 - `embed`: the site allows being framed, so Play on the website opens it in `GamePanel.jsx` (iframe plus a clipboard Paste button). Only games verified to render in an iframe get this; NYT, LinkedIn, Krillion, EthnoGuessr, GeoGuessr, Plain and Perceptle refuse framing, and Worldle/Travle/Noillirk ask not to be framed.

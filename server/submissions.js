@@ -70,6 +70,8 @@ submissionsRouter.post('/', async (req, res) => {
       }
       puzzleDate = derived <= today ? derived : today
     }
+    // A weekly puzzle (Wordle in 1) counts on the day it's played, once per puzzle
+    if (game.weekly) puzzleDate = today
     gameId = game.id
     metric = parsed.metric
     display = parsed.display
@@ -99,6 +101,15 @@ submissionsRouter.post('/', async (req, res) => {
     'SELECT id FROM submissions WHERE user_id = $1 AND game_id = $2 AND puzzle_date = $3',
     [req.user.id, gameId, puzzleDate]
   )
+  if (gameById[gameId].weekly && puzzleNumber != null && !dupe.rows.length) {
+    const week = await q(
+      'SELECT id FROM submissions WHERE user_id = $1 AND game_id = $2 AND puzzle_number = $3',
+      [req.user.id, gameId, puzzleNumber]
+    )
+    if (week.rows.length) {
+      return res.status(409).json({ error: `You already have a score for this week's ${gameById[gameId].name}. A new one comes out each week.` })
+    }
+  }
   if (dupe.rows.length) {
     return res.status(409).json({
       error: `You already have a ${gameById[gameId].name} score today. Delete it from the board first if you need to fix it.`,

@@ -189,6 +189,42 @@ export const GAMES = [
     },
   },
   {
+    id: 'wordleinone', category: 'nyt', name: 'Wordle in 1', emoji: '1️⃣', color: '#D3EBC6',
+    url: 'https://www.nytimes.com/games/bonus/hub', metricLabel: 'time', better: 'lower',
+    // From a real share (2026-11-16) and nytimes.com's code: one of NYT's weekly bonus puzzles,
+    // played from the Bonus Puzzles hub. Several Wordles, each to be solved in one guess from the
+    // clues; a square per word (🟩 solved, 💡 revealed) and the total time when the timer is on:
+    // "Wordle in 1\nBonus November 11, 2026\n\n🟩🟩🟩🟩🟩 0:26". `weekly`: it counts on the day
+    // it's played, once per puzzle (puzzleNumber is the puzzle's date as yyyymmdd).
+    // Ranked by words revealed, then time: each 💡 adds an hour; no timer counts as the slowest.
+    weekly: true, epoch: null, dateTolerance: 7, manual: false,
+    paid: {
+      what: 'Bonus puzzles are part of an NYT Games subscription (a few are free).',
+      deals: [
+        { label: 'Free if your school or workplace has an NYT pass (sign in with that email)', url: 'https://www.nytimes.com/passes' },
+        { label: 'Intro offers, or split an All Access Family plan with up to 3 friends', url: 'https://www.nytimes.com/subscription/games' },
+      ],
+    },
+    parse(text) {
+      const head = text.match(/Wordle\s+in\s+(?:1|one)\b/i)
+      if (!head) return null
+      const rest = text.slice(head.index + head[0].length)
+      const date = parseLongDate(rest.slice(0, 50))
+      if (!date) return null
+      const solved = (rest.match(/🟩/gu) ?? []).length
+      const revealed = (rest.match(/💡/gu) ?? []).length
+      if (solved + revealed === 0) return null
+      const t = rest.match(/(\d+:\d{2}(?::\d{2})?)/)
+      const secs = t ? clockToSeconds(t[1]) : null
+      return {
+        date,
+        puzzleNumber: Number(date.replace(/-/g, '')),
+        metric: revealed * 3600 + (secs ?? 3599),
+        display: `${solved}/${solved + revealed}${secs != null ? ` · ${secondsToClock(secs)}` : ''}`,
+      }
+    },
+  },
+  {
     id: 'wordle', category: 'nyt', name: 'Wordle', emoji: '🟩', color: '#C8E6B8',
     url: 'https://www.nytimes.com/games/wordle', metricLabel: 'guesses', better: 'lower',
     epoch: { date: '2021-06-19', first: 0 }, dateTolerance: 1, manual: false,
@@ -793,6 +829,8 @@ const SCORING = {
   globle: { perfect: 1, par: 8, zero: 25 },
   fermi: { perfect: 1, par: 1.6, zero: 4 },
   mini: { perfect: 20, par: 45, zero: 180 },
+  // total seconds for the week's words (+1 h per word revealed); a real run was 0:26
+  wordleinone: { perfect: 15, par: 60, zero: 600 },
   queens: { perfect: 5, par: 30, zero: 180 },
   tango: { perfect: 13, par: 30, zero: 180 },
   zip: { perfect: 3, par: 10, zero: 120 },

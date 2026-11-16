@@ -85,7 +85,7 @@ async function favorites(userId, today) {
   )
   const { rows: active } = await q(`SELECT count(DISTINCT puzzle_date)::int AS days FROM submissions WHERE ${where}`, args)
   const need = Math.max(FAVORITE_MIN, Math.ceil(active[0].days * FAVORITE_SHARE))
-  return rows.filter((r) => r.days >= need && gameById[r.game_id]).map((r) => r.game_id)
+  return rows.filter((r) => r.days >= need && gameById[r.game_id] && !gameById[r.game_id].weekly).map((r) => r.game_id)
 }
 
 /** The most played games over the last month, for the "today's Wordle is ready" reminder. */
@@ -96,7 +96,8 @@ async function mostPlayed(userId, today, limit = 3) {
       GROUP BY game_id ORDER BY n DESC, game_id LIMIT $5`,
     [userId, today, dayBefore(today, 30), hiddenGameIds(), limit + 2]
   )
-  return rows.filter((r) => gameById[r.game_id]).slice(0, limit).map((r) => r.game_id)
+  // not a weekly puzzle: "Today's Wordle in 1 is ready" would be wrong most days
+  return rows.filter((r) => gameById[r.game_id] && !gameById[r.game_id].weekly).slice(0, limit).map((r) => r.game_id)
 }
 
 /** Today's board in their circle (friends only, not them). */
