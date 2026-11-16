@@ -60,6 +60,36 @@ function localInt(s) {
   return parseInt(String(s).replace(/\D/g, ''), 10)
 }
 
+// Reading shares loosely. The smaller games keep changing the punctuation, emoji, words and line
+// breaks around their results ("Plain #25 — ✈️ 6,120 m" became "Plain #26 ✈️ 4,158 m"; "Noillirk:
+// The Daily Climb | No. 45 - 6,763m" became "Noillirk 🎈 The Daily Climb · No. 51 · 1,048m"), so a
+// parser should only require what identifies the result: the game's name, its puzzle number a
+// short way after the name ("#30", "No. 51", on the next line…), and the score's shape somewhere
+// after that ("5,478 m", "262/500"). Anything else in between may change without breaking it.
+//
+// numbered(text, name): the puzzle number after the name (no digits in between), and the text
+// after it, where the score is; null when the name or number isn't there.
+function numbered(text, name, gap = 60) {
+  const m = text.match(new RegExp(`${name}[^\\d]{0,${gap}}?(?:#|\\bNo\\.?|\\bNº)\\s*(\\d[\\d,]*)`, 'iu'))
+  if (!m) return null
+  return { number: num(m[1]), rest: text.slice(m.index + m[0].length) }
+}
+// The first distance in the text, in meters: "5,478 m", "6 120m", "12 km"
+function meters(text) {
+  const m = text.match(new RegExp(`(${INT})\\s*(km|m)\\b`, 'i'))
+  return m ? localInt(m[1]) * (m[2].toLowerCase() === 'km' ? 1000 : 1) : null
+}
+// The first "N/max" in the text (max optional): "262/500", "4 / 6"
+function outOf(text, max = String.raw`\d[\d,]*`) {
+  const m = text.match(new RegExp(`(${INT}|X|😛)\\s*\\/\\s*(${max})(?!\\d)`, 'iu'))
+  return m ? { got: m[1], max: m[2] } : null
+}
+// The first number in the text
+function firstInt(text) {
+  const m = text.match(new RegExp(`(${INT})`))
+  return m ? localInt(m[1]) : null
+}
+
 const SQUARES = new Set(['🟨', '🟩', '🟦', '🟪'])
 
 function linkedinGame(id, name, emoji, color, url, epochDate, kind) {
@@ -138,12 +168,15 @@ export const GAMES = [
     url: 'https://worldle.teuteuf.fr', metricLabel: 'guesses', better: 'lower',
     epoch: { date: '2022-01-22', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
+      const n = numbered(text, 'Worldle')
+      if (!n) return null
       // 😛 instead of the guesses: a lifesaver was used, so it counts as a miss
-      const m = text.match(new RegExp(`#Worldle\\s+#(${INT})\\s*(?:\\((\\d{2})\\.(\\d{2})\\.(\\d{4})\\))?\\s+([1-6X]|😛)\\s*\\/\\s*6`, 'iu'))
-      if (!m) return null
-      const miss = !/^[1-6]$/.test(m[5])
-      const date = m[2] ? `${m[4]}-${m[3]}-${m[2]}` : null
-      return { puzzleNumber: localInt(m[1]), date, metric: miss ? 7 : num(m[5]), display: `${m[5].toUpperCase()}/6` }
+      const s = outOf(n.rest, '6')
+      if (!s || !/^([1-6]|X|😛)$/i.test(s.got)) return null
+      const miss = !/^[1-6]$/.test(s.got)
+      const d = n.rest.match(/\((\d{2})\.(\d{2})\.(\d{4})\)/)
+      const date = d ? `${d[3]}-${d[2]}-${d[1]}` : null
+      return { puzzleNumber: n.number, date, metric: miss ? 7 : num(s.got), display: `${s.got.toUpperCase()}/6` }
     },
   },
   {
@@ -369,10 +402,12 @@ export const GAMES = [
     // from its server, hence the day's tolerance. Unlimited and archive plays have no number.
     epoch: { date: '2026-08-20', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Chainle\s+#([\d,]+)\s*[·•|\-–—]\s*([\d,]+)\s*🔗/i)
-      if (!m) return null
-      const points = num(m[2])
-      return { puzzleNumber: num(m[1]), metric: points, display: points.toLocaleString('en-US') }
+      // unlimited and archive plays say "Chainle Unlimited" or have no number
+      const n = numbered(text, 'Chainle', 20)
+      if (!n) return null
+      const points = firstInt(n.rest)
+      if (points == null) return null
+      return { puzzleNumber: n.number, metric: points, display: points.toLocaleString('en-US') }
     },
   },
 
@@ -385,10 +420,13 @@ export const GAMES = [
     // add 🃏 after the number.
     epoch: { date: '2026-07-18', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Perceptle\s+#([\d,]+)(?:\s*🃏)?\s*[-–—]\s*([SABCDF])\s*\((\d{1,3})\)/i)
-      if (!m) return null
-      const score = num(m[3])
-      return { puzzleNumber: num(m[1]), metric: score, display: `${score} · ${m[2].toUpperCase()}` }
+      const n = numbered(text, 'Perceptle')
+      if (!n) return null
+      const s = n.rest.match(/\((\d{1,3})\)/)
+      if (!s) return null
+      const score = num(s[1])
+      const grade = n.rest.slice(0, s.index).match(/\b([SABCDF])\b/)
+      return { puzzleNumber: n.number, metric: score, display: grade ? `${score} · ${grade[1]}` : `${score}` }
     },
   },
 
@@ -402,12 +440,20 @@ export const GAMES = [
     // match. Before that (2026-10-30) the share was "Size It Up\nOverall Score 222", with no date.
     epoch: null, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/^\s*Magnitudle\s*[—–-]\s*Size It Up[ \t]*\n[ \t]*(\d{4}-\d{2}-\d{2})[ \t]*\n\s*Score:\s*([\d,]+)\s*\/\s*[\d,]+/i)
-      if (m) {
-        const pts = num(m[2])
-        return { date: m[1], metric: pts, display: `${pts} pts` }
+      // not the other editions ("Size It Up: Geography", "Size It Up: Pop Culture") or Unlimited,
+      // Practice and archive plays (a note line at the end since 2026-11-16, on the date line before)
+      const head = text.match(/Size It Up(?!\s*:)/i)
+      if (!head || /\b(unlimited|practice|archive)\b/i.test(text)) return null
+      const rest = text.slice(head.index + head[0].length)
+      const top = rest.slice(0, 40)
+      const date = top.match(/(\d{4}-\d{2}-\d{2})/)
+      const number = top.match(/#\s*(\d+)/)
+      const s = outOf(rest)
+      if (s && (date || number)) {
+        const pts = localInt(s.got)
+        return { puzzleNumber: number ? num(number[1]) : undefined, date: date ? date[1] : null, metric: pts, display: `${pts} pts` }
       }
-      const old = text.match(/^\s*Size It Up\s*\n\s*Overall Score\s+([\d,]+)/i)
+      const old = rest.match(/^\s*Overall Score\s+([\d,]+)/i)
       if (!old) return null
       const pts = num(old[1])
       return { metric: pts, display: `${pts} pts` }
@@ -422,12 +468,11 @@ export const GAMES = [
     // It refuses framing (X-Frame-Options: DENY), so Play opens a new tab on the website.
     epoch: { date: '2026-10-18', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      // "Plain #26 ✈️ 4,158 m" (since 2026-11-12; a "—" before the plane until then), the meters in
-      // the player's locale: "6,120 m", "6.120 m", "6 120 m"
-      const m = text.match(new RegExp(`^\\s*Plain\\s+#(\\d+)\\s*[—–-]?\\s*(?:✈️?\\s*)?(${INT})\\s*m\\b`))
-      if (!m) return null
-      const meters = localInt(m[2])
-      return { puzzleNumber: num(m[1]), metric: meters, display: `${meters.toLocaleString('en-US')} m` }
+      const n = numbered(text, '\\bPlain\\b', 20)
+      if (!n) return null
+      const m = meters(n.rest)
+      if (m == null) return null
+      return { puzzleNumber: n.number, metric: m, display: `${m.toLocaleString('en-US')} m` }
     },
   },
   {
@@ -441,11 +486,12 @@ export const GAMES = [
     // a "Play on the official site" card, so Play opens a new tab on the website.
     epoch: { date: '2026-09-27', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      // 10,000 m and up is shared rounded to km ("12 km"), and numbers are in the player's locale
-      const m = text.match(new RegExp(`^\\s*Noillirk(?::\\s*The\\s+Daily\\s+Climb\\s*\\|\\s*No\\.\\s*|\\s+daily\\s+#)(\\d+)\\s*[—–-]\\s*(${INT})\\s*(km|m)\\b`, 'i'))
-      if (!m) return null
-      const meters = localInt(m[2]) * (m[3].toLowerCase() === 'km' ? 1000 : 1)
-      return { puzzleNumber: num(m[1]), metric: meters, display: `${meters.toLocaleString('en-US')} m` }
+      // only the daily has a number ("No. 51", "daily #39"); Classic and Endless shares don't
+      const n = numbered(text, 'Noillirk')
+      if (!n) return null
+      const m = meters(n.rest)
+      if (m == null) return null
+      return { puzzleNumber: n.number, metric: m, display: `${m.toLocaleString('en-US')} m` }
     },
   },
   {
@@ -457,11 +503,13 @@ export const GAMES = [
     // is the extra guesses (its own stats average the same). #1 was 2025-08-15; it resets 08:00 UTC.
     epoch: { date: '2025-08-15', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Poople\s+#([\d,]+)\s+(\d+)\s*\/\s*(\d+)/i)
-      if (!m) return null
-      const used = num(m[2])
-      const best = num(m[3])
-      return { puzzleNumber: num(m[1]), metric: Math.max(0, used - best), display: `${used}/${best}` }
+      const n = numbered(text, 'Poople')
+      if (!n) return null
+      const s = outOf(n.rest)
+      if (!s || !/^\d+$/.test(s.got)) return null
+      const used = num(s.got)
+      const best = num(s.max)
+      return { puzzleNumber: n.number, metric: Math.max(0, used - best), display: `${used}/${best}` }
     },
   },
 
@@ -493,13 +541,13 @@ export const GAMES = [
     // after the number is the Halloween puzzle. No framing headers, and it loads in an iframe.
     epoch: { date: '2026-10-16', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Eraly\s+#([\d,]+)/i)
-      if (!m || /Eraly\s+#[\d,]+\s*\(Archive\)/i.test(text)) return null
-      const s = text.match(/(\d{1,3})\s*\/\s*700/)
+      const n = numbered(text, 'Eraly', 20)
+      if (!n || /^\s*\(Archive\)/i.test(n.rest)) return null
+      const s = outOf(n.rest, '700')
       if (!s) return null
-      const points = num(s[1])
-      if (points > 700) return null
-      return { puzzleNumber: num(m[1]), metric: points, display: `${points}/700` }
+      const points = localInt(s.got)
+      if (!(points <= 700)) return null
+      return { puzzleNumber: n.number, metric: points, display: `${points}/700` }
     },
   },
 
@@ -512,10 +560,14 @@ export const GAMES = [
     // daily: 2023-09-21 is #2. Older shares had no "Classic".
     epoch: { date: '2023-09-20', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Costcodle\s+(?:Classic\s+)?#\s*([\d,]+)\s+([1-6X])\s*\/\s*6/i)
-      if (!m) return null
-      const guesses = m[2].toUpperCase() === 'X' ? 7 : num(m[2])
-      return { puzzleNumber: num(m[1]), metric: guesses, display: `${m[2].toUpperCase()}/6` }
+      // Checkout ("Costcodle Checkout #2", five prices) is another game
+      if (/Costcodle\s+Checkout/i.test(text)) return null
+      const n = numbered(text, 'Costcodle', 20)
+      if (!n) return null
+      const s = outOf(n.rest, '6')
+      if (!s || !/^([1-6]|X)$/i.test(s.got)) return null
+      const guesses = s.got.toUpperCase() === 'X' ? 7 : num(s.got)
+      return { puzzleNumber: n.number, metric: guesses, display: `${s.got.toUpperCase()}/6` }
     },
   },
   {
@@ -562,10 +614,13 @@ export const GAMES = [
     // ("Krillion ⟲ #") and unlimited ("Krillion ∞ #") plays don't match.
     epoch: { date: '2026-07-16', first: 1 }, dateTolerance: 1, manual: true,
     parse(text) {
-      const m = text.match(/Krillion\s+#([\d,]+)\s*(?:🦐)?\s*([\d,]+)(?![\d,])/iu)
-      if (!m) return null
-      const v = num(m[2])
-      return { puzzleNumber: num(m[1]), metric: v, display: `${v.toLocaleString()}` }
+      // archive ("Krillion ⟲ #") and unlimited ("Krillion ∞ #") plays don't count
+      if (/Krillion\s*[⟲∞]/u.test(text)) return null
+      const n = numbered(text, 'Krillion', 20)
+      if (!n) return null
+      const v = firstInt(n.rest)
+      if (v == null) return null
+      return { puzzleNumber: n.number, metric: v, display: `${v.toLocaleString()}` }
     },
   },
   {
@@ -574,10 +629,13 @@ export const GAMES = [
     // Real share 2026-10-27: "TimeGuessr #1245 — 28,325/50,000\n\n1️⃣ 🏆779 · 📅 48y · 🌍 2500.1mi ..."
     epoch: { date: '2026-10-27', first: 1245 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/TimeGuessr\s+#([\d,]+)\s*[—–-]?\s*([\d,]+)\s*\/\s*([\d,]+)/i)
-      if (!m) return null
-      const pts = num(m[2])
-      return { puzzleNumber: num(m[1]), metric: pts, display: `${pts.toLocaleString()} pts` }
+      // only the daily has a number ("TimeGuessr 28,325/50,000" is another mode)
+      const n = numbered(text, 'TimeGuessr', 20)
+      if (!n) return null
+      const s = outOf(n.rest, '50,?000')
+      if (!s) return null
+      const pts = localInt(s.got)
+      return { puzzleNumber: n.number, metric: pts, display: `${pts.toLocaleString()} pts` }
     },
   },
   {
@@ -618,10 +676,12 @@ export const GAMES = [
     // Guess the NBA player in 8; X is a miss (→ 9). Puzzle numbers run daily: #1707 on 2026-10-28.
     epoch: { date: '2022-02-25', first: 1 }, dateTolerance: 1, manual: false,
     parse(text) {
-      const m = text.match(/Poeltl\s+#?\s*([\d,]+)\s*\|\s*([1-8X])\s*\/\s*8/i)
-      if (!m) return null
-      const miss = m[2].toUpperCase() === 'X'
-      return { puzzleNumber: num(m[1]), metric: miss ? 9 : num(m[2]), display: `${m[2].toUpperCase()}/8` }
+      const n = numbered(text, 'Poeltl', 20) ?? (() => { const m = text.match(/Poeltl\s+(\d+)\s*\|/i); return m && { number: num(m[1]), rest: text.slice(m.index + m[0].length) } })()
+      if (!n) return null
+      const s = outOf(n.rest, '8')
+      if (!s || !/^([1-8]|X)$/i.test(s.got)) return null
+      const miss = s.got.toUpperCase() === 'X'
+      return { puzzleNumber: n.number, metric: miss ? 9 : num(s.got), display: `${s.got.toUpperCase()}/8` }
     },
   },
   {

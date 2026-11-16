@@ -73,6 +73,13 @@ const SAMPLES = [
   ['TimeGuessr #1260 28,325/50,000\n🌎🟩🟩⬛', 'timeguessr', 28325, '2026-11-11'],
   ["I scored an average of 2417 over 10 rounds in today's EthnoGuessr! Can you beat my score of 4876 points on round 7? Play now at https://hbd.gg/play/", 'ethnoguessr', 2417],
   ['EthnoGuessr 4876 points', null],
+  ['Size It Up: Geography\n#40\n\nScore: 262/500', null],
+  ['Size It Up\n#99\n\nScore: 262/500\n\nUnlimited', null],
+  ['Plain · No. 30\n✈️ Flew 5 478m today', 'plain', 5478, '2026-11-16'],
+  ['Noillirk 🎈 The Daily Climb · No. 51 · 12 km', 'noillirk', 12000, '2026-11-16'],
+  ['Noillirk 🎈 The Classic Climb · 1,048m', null],
+  ['Chainle Unlimited · 4,120 🔗', null],
+  ['TimeGuessr 28,325/50,000', null],
 ]
 
 for (const [text, gameId, metric, date] of SAMPLES) {
