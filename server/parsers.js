@@ -649,6 +649,26 @@ export const GAMES = [
   },
 
   {
+    id: 'nerdle', category: 'words', name: 'Nerdle', emoji: '🧮', color: '#E8C9DC',
+    url: 'https://nerdlegame.com', metricLabel: 'guesses', better: 'lower',
+    // From nerdlegame.com's own code (2026-11-18): the share is `${mode} nerdlegame ${n} ${rows}/6`,
+    // then one row of eight squares per guess; mode is empty for the classic game and "mini",
+    // "maxi", "micro", "midi", "speed", "pro"… for the others, which don't count here. A loss still
+    // says 6/6, so six rows with no all-green row is a fail. #1 was 2022-01-20 (#1764 = 2026-11-18).
+    // It refuses to run in an iframe ("Click here to play Nerdle"), so no embed.
+    epoch: { date: '2022-01-20', first: 1 }, dateTolerance: 1, manual: false,
+    parse(text) {
+      const m = text.match(new RegExp(`(?:\\b(micro|mini|midi|maxi|speed|instant|pro|bi|quad)[ \\t]+)?\\bnerdlegame\\s*#?\\s*(${INT})\\s+([1-6X])\\s*\\/\\s*6`, 'iu'))
+      if (!m || m[1]) return null // another mode ("mini nerdlegame …")
+      const rows = text.slice(m.index + m[0].length).split('\n')
+        .map((line) => Array.from(line).filter((ch) => ch === '🟩' || ch === '🟪' || ch === '⬛'))
+        .filter((cells) => cells.length >= 5)
+      const lost = m[3].toUpperCase() === 'X' || (num(m[3]) === 6 && rows.length === 6 && !rows.some((r) => r.every((c) => c === '🟩')))
+      return { puzzleNumber: localInt(m[2]), metric: lost ? 7 : num(m[3]), display: lost ? 'X/6' : `${m[3]}/6` }
+    },
+  },
+
+  {
     id: 'costcodle', category: 'words', name: 'Costcodle', emoji: '🛒', color: '#F4B8B8',
     url: 'https://costcodle.com', embed: true, metricLabel: 'guesses', better: 'lower',
     // From costcodle.com's own code (2026-11-11): since V2 (2026-11-10) the guess-the-price game is
@@ -829,6 +849,7 @@ const SCORING = {
   wordle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
   worldle: { perfect: 1, par: 3, zero: 7, failAt: 7 },
   costcodle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
+  nerdle: { perfect: 1, par: 4, zero: 7, failAt: 7 },
   // five rounds of up to 1,000; 3,560 beat 59% of players on #70, so a typical day is ~3,300
   chainle: { perfect: 5000, par: 3300, zero: 1000 },
   // five rounds of 0-100; a real day was 222 (rounds 31, 67, 2, 35, 87)

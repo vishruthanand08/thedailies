@@ -22,6 +22,7 @@ Only add text captured from a real share. Don't type one from memory or adapt an
 | plain | web share, 2026-11-03 |
 | noillirk, dailyholes | web shares, 2026-11-04; `noillirk.2026-11-10.txt`: the new "Noillirk: The Daily Climb | No. 45" format |
 | eraly | eraly.io web share, 2026-11-10 |
+| nerdle | nerdlegame.com web share, 2026-11-18 |
 | sizeitup | web share, 2026-10-30; `sizeitup.2026-11-03.txt`: the new "Magnitudle — Size It Up" format |
 
 ## Still needed

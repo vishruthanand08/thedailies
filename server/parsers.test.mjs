@@ -28,6 +28,10 @@ for (const file of fixtures) {
 // Share formats built from each game's own share code (2026-11-11 audit), not real shares: the
 // game, metric and puzzle date each must parse to. `null` means the text must not be recognized.
 const SAMPLES = [
+  ['nerdlegame 1764 3/6\n\n⬛🟪⬛🟩🟩🟩🟪⬛\n🟩🟪🟩🟩🟩🟩🟩⬛\n🟩🟩🟩🟩🟩🟩🟩🟩', 'nerdle', 3, '2026-11-18'],
+  ['nerdlegame 1764 6/6\n\n' + '⬛🟪⬛🟩🟩🟩🟪⬛\n'.repeat(6), 'nerdle', 7, '2026-11-18'],
+  ['mini nerdlegame 1764 3/6\n\n🟩🟩🟩🟩🟩🟩', null],
+  ['maxi nerdlegame 1764 4/6', null],
   ['Costcodle Classic #1149 3/6\n⬆️🟥\n⬇️🟨\n✅\n\nPlay now at https://www.costcodle.com', 'costcodle', 3, '2026-11-11'],
   ['Costcodle #1149 X/6\n⬆️🟥', 'costcodle', 7, '2026-11-11'],
   ["Went full Bulk Buyer on today's Costcodle and walked out $21.40 off the mark!\n\nCostcodle Checkout #2\n1. Kirkland Olive Oil — off $3.10\n\nPlay now at https://www.costcodle.com", null],
